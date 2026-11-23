@@ -5,7 +5,7 @@ params:
   plan: required
   model: sonnet
   # review-model: see the note in P6.yaml.
-  review-model: haiku-xhigh
+  review-model: haiku-line-pass
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

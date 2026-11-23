@@ -21,7 +21,7 @@ from squadron.metrology.project_id import ProjectId
 from squadron.metrology.recall_run_models import StageConfig
 from squadron.metrology.recipe_review_models import RecipeReview, RecipeStage
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, rules_sha256
 from squadron.recipes.recipe_outcome import RecipeStageResult
 from squadron.review.models import Verdict
 
@@ -101,7 +101,23 @@ class RecipeRecordFacts:
 
 def recipe_hash(recipe: Recipe) -> str:
     """sha256 of the recipe's canonical content."""
-    canonical = json.dumps(recipe.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    # Explicit keys: a field added to ``Recipe`` must not change every recipe's hash (437 D1).
+    # The 437 keys appear only when set, so a recipe without them hashes as before; the
+    # loader-set ``rules_path`` and ``rules_content`` never do.
+    content = recipe.model_dump(mode="json", include={"name", "reviewers", "pool", "combs"})
+    if recipe.reviewer_options:
+        content["reviewer_options"] = {
+            alias: {
+                "tools": options.tools,
+                "rules": options.rules,
+                "rules_sha256": rules_sha256(options),
+            }
+            for alias, options in recipe.reviewer_options.items()
+        }
+    if recipe.keep_categories is not None:
+        # Sorted: the filter is a set, so its order must not change the hash.
+        content["keep_categories"] = sorted({str(category) for category in recipe.keep_categories})
+    canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -158,6 +174,7 @@ def build_recipe_record(
         verdict=facts.verdict,
         complete=facts.complete,
         aborted=facts.aborted,
+        keep_categories=facts.recipe.keep_categories,
         created=context.clock(),
     )
     return record, raw_outputs

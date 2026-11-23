@@ -14,6 +14,7 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.core.models import Effort
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import (
@@ -29,6 +30,13 @@ from squadron.metrology.recall_run_models import (
     run_record_id,
 )
 from squadron.recipes.recipe import Recipe
+
+#: Refusal for a reviewer with options (437 D8): the benchmark would run it with tools and
+#: no rules file. Tracked in #393.
+REVIEWER_OPTIONS_REFUSAL = (
+    "recipe '{recipe}': reviewer '{reviewer}' has reviewer_options, which "
+    "`sq benchmark recall run` cannot apply yet (#393)"
+)
 
 ConfigFor = Callable[[str, StageKind], tuple[StageConfig, Effort | None]]
 
@@ -97,6 +105,9 @@ def expand_pending(
     A comb whose parent stage is pending is pending too: its stored entry was built from
     the parent's old output, so it is replaced (and moved to ``superseded``) after the rerun.
     """
+    for recipe in recipes:
+        for reviewer in recipe.reviewers_with_options():
+            raise RecallRefusal(REVIEWER_OPTIONS_REFUSAL.format(recipe=recipe.name, reviewer=reviewer))
     pending: list[PendingStage] = []
     pending_slots: set[tuple[str, str]] = set()
     seen: set[tuple[str, str]] = set()

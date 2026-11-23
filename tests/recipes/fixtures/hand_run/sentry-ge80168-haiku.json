@@ -1,0 +1,26 @@
+{
+ "verdict": "FAIL",
+ "findings": [
+  {
+   "severity": "FAIL",
+   "title": "MetricAlertDetectorHandler is a `pass` body that leaves the new abstract method unimplemented",
+   "description": "The diff changes `MetricAlertDetectorHandler` to subclass `StatefulDetectorHandler[QuerySubscriptionUpdate]` with a body of just `pass`. The same diff adds `@abc.abstractmethod build_occurrence_and_event_data(...)` to `StatefulDetectorHandler`, and this class does not implement it. Instantiating the class raises `TypeError: Can't instantiate abstract class`. `Detector.detector_handler` instantiates the handler for registered group types, so metric alert detectors will fail at runtime. The other abstract methods on the base class are also not visible in this hunk, so they may be unimplemented too. Either implement the required methods or keep the class off the stateful base.",
+   "location": "src/sentry/incidents/grouptype.py#MetricAlertDetectorHandler",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Occurrence fixture is built for \"val1\" while the expected result uses \"group_key\"",
+   "description": "In `TestEvaluateGroupKeyValue.test_dedupe`, `build_mock_occurrence_and_event(handler, \"val1\", 6, ...)` creates the occurrence, and `expected_result` is constructed with group key `\"group_key\"`. `build_mock_occurrence_and_event` derives the fingerprint from the group key, so the expected occurrence does not match the group key the test asserts on. Check that the group key passed to `evaluate_group_key_value` matches the one used to build the occurrence.",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluateGroupKeyValue",
+   "category": "test-debt"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Helper is passed a value that does not match the evaluated value",
+   "description": "In `test_results_on_change` the evaluated value is 100 and in `test_dedupe` it is 8, but both build the expected occurrence with value 6. The helper ignores `value`, so the assertions still pass, but the arguments mislead readers. Pass the actual evaluated value, or drop the parameter.",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluate",
+   "category": "test-debt"
+  }
+ ]
+}

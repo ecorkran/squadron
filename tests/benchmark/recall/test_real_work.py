@@ -12,6 +12,7 @@ from squadron.benchmark.recall.real_work import (
     chain_counts,
     render_real_work,
 )
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.metrology.models import RECORD_TYPE_RECIPE_REVIEW, MetrologyRecord
 from squadron.metrology.recall_run_models import (
@@ -171,3 +172,29 @@ def test_real_work_needs_no_set_and_without_either_errors(tmp_path: Path) -> Non
 def test_json_with_real_work_is_refused(tmp_path: Path) -> None:
     result = invoke_recall(fake_services(tmp_path), "report", "--real-work", "--json")
     assert result.exit_code == 1 and "--json is not supported with --real-work" in result.output
+
+
+def _filtered_record(keep: tuple[ReviewCategory, ...] | None) -> RecipeReview:
+    findings = [
+        recall_finding(1, "CONCERN", ReviewCategory.CORRECTNESS),
+        recall_finding(2, "FAIL", ReviewCategory.TEST_DEBT),
+        recall_finding(3, "CONCERN", ReviewCategory.TEST_DEBT),
+        recall_finding(4, "NOTE", ReviewCategory.TEST_DEBT),
+    ]
+    review = _review().model_copy(update={"findings": findings})
+    record = _record([review])
+    return record.model_copy(update={"keep_categories": keep})
+
+
+def test_not_gating_findings_are_counted_apart_from_kept() -> None:
+    counts = chain_counts(_filtered_record((ReviewCategory.CORRECTNESS,)))
+    assert (counts.raw, counts.not_gating, counts.kept) == (3, 2, 1)
+    text = render_real_work(build_rows([_filtered_record((ReviewCategory.CORRECTNESS,))]))
+    assert "Not gating/review" in text
+    assert "| 1 | 0 (0) | 3.0 | 2.0 | 1.0 |" in text
+
+
+def test_record_without_a_filter_counts_as_before_with_zero_not_gating() -> None:
+    counts = chain_counts(_filtered_record(None))
+    assert (counts.raw, counts.not_gating, counts.kept) == (3, 0, 3)
+    assert "| 1 | 0 (0) | 3.0 | 0.0 | 3.0 |" in render_real_work(build_rows([_filtered_record(None)]))

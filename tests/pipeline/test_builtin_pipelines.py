@@ -47,7 +47,7 @@ def test_implement_plan_params_and_shape() -> None:
     assert definition.params == {
         "plan": "required",
         "model": "sonnet",
-        "review-model": "haiku-xhigh",
+        "review-model": "haiku-line-pass",
         "max-revisions": "2",
         "pass-threshold": "review.pass",
         "accept-threshold": "review.concerns_or_better",
@@ -59,6 +59,23 @@ def test_implement_plan_params_and_shape() -> None:
     assert each.config["on_item_failure"] == "continue"
     body = [next(iter(s)) for s in each.config["steps"]]  # type: ignore[union-attr]
     assert body == ["summary", "branch", "implement", "dispatch", "loop", "devlog", "branch"]
+
+
+# (pipeline, the param that names its code reviewer, the shipped default) per D10 of slice 437.
+_CODE_REVIEWERS = [
+    ("P6", "review-model", "haiku-line-pass"),
+    ("implement", "review-model", "haiku-line-pass"),
+    ("implement-plan", "review-model", "haiku-line-pass"),
+    ("review", "model", "haiku-line-pass"),
+    # P56 and P456 keep haiku-xhigh: their review-model also reviews documents (#390).
+    ("P56", "review-model", "haiku-xhigh"),
+    ("P456", "review-model", "haiku-xhigh"),
+]
+
+
+@pytest.mark.parametrize(("name", "param", "expected"), _CODE_REVIEWERS)
+def test_code_reviewer_default_of_each_pipeline(name: str, param: str, expected: str) -> None:
+    assert load_pipeline(name).params[param] == expected
 
 
 # ---------------------------------------------------------------------------

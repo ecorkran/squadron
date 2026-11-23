@@ -302,15 +302,24 @@ A `template` name that is not registered fails before the first step runs, namin
 
 A review step's `model`, a pipeline's `review-model`, and `sq review --model` also take a **recipe** name. A recipe runs several reviewers on the same work, then has comb models mark each reviewer's CONCERN and FAIL findings KEEP or DROP; the kept findings become one review with one verdict, one review file and the same revise loop. The review file's frontmatter has `aiModel: <recipe>` and `aiRecipe: true`, and its body has a "Recipe" table with each stage's outcome, counts and cost. Every recipe review also writes a `recipe_review` record to the metrology store; `sq benchmark recall report --real-work` summarizes them.
 
-Squadron finds a recipe by name in `project-documents/user/recipes/<name>.yaml`, then in the shipped recipes: `haiku-solr-luna` (needs `OPENROUTER_API_KEY`) and `haiku-sol-luna` (needs Codex credits and `OPENROUTER_API_KEY`). Each runs two reviewers and one `luna-r` comb. A project file with a shipped name overrides it, with a WARNING naming both files. To add one, write a YAML file whose `name` matches its file name:
+Squadron finds a recipe by name in `project-documents/user/recipes/<name>.yaml`, then in the shipped recipes: `haiku-line-pass`, `haiku-solr-luna` (needs `OPENROUTER_API_KEY`) and `haiku-sol-luna` (needs Codex credits and `OPENROUTER_API_KEY`). `haiku-solr-luna` and `haiku-sol-luna` run two reviewers and one `luna-r` comb. `haiku-line-pass` needs neither `OPENROUTER_API_KEY` nor Codex credits: it runs `haiku-xhigh` with tools and a no-tools `haiku` line pass with its own rules file, and has no comb. A project file with a shipped name overrides it, with a WARNING naming both files. To add one, write a YAML file whose `name` matches its file name:
 
 ```yaml
 name: my-recipe
-reviewers: [haiku-xhigh, sol]   # each reviews the work in order
+reviewers: [haiku-xhigh, haiku] # each reviews the work in order
+reviewer_options:               # optional, per reviewer alias
+  haiku:
+    tools: false                # a review with no tools (default true)
+    rules: my-rules.md          # a file beside this recipe, added to the step's rules
 combs: [luna-r]                 # optional list; each comb filters what the previous kept
+keep_categories: [correctness]  # optional; not with combs
 ```
 
-A name that is both a model alias and a recipe is an error; rename the recipe. These are refused before any model call, naming the recipe: an unknown reviewer or comb alias, `pool: true`, a judge template, combs on a review with no diff (a slice, tasks or arch review takes a recipe with no `combs`), and an explicit `profile` (each stage's alias picks its own). A stage that fails is shown in the review's table; an incomplete recipe never passes: with findings kept its verdict is FAIL, with none it is UNKNOWN and the review fails. The step's usage record carries the recipe's summed cost, so `pipeline.max_cost_usd` counts it. Stages run one at a time; a stage still running after `review.recipe_stage_slow_s` seconds (default 1800) logs a WARNING but is not stopped. A stage call has only its provider's own bound (`codex.turn_timeout_s` for Codex aliases; none from squadron for OpenAI-compatible or Claude Code aliases), so a hung call holds the step until you cancel the run.
+`reviewer_options` gives one reviewer `tools: false` (the `--no-tools` review) and a `rules` file, a bare file name in the recipe's own directory whose content is added after the step's rules for that reviewer only. Editing the rules file or `tools` gives the recipe and that reviewer's stage a new identity. `keep_categories` is a category filter with no model call: only a CONCERN or FAIL finding whose category is listed (or that has no category) sets the verdict and is sent to the reviser. The others stay in the review file, in a "Not gating" table in the Recipe section, and are counted in `sq benchmark recall report --real-work`. A recipe with both `keep_categories` and `combs` is refused when it loads ([#392](https://github.com/ecorkran/squadron/issues/392)); `sq benchmark recall run` refuses a recipe whose reviewers have options, and the report scores none of their stored outputs ([#393](https://github.com/ecorkran/squadron/issues/393)).
+
+`haiku-line-pass` is the default code review of `P6`, `implement`, `implement-plan` and the `review` pipeline. `sq review code` with no `--model`, and `P56` and `P456` (whose `review-model` also reviews documents), still run `haiku-xhigh`; set `review-model: haiku-xhigh` to give any of the four the old single reviewer.
+
+A name that is both a model alias and a recipe is an error; rename the recipe. These are refused before any model call, naming the recipe: an unknown reviewer or comb alias, `pool: true`, a judge template, combs, `keep_categories` or a `tools: false` reviewer on a review with no diff (a slice, tasks or arch review takes a recipe with none of these), and an explicit `profile` (each stage's alias picks its own). A stage that fails is shown in the review's table; an incomplete recipe never passes: with findings kept its verdict is FAIL, with none it is UNKNOWN and the review fails. The step's usage record carries the recipe's summed cost, so `pipeline.max_cost_usd` counts it. Stages run one at a time; a stage still running after `review.recipe_stage_slow_s` seconds (default 1800) logs a WARNING but is not stopped. A stage call has only its provider's own bound (`codex.turn_timeout_s` for Codex aliases; none from squadron for OpenAI-compatible or Claude Code aliases), so a hung call holds the step until you cancel the run.
 
 ---
 
@@ -1056,7 +1065,7 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 - A rerun keeps work: an implement step whose slice branch already has commits of its own skips the model call and goes straight to the code review. The only way to start a slice over is to delete or rename its branch yourself; squadron never deletes branches.
 - If you fix a flagged slice by hand on its branch and commit, a retry re-reviews it, and a passing review merges it.
 - An implement dispatch that commits nothing fails its code review (no diff to review), so the item is flagged `step_failed`, not merged.
-- Same params as the plan batches above, except `model` defaults to `sonnet`. `review-model` defaults to `haiku-xhigh`, matching `P6`.
+- Same params as the plan batches above, except `model` defaults to `sonnet`. `review-model` defaults to `haiku-line-pass`, matching `P6`.
 - Git, not cf's checkboxes, says a slice is merged. A slice whose branch is merged into the target counts as complete even when cf still reports it open (its tasks were never checked off): it is skipped, its dependents are not flagged, and a WARNING names the slice, branch and target. Fast-forwarded branches and branches with no commits of their own are not treated as merged. If git cannot be read, the batch fails before any item runs.
 
 ### Recovering a batch

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from squadron.benchmark.recall.scoring_select import StageIdentity
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import (
@@ -35,14 +36,18 @@ def make_case(
 
 
 def finding(
-    index: int, location: str | None, severity: str = "CONCERN", text: str = ""
+    index: int,
+    location: str | None,
+    severity: str = "CONCERN",
+    text: str = "",
+    category: ReviewCategory | None = None,
 ) -> RecallFinding:
     title = f"finding {index} {text}"
     return RecallFinding(
         finding_id=f"F{index}",
         content_key=content_key(location, title, "d"),
         severity=severity,
-        category=None,
+        category=category,
         location=location,
         title=title,
         description="d",

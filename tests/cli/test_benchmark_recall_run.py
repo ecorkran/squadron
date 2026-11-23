@@ -165,6 +165,23 @@ def test_exit_1_when_refused(tmp_path: Path, bug_repo: BuiltBugRepo) -> None:
     assert refused.exit_code == 1 and BENCHMARK_REVIEW_TIMEOUT_KEY in refused.output
 
 
+def test_recipe_with_reviewer_options_is_refused_before_any_bound_or_call(
+    tmp_path: Path, bug_repo: BuiltBugRepo
+) -> None:
+    events: list[str] = []
+    services = _services(tmp_path, events)
+    _add_fixture(services, bug_repo)
+    recipe = tmp_path / "rev.yaml"
+    recipe.write_text(
+        "name: rev\nreviewers: [rev]\nreviewer_options:\n  rev: {tools: false}\n", encoding="utf-8"
+    )
+    result = _run(services, recipe, "--max-cost", "1", "--call-cost", "0.01")
+    assert result.exit_code == 1
+    assert "#393" in result.output and "rev" in result.output
+    assert "stages to run" not in result.output and "at most" not in result.output
+    assert events == []
+
+
 def test_exit_2_when_capped(tmp_path: Path, bug_repo: BuiltBugRepo) -> None:
     events: list[str] = []
     services = _services(tmp_path, events)

@@ -3,6 +3,9 @@
 A CONCERN or FAIL finding is **kept** when every comb in the chain decided KEEP, or left
 it ``UNDECIDED``. An undecided finding is never dropped and is not sent to the next comb.
 NOTE and PASS findings are never combed. Pure functions: no I/O, no model call.
+
+Slice 437 adds ``split_by_category``: the recipe's category filter, the only place a
+finding's category is compared with the kept list (D5).
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.recall_run_models import CombDecision, CombVerdict, RecallFinding
 from squadron.recipes.comb_call import finding_id_at
 from squadron.review.models import SCORED_SEVERITIES
@@ -37,6 +41,29 @@ def comb_input(findings: Sequence[RecallFinding]) -> CombInput:
     scored = tuple(f for f in findings if f.severity in SCORED_SEVERITIES)
     unscored = tuple(f for f in findings if f.severity not in SCORED_SEVERITIES)
     return CombInput(scored=scored, unscored=unscored)
+
+
+def split_by_category(
+    findings: Sequence[RecallFinding], keep: Sequence[ReviewCategory] | None
+) -> tuple[tuple[RecallFinding, ...], tuple[RecallFinding, ...]]:
+    """Split findings into (gating, not gating) by the recipe's ``keep_categories``.
+
+    Only CONCERN and FAIL findings can be not gating. A finding with no category is
+    gating: an omitted category says nothing about the kind of defect, and the gate must
+    not lose a defect to an omission. ``keep`` of ``None`` means no filter.
+    """
+    if keep is None:
+        return tuple(findings), ()
+    gating: list[RecallFinding] = []
+    not_gating: list[RecallFinding] = []
+    for finding in findings:
+        is_filtered_out = (
+            finding.severity in SCORED_SEVERITIES
+            and finding.category is not None
+            and finding.category not in keep
+        )
+        (not_gating if is_filtered_out else gating).append(finding)
+    return tuple(gating), tuple(not_gating)
 
 
 def decisions_by_finding(

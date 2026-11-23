@@ -44,7 +44,9 @@ from squadron.models.aliases import (
     require_known_model,
     resolve_model_alias,
 )
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.judge import judge_verdict
+from squadron.pipeline.actions.review_recipe import recipe_isolation_failure
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.errors import ProviderError
 from squadron.recipes.model_ref import (
@@ -101,6 +103,9 @@ from squadron.review.templates import (
 )
 
 _logger = logging.getLogger(__name__)
+
+#: The step name the CLI gives an isolation refusal, which a pipeline names after its step.
+CLI_STEP_NAME = "sq review"
 
 review_app = typer.Typer(
     name="review",
@@ -760,7 +765,16 @@ def _classify_or_exit(
     except ReviewModelError as exc:
         rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
-    return ref if isinstance(ref, RecipeRef) else None
+    if not isinstance(ref, RecipeRef):
+        return None
+    # The same per-reviewer `tools: false` check a pipeline review step gets (#306).
+    refusal = recipe_isolation_failure(
+        ref.recipe, action_type=ActionType.REVIEW, step_name=CLI_STEP_NAME
+    )
+    if refusal is not None:
+        rprint(f"[red]Error: {escape(str(refusal.error))}[/red]")
+        raise typer.Exit(code=1)
+    return ref
 
 
 def _require_persist(

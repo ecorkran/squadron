@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from squadron.benchmark.recall.recipe_dirs import benchmark_recipe_dirs
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.recall_run_models import StageKind
 from squadron.recipes.recipe import (
     RecipeError,
@@ -33,7 +34,11 @@ COMMITTED = {
     "haiku-sol-luna-opus",
     "haiku-solr-luna-opus",
 }
-SHIPPED = {"haiku-sol-luna", "haiku-solr-luna"}
+SHIPPED = {"haiku-sol-luna", "haiku-solr-luna", "haiku-line-pass"}
+MARTIAN_RULES = (
+    REPO_ROOT / "project-documents/user/reference/review-recall-results/20261122-martian"
+    / "rules-line-pass.md"
+)  # fmt: skip
 #: The comb no shipped recipe may use: it dropped a third of the real findings (#389).
 REMOVED_COMB = "opus-high"
 
@@ -86,7 +91,7 @@ def test_every_committed_recipe_loads() -> None:
         assert load_recipe(path).name == stem
 
 
-def test_shipped_recipes_are_the_two_with_no_opus_high_comb() -> None:
+def test_shipped_recipes_have_no_opus_high_comb() -> None:
     """The opus-high comb dropped real findings; no shipped recipe ends in it (#389)."""
     shipped = {path.stem: load_recipe(path) for path in SHIPPED_DIR.glob("*.yaml")}
     assert set(shipped) == SHIPPED
@@ -125,3 +130,24 @@ def test_unknown_recipe_name_lists_known_names() -> None:
     known = "known: .*haiku-sol-luna, .*haiku-sol-opus"
     with pytest.raises(RecipeError, match=f"no recipe named 'nope'; {known}"):
         resolve_recipe("nope", benchmark_recipe_dirs(REPO_ROOT))
+
+
+def test_shipped_rules_file_is_the_measured_one_byte_for_byte() -> None:
+    shipped = SHIPPED_DIR / "line-pass.rules.md"
+    assert shipped.read_bytes() == MARTIAN_RULES.read_bytes()
+
+
+def test_haiku_line_pass_loads_from_the_shipped_directory_with_its_options() -> None:
+    recipe = load_recipe(SHIPPED_DIR / "haiku-line-pass.yaml")
+    assert recipe.reviewers == ("haiku-xhigh", "haiku")
+    assert set(recipe.reviewer_options) == {"haiku"}
+    options = recipe.reviewer_options["haiku"]
+    assert options.tools is False and options.rules == "line-pass.rules.md"
+    assert options.rules_content == MARTIAN_RULES.read_text(encoding="utf-8")
+    assert recipe.keep_categories == (
+        ReviewCategory.CORRECTNESS,
+        ReviewCategory.SECURITY_HYGIENE,
+        ReviewCategory.ERROR_HANDLING_OBSERVABILITY,
+        ReviewCategory.CONSISTENCY_ROT,
+        ReviewCategory.TYPE_CONTRACT_DEBT,
+    )

@@ -10,7 +10,7 @@ interfaces:
 - 436
 dateCreated: 20261123
 dateUpdated: 20261123
-status: not_started
+status: complete
 turns: 57
 promptTokens: 5771284
 cachedTokens: 5535996
@@ -224,7 +224,7 @@ This settles the plan's open question. The measurement dropped them; here they a
 Status: decided
 - `validate_recipe_review` refuses, before any model call and naming the recipe: `keep_categories` on a review with no diff input, and a `tools: false` reviewer on a review with no diff input. The category values are the code review's vocabulary, and a no-tools reviewer of a document would get only what the prompt carries. The same refusal already applies to combs.
 - So `haiku-line-pass` is refused on `slice`, `tasks` and `arch` reviews, with a message that names the template.
-- The pipeline pre-run check knows only the template, and the `code` template can take a diff. A `code` step given `files` and no diff therefore passes `sq run --dry-run` and is refused when the step runs, still before any model call.
+- The pipeline pre-run check knows only the template, and the `code` template can take a diff. A `code` step given `files` and no diff therefore passes `sq run --dry-run` and is refused when the step runs, still before any model call. Refusing it at pre-run is [#396](https://github.com/ecorkran/squadron/issues/396).
 
 ### D8 — The benchmark scores the filter like a comb; reviewers with options wait for #393
 Status: decided
@@ -355,7 +355,7 @@ No new command or flag. `sq review code --model haiku-line-pass` and a pipeline 
 
 ### Verification Walkthrough
 
-Draft; refined after implementation. Run from the squadron checkout with `uv run sq`. Steps 1 to 3 make no model call. Steps 4 and 5 are live and cost about $0.13 a review.
+Verified 20261123 on the slice branch. Run from the squadron checkout with `uv run sq` (steps 5 and 6 run from the fixture directory with `uv run --project <squadron checkout> sq`). Steps 1 to 3 make no model call. Steps 4 and 5 are live; the stage table's cost column reported $0.0053 for the `haiku-xhigh` review and $0.0012 for the line pass in step 4, a few cents with the reviser in step 5.
 
 1. **The recipe loads and old recipes are unchanged.**
    ```bash
@@ -364,11 +364,15 @@ Draft; refined after implementation. Run from the squadron checkout with `uv run
    ```
    The directory holds `haiku-line-pass.yaml` and `line-pass.rules.md` beside the two existing recipes. The tests include the hash and key checks for the existing recipes.
 
+   Actual: `ls` printed `haiku-line-pass.yaml  haiku-sol-luna.yaml  haiku-solr-luna.yaml  line-pass.rules.md`; the tests printed `174 passed`.
+
 2. **The hand-run entry is reproduced.**
    ```bash
    uv run pytest tests/recipes/test_hand_run_entry.py -q
    ```
    Passes: for the five fixture PRs the gating findings equal the hand-run entry's.
+
+   Actual: `7 passed` (five PRs, plus the two fixture checks: every category is a `ReviewCategory` value, and every CONCERN/FAIL finding has a category).
 
 3. **Refused where it does not apply.**
    ```bash
@@ -377,11 +381,27 @@ Draft; refined after implementation. Run from the squadron checkout with `uv run
    ```
    The first exits 1 with an error naming the recipe and the `slice` template, and makes no model call. The second passes the pre-run check with `review-model` resolved to `haiku-line-pass`.
 
+   Actual: the first printed `Error: recipe 'haiku-line-pass': keep_categories is the code review's category filter and needs a diff; template 'slice' has no diff input here` and exited 1. The second printed `Params: {'summary-model': 'sonnet', 'model': 'sonnet', 'review-model': 'haiku-line-pass', ...}` and the step list (`review-1 (review)` inside `revise-code (loop)`), with no classification error.
+
 4. **A live review from the CLI.** In a fixture repo whose last commit turns `total -= amount` into `total += amount` and also adds an undocumented public function:
    ```bash
    uv run sq review code --diff HEAD~1 --model haiku-line-pass -v --cwd <fixture>
    ```
    The output shows findings marked `Reviewer: haiku-xhigh` and `Reviewer: haiku`, the stage table with two review rows, and a "Not gating" table if either reviewer raised a finding outside the five categories. The `haiku` row shows no tool calls. Exit 2 (FAIL) on the sign defect.
+
+   Fixture: `ledger.py` with an `apply_entry` whose debit branch the last commit changed from `total -= amount` to `total += amount`, plus an undocumented `monthly_summary`; `sq config set metrology.project_id fixture-437 --project --cwd <fixture>` run first.
+
+   Actual (exit 2): the log shows `Review tools suppressed (model=claude-haiku-5-5, reason=run-suppressed)` for the second call only. The result is `Review: code  Verdict: FAIL  Model: haiku-line-pass`, with five findings marked `Reviewer: haiku-xhigh` (a FAIL and a CONCERN in `correctness`, CONCERNs in `consistency-rot` and `type-contract-debt`, a NOTE) and one FAIL marked `Reviewer: haiku`, both on the debit sign. The Recipe section:
+
+   ```
+   | review haiku-xhigh | review | haiku-xhigh | claude-haiku-5-5 | ok | 6 findings | $0.0053 |
+   | review haiku | review | haiku | claude-haiku-5-5 | ok | 1 findings | $0.0012 |
+
+   ### Not gating
+   | haiku-xhigh | test-debt | CONCERN | ledger.py | No tests cover the ledger, including the changed debit path and the new function |
+   ```
+
+   No `recipe record: not written` line was printed. Caveats: the stage table has no tool-call column, so "no tool calls" is read from the `Review tools suppressed` log line; the review is not saved (no slice number), as for any slice-less code review.
 
 5. **The same review in a revise loop.** With the fixture registered with cf as in 434's walkthrough step 5:
    ```bash
@@ -389,11 +409,19 @@ Draft; refined after implementation. Run from the squadron checkout with `uv run
    ```
    `--model` is needed: without it `--max` runs `haiku-xhigh` (D10). The review file has `aiModel: haiku-line-pass` and `aiRecipe: true`, and the reviser's round addresses only gating findings.
 
+   Fixture registration: the fixture repo got `project-documents/user/{architecture,slices,tasks}` files for slice 100 (`100-arch.ledger.md`, `100-slices.ledger.md`, `100-slice.ledger-fix.md`, `100-tasks.ledger-fix.md`), branch `100-slice.ledger-fix` holding the defect commit and the documents commit on top of `main` (set back to the base commit), `cf init --lite --name fixture-437`, then `cf set slice 100-slice.ledger-fix` and `cf set arch 100-arch.ledger.md`.
+
+   Actual (exit 2): `review-revise code 100  reviewer=haiku-line-pass  reviser=sonnet  max=1`, `review    FAIL (6)      project-documents/user/reviews/100-review.code.ledger-fix.md`, then `round 1   FAIL (6)      committed 877f82d` and `final: FAIL after 1 round`. The review file has `aiModel: haiku-line-pass`, `aiRecipe: true`, `recipeComplete: true`, one Recipe section and a "Not gating" table of two rows (`test-debt`, `architectural-decay`). The reviser's commit changed `ledger.py` only: the debit sign, an explicit `credit` check with `raise ValueError`, and `monthly_summary`'s annotations (the findings in gating categories), and added no tests (the not-gating `test-debt` finding).
+
+   Caveat: the round did not end PASS. The reviser's fix is uncommitted when the round's review runs (`commit_each_iteration` commits after it), and the diff both reviewers get is the committed one. `haiku-xhigh` read the working tree and wrote "The working tree's `ledger.py:7` reads `return total - amount`, so committing that change resolves this finding", yet still filed the committed defect as FAIL; the no-tools `haiku` line pass cannot see the working tree at all and filed the same FAIL from the diff. With `--max 1` the loop ends there. The loop's later rounds were not run.
+
 6. **The record.**
    ```bash
    cd <fixture> && uv run sq benchmark recall report --real-work
    ```
    One `haiku-line-pass` row counting the reviews of steps 4 and 5. For each review, "Kept/review" plus "Not gating/review" accounts for the rows of its "Not gating" table and its CONCERN and FAIL findings in the review file.
+
+   Actual: `Real work: 3 recipe reviews in 1 rows.` and `| haiku-line-pass [689e3cf8] | 3 | 0 (0) | 5.7 | 1.7 | 4.0 | 0.0 | 0.0 | PASS 0 CONCERNS 0 FAIL 3 UNKNOWN 0 | $0.01 (0) |` (the step 4 review and the two reviews of step 5's round 0 and round 1; the columns are Reviews, Incomplete, Raw, Not gating, Kept, Dropped, Undecided, Verdicts, Cost). Raw 17, not gating 5 and kept 12 over three reviews equal the sum of: step 4 (5 gating findings, 1 table row; no review file), the archived round-0 file (4 gating headings, 2 table rows) and the final file (3 gating headings, 2 table rows). The command also printed three `Skipping unreadable metrology record` warnings for `code_snapshot` files dated 22 October in the user's metrology directory; they are unrelated to recipe records.
 
 7. **The full benchmark run** is the PM's to start (Technical Scope). The numbers to compare with are the pair's rows in RESULTS.md.
 

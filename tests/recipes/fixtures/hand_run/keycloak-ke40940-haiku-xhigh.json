@@ -1,0 +1,61 @@
+{
+ "verdict": "CONCERNS",
+ "findings": [
+  {
+   "severity": "CONCERN",
+   "title": "getSubGroupsCount() can now return null, contradicting the GroupModel contract",
+   "description": "The new body `return model == null ? null : model.getSubGroupsCount();` returns null when the backing group has vanished. The default method in server-spi/src/main/java/org/keycloak/models/GroupModel.java:293-300 is documented \"Never returns {@code null}.\" The JPA implementation (model/jpa/src/main/java/org/keycloak/models/jpa/GroupAdapter.java:190) always returns a count query result. The only caller, `GroupUtils.populateSubGroupCount` (services/src/main/java/org/keycloak/utils/GroupUtils.java:89-92), passes the value straight into `setSubGroupCount`, so the null is silently serialized instead of surfacing as an error. Returning `0L` would keep the documented contract. If null is really intended, the GroupModel Javadoc must change to say so.",
+   "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:272-276",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Null handling for a vanished group is inconsistent across the same class",
+   "description": "The same race this change fixes still throws NPE in the three `getSubGroupsStream(...)` overloads at lines 256, 262 and 268, which call `modelSupplier.get().getSubGroupsStream(...)` with no null check. The class already handles the same condition three different ways: `getDelegateForUpdate()` (line 60-61) throws `IllegalStateException`, `isUpdated()` (lines 73-74) throws `IllegalStateException(\"Not found in database\")`, and the new `getSubGroupsCount` returns null. The fix covers only the count path that the new test exercises. Pick one policy and apply it to every `modelSupplier.get()` dereference in the class, or document why only the count path can race.",
+   "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:256",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Reader thread leaks and busy-loops forever if the deletion loop throws",
+   "description": "`deletedAll.set(true)` at line 155 is not in a `finally`. The reader thread (lines 139-149) is non-daemon and loops `while (!deletedAll.get())` with no pause. If any `remove()` at lines 152-154 throws, the flag is never set and the thread keeps issuing `groups(null, 0, Integer.MAX_VALUE, true)` for the rest of the JVM's life. Each read triggers a count query per top-level group through `populateSubGroupCount`. Each failure is appended to a `CopyOnWriteArrayList`, which copies the whole array on every add. Also, the `fail(...)` at line 131 skips deletion of groups already created, which leaves them in the managed realm. Wrap the deletion in try/finally that sets the flag and joins the thread, and make the thread a daemon.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-155",
+   "category": "performance-resource"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Assertion can run before the reader finishes, so late failures are missed",
+   "description": "The test asserts `caughtExceptions` at line 157 without joining the reader thread. A read in flight when the flag flips can add its exception after the assertion has already passed, so the test can report success despite a failed read. Nothing also guarantees the reader completed a single successful read, so the assertion can pass vacuously. Join the thread before asserting, and assert a successful-read counter is greater than zero. The final state of the realm is also never checked after deletion.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155-157",
+   "category": "test-debt"
+  },
+  {
+   "severity": "NOTE",
+   "title": "The regression test depends on a timing race and does not deterministically cover the null branch",
+   "description": "The null path in `GroupAdapter.getSubGroupsCount` is reached only when a group is removed between listing and counting. The test relies on that interleaving across 100 deletions, so it may pass against the pre-fix code on many runs. A stress test is reasonable for this scenario, but a unit-level test that gives the adapter a delegate lookup returning null would exercise the branch every time. I did not run the test, so I cannot say how often it reproduces.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:118-158",
+   "category": "test-debt"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Test name, typo and whitespace drift",
+   "description": "`createMultiDeleteMultiReadMulti` does not say what is asserted (no errors while listing during concurrent deletes). Neighboring tests such as `getGroupsWithBriefAndFullRepresentation` (line 853) name the behavior. The variable `groupUuuids` has a triple-u typo, used at lines 121, 129 and 152. Line 117 is a whitespace-only line before `@Test`.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:117-121",
+   "category": "consistency-rot"
+  },
+  {
+   "severity": "PASS",
+   "title": "CachedGroup `@Override` on getRealm() is valid",
+   "description": "Verified that `InRealm` declares `String getRealm();` (model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/InRealm.java:8). The annotation compiles and makes the interface contract explicit. No behavior change.",
+   "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/CachedGroup.java:61-64",
+   "category": "type-contract-debt"
+  },
+  {
+   "severity": "PASS",
+   "title": "Removed GroupUtils helper was unused private code",
+   "description": "A repo-wide search found no remaining references to `groupMatchesSearchOrIsPathElement` in `GroupUtils`. The only other match is a separately declared private method with a different signature in server-spi-private/src/main/java/org/keycloak/models/utils/ModelToRepresentation.java:209. Every remaining import in `GroupUtils` is still used.",
+   "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:98-101",
+   "category": "architectural-decay"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "verdict": "FAIL",
+ "findings": [
+  {
+   "severity": "FAIL",
+   "title": "`enableSqlExpressions` returns false on every path, so the SQL expression branch always errors",
+   "description": "The new helper computes `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, then returns `false` whether `enabled` is true or false. The gate in `ReadQuery` (reader.go:129-132) therefore rejects every `QueryTypeSQL` query with `sqlExpressions is not implemented`, even when the feature flag is on. The negation is also inverted relative to the flag name. The helper should return the flag state, for example `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`.",
+   "location": "pkg/expr/reader.go:194-200",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "SQL database stub returns \"not implemented\" for every operation",
+   "description": "`TablesList`'s backing `RunCommands`, and `QueryFramesInto`, both return `errors.New(\"not implemented\")`. Even after the gate in reader.go is fixed, `SQLCommand.Execute` (pkg/expr/sql_command.go, around line 97) will return an error on every query. This is a deliberate stub, but the diff makes the SQL expression path unusable end to end.",
+   "location": "pkg/expr/sql/db.go:13-19",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "`sql_command.go` uses the `sql` package without an added import in this diff",
+   "description": "The hunk replaces the `duck` import with nothing and changes the body to call `sql.NewInMemoryDB()`. No `github.com/grafana/grafana/pkg/expr/sql` import appears in the shown hunk. The file may already import it elsewhere, but I could not confirm that from the diff alone, so the build may fail.",
+   "location": "pkg/expr/sql_command.go#Execute",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "go.sum drops `h1:` content hashes for modules that may still be required",
+   "description": "The diff removes the `h1:` (zip) hash lines for `gotest.tools/v3 v3.5.1`, `github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.3.2`, `github.com/google/go-replayers/grpcreplay` and `httpreplay`, and `github.com/araddon/dateparse`, while keeping their `/go.mod` lines. If any of these modules are still imported by the build, `go build` or `go test` will fail with missing checksum errors. I did not inspect the import graph to confirm, so this needs a `go mod tidy` and build check.",
+   "location": "go.sum",
+   "category": "dependency-config-debt"
+  }
+ ]
+}

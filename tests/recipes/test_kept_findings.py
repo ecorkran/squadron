@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.recall_run_models import CombDecision, CombVerdict
 from squadron.recipes.kept_findings import (
     apply_comb,
@@ -9,6 +10,7 @@ from squadron.recipes.kept_findings import (
     comb_input,
     decisions_by_finding,
     pass_through,
+    split_by_category,
 )
 from tests.recipes.support import recall_finding
 
@@ -51,3 +53,31 @@ def test_positional_decisions_map_to_finding_ids() -> None:
 def test_failed_comb_passes_its_input_through() -> None:
     f1 = recall_finding(1)
     assert pass_through([f1]).kept == (f1,)
+
+
+CORRECT, TEST_DEBT = ReviewCategory.CORRECTNESS, ReviewCategory.TEST_DEBT
+OTHER = ReviewCategory.OTHER
+
+
+def test_split_listed_unlisted_and_other_categories() -> None:
+    listed = recall_finding(1, "CONCERN", CORRECT)
+    unlisted = recall_finding(2, "FAIL", TEST_DEBT)
+    invented = recall_finding(3, "CONCERN", OTHER)  # an invented string normalizes to other
+    gating, not_gating = split_by_category([listed, unlisted, invented], [CORRECT])
+    assert gating == (listed,)
+    assert not_gating == (unlisted, invented)
+
+
+def test_split_no_category_is_gating_and_note_pass_are_untouched() -> None:
+    uncategorized = recall_finding(1, "CONCERN")
+    note = recall_finding(2, "NOTE", TEST_DEBT)
+    passed = recall_finding(3, "PASS", OTHER)
+    unlisted = recall_finding(4, "CONCERN", TEST_DEBT)
+    gating, not_gating = split_by_category([uncategorized, note, unlisted, passed], [CORRECT])
+    assert gating == (uncategorized, note, passed)  # order preserved
+    assert not_gating == (unlisted,)
+
+
+def test_split_without_a_filter_keeps_everything_gating() -> None:
+    findings = [recall_finding(1, "CONCERN", TEST_DEBT), recall_finding(2, "FAIL", OTHER)]
+    assert split_by_category(findings, None) == (tuple(findings), ())

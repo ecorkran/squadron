@@ -1,0 +1,65 @@
+{
+ "keycloak-ke40940": {
+  "haiku-xhigh": [
+   "getSubGroupsCount() can now return null, contradicting the GroupModel contract",
+   "Null handling for a vanished group is inconsistent across the same class"
+  ],
+  "haiku": [
+   "Possible null return from `getSubGroupsCount` relies on an unverified `modelSupplier` field",
+   "Removal of `groupMatchesSearchOrIsPathElement` may break compilation or leave imports unused"
+  ]
+ },
+ "sentry-ge80168": {
+  "haiku-xhigh": [
+   "MetricAlertDetectorHandler is abstract and cannot be instantiated"
+  ],
+  "haiku": [
+   "MetricAlertDetectorHandler is a `pass` body that leaves the new abstract method unimplemented"
+  ]
+ },
+ "grafana-gr94942": {
+  "haiku-xhigh": [
+   "`enableSqlExpressions` always returns false; the flag check is inverted",
+   "SQL expressions now fail on every path: a silent regression of working functionality"
+  ],
+  "haiku": [
+   "`enableSqlExpressions` returns false on every path, so the SQL expression branch always errors",
+   "SQL database stub returns \"not implemented\" for every operation",
+   "`sql_command.go` uses the `sql` package without an added import in this diff"
+  ]
+ },
+ "keycloak-greptile-ai1": {
+  "haiku-xhigh": [
+   "UsernameForm calls a no-arg `isConditionalPasskeysEnabled()` that does not exist",
+   "First-login conditional passkeys are disabled, which breaks existing tests",
+   "PasswordForm's error path now shows passkey UI that its first challenge does not"
+  ],
+  "haiku": [
+   "UsernameForm calls `isConditionalPasskeysEnabled()` with no arguments, but the only definition in the diff takes a `UserModel`",
+   "`challenge()` gate is inverted relative to the code it replaces"
+  ]
+ },
+ "discourse-graphite-ai10": {
+  "haiku-xhigh": [
+   "Migration raises on fresh installs and any DB without an `embed_category` row",
+   "Legacy URL-form host entries are migrated unnormalized and silently stop matching",
+   "Migration interpolates host values into SQL without escaping",
+   "`EmbeddableHost` before_validation crashes on a nil host",
+   "Host validation accepts values the matcher can never match and rejects valid domains",
+   "Duplicate hosts are allowed, and the lookup has no ordering",
+   "Topics from unlisted hosts are created with no category instead of the old `embed_category`",
+   "Admin endpoints return 500 on an unknown id or missing params, and `destroy` ignores failures",
+   "The `_ids` branch of `_hydrateEmbedded` writes undefined entries and crashes on null",
+   "Edit buffer is not cleared after a successful save, so re-editing shows the un-normalized input",
+   "A failed delete produces no feedback",
+   "Fabricator contents are in the wrong files"
+  ],
+  "haiku": [
+   "Host lookup compares a lowercased column against a non-lowercased input",
+   "`before_validation` crashes when `host` is nil",
+   "Fabricator contents are swapped between the two files",
+   "The embedding `update` action persists nothing",
+   "Migration assumes an `embed_category` row exists and builds SQL by string interpolation"
+  ]
+ }
+}

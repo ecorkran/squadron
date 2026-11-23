@@ -9,6 +9,7 @@ recorded", never as the alias's configured effort.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -37,6 +38,9 @@ _VERDICT_TEXT = {
 class ReportRow:
     outputs: RowOutputs
     metrics: RowMetrics
+    #: The same row scored without the recipe's category filter; ``None`` for a recipe
+    #: with no filter (437 D8).
+    unfiltered: RowMetrics | None = None
 
 
 @dataclass(frozen=True)
@@ -93,18 +97,27 @@ def _table_row(row: ReportRow) -> str:
         number(m.cases),
         number(m.runs),
         f"{bounds_text(m.bug_hits)}/{m.bug_slots}",
-        percent_text(m.recall),
+        _before_after(percent_text(m.recall), row.unfiltered, lambda b: percent_text(b.recall)),
         f"{bounds_text(m.bugs_found)}/{m.bugs_total}",
         f"{bounds_text(m.runs_with_hit)}/{m.pairs}",
         number(m.adjacent),
         number(m.undecided),
-        f"{m.findings_per_run:.1f}",
+        _before_after(
+            f"{m.findings_per_run:.1f}", row.unfiltered, lambda b: f"{b.findings_per_run:.1f}"
+        ),
         number(m.matched_nothing),
         _real_share(m),
         _cost(m),
         _leaks(m.leaks),
     ]
     return "| " + " | ".join(cells) + " |"
+
+
+def _before_after(
+    after: str, unfiltered: RowMetrics | None, render: Callable[[RowMetrics], str]
+) -> str:
+    """A filtered recipe's cell shows the value after the filter and before it."""
+    return after if unfiltered is None else f"{after} (before filter {render(unfiltered)})"
 
 
 def _real_share(m: RowMetrics) -> str:

@@ -1,8 +1,9 @@
 """Resolved alias settings to 430's ``StageConfig`` (slice 434, D8).
 
-``config_key`` covers model, profile, template hash, ``tool_use`` and
-``max_output_tokens``. A recipe review's review stages use the step's own template hash;
-comb stages use the built-in ``comb`` template's. ``sq benchmark recall`` builds its live
+``config_key`` covers model, profile, template hash, ``tool_use``, ``max_output_tokens``
+and, for a reviewer with options, its tools setting and ``rules_hash``. A recipe review's
+review stages use the step's own template hash; comb stages use the built-in ``comb``
+template's. ``sq benchmark recall`` builds its live
 stage identity through ``stage_config`` too, so both sides key stages the same way.
 """
 
@@ -20,7 +21,13 @@ from squadron.models.aliases import (
     resolve_model_alias,
 )
 from squadron.recipes.comb_call import StageModel
-from squadron.recipes.recipe import Recipe, RequiredStage, required_stages
+from squadron.recipes.recipe import (
+    Recipe,
+    RequiredStage,
+    ReviewerOptions,
+    required_stages,
+    rules_sha256,
+)
 from squadron.review.templates import ReviewTemplate, load_template
 
 #: The built-in template every comb stage sends.
@@ -46,21 +53,36 @@ def builtin_template_hash(name: str) -> str:
     return template_behavior_hash(builtin_template(name))
 
 
-def stage_config(alias: str, model: str, profile: str, template_hash: str) -> StageConfig:
-    """The stage identity of *alias* sent as *model* on *profile* with that template."""
+def stage_config(
+    alias: str,
+    model: str,
+    profile: str,
+    template_hash: str,
+    options: ReviewerOptions | None = None,
+) -> StageConfig:
+    """The stage identity of *alias* sent as *model* on *profile* with that template.
+
+    With *options* (437 D4): ``tools: false`` makes ``tool_use`` false whatever the alias
+    allows, and the reviewer's rules file enters as ``rules_hash``. ``None`` gives the
+    config and key the alias had before reviewer options existed.
+    """
+    tools_off = options is not None and not options.tools
     return StageConfig(
         model=model,
         profile=profile,
         template_hash=template_hash,
-        tool_use=model_allows_tools(alias),
+        tool_use=False if tools_off else model_allows_tools(alias),
         max_output_tokens=model_max_output_tokens(alias),
+        rules_hash=None if options is None else rules_sha256(options),
     )
 
 
-def alias_stage_config(alias: str, template_hash: str) -> StageConfig:
+def alias_stage_config(
+    alias: str, template_hash: str, options: ReviewerOptions | None = None
+) -> StageConfig:
     """Production entry: model and profile from the alias registry; no profile raises."""
     resolved = stage_model(alias)
-    return stage_config(alias, resolved.model, resolved.profile, template_hash)
+    return stage_config(alias, resolved.model, resolved.profile, template_hash, options)
 
 
 def stage_model(alias: str) -> StageModel:
@@ -87,9 +109,10 @@ def planned_stages(recipe: Recipe, review_template_hash: str) -> list[StageConfi
     """One config per ``required_stages`` entry, in order, resolved before any call."""
     comb_hash = builtin_template_hash(COMB_TEMPLATE_NAME)
     return [
-        alias_stage_config(
-            stage_alias(stage),
-            comb_hash if stage.kind is StageKind.COMB else review_template_hash,
+        alias_stage_config(stage_alias(stage), comb_hash)
+        if stage.kind is StageKind.COMB
+        else alias_stage_config(
+            stage_alias(stage), review_template_hash, recipe.reviewer_options.get(stage.reviewer)
         )
         for stage in required_stages(recipe)
     ]

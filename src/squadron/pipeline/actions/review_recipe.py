@@ -17,9 +17,11 @@ from squadron.config.keys import REVIEW_RECIPE_STAGE_SLOW_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.usage import UsageRecord
 from squadron.metrology.recall_run_models import StageOutcome
+from squadron.pipeline.actions.tool_support import DispatchRoute, tool_isolation_failure
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.usage_capture import stamp
 from squadron.recipes.model_ref import RecipeRef
+from squadron.recipes.recipe import Recipe
 from squadron.recipes.recipe_outcome import RecipeProgress, RecipeStageResult, stage_totals
 from squadron.recipes.recipe_review import (
     RECORD_NOT_WRITTEN,
@@ -27,6 +29,7 @@ from squadron.recipes.recipe_review import (
     record_context,
     run_recipe_review,
 )
+from squadron.recipes.stage_config import stage_model
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.templates import ReviewTemplate
 
@@ -37,6 +40,29 @@ RECIPE_METADATA_KEY = "recipe"
 
 SavePart = Callable[[ReviewResult], Awaitable[str | None]]
 ToActionResult = Callable[[ReviewResult, str | None], ActionResult]
+
+
+def recipe_isolation_failure(
+    recipe: Recipe, *, action_type: str, step_name: str
+) -> ActionResult | None:
+    """The failed result for the first ``tools: false`` reviewer whose provider would still
+    bring tools of its own, else ``None``. The recipe path of the check a step's
+    ``allowed_tools: []`` gets (#306), made before any reviewer is called."""
+    for reviewer, options in recipe.reviewer_options.items():
+        if options.tools:
+            continue
+        member = stage_model(reviewer)
+        refusal = tool_isolation_failure(
+            action_type=action_type,
+            step_name=step_name,
+            model=member.model,
+            profile_name=member.profile,
+            route=DispatchRoute.AGENT,
+            declaration=f"reviewer_options.{reviewer}.tools: false",
+        )
+        if refusal is not None:
+            return refusal
+    return None
 
 
 class RecipeSinkMissingError(RuntimeError):

@@ -7,12 +7,13 @@ from collections import defaultdict
 from squadron.benchmark.recall.label_precedence import resolve_labels
 from squadron.benchmark.recall.recall_store import RecallRecordStore, RecallStoreError
 from squadron.benchmark.recall.report_render import ReportData, ReportRow
-from squadron.benchmark.recall.scoring import recipe_outputs
+from squadron.benchmark.recall.scoring import recipe_outputs, unfiltered
 from squadron.benchmark.recall.scoring_metrics import LabelsByCase, row_metrics
 from squadron.benchmark.recall.scoring_paired import paired_lines
 from squadron.benchmark.recall.scoring_select import StageIdentityResolver
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseSet
 from squadron.metrology.recall_label_models import RecallLabels
+from squadron.metrology.recall_run_models import RecallRun
 from squadron.recipes.recipe import Recipe
 
 
@@ -34,9 +35,9 @@ def build_report(
     labels = resolved_labels(store.list_labels(case_ids))
     label = set_label(case_set)
     rows = [
-        ReportRow(outputs=row, metrics=row_metrics(row, labels, label))
+        row
         for recipe in recipes
-        for row in recipe_outputs(recipe, cases, runs, run_indexes, resolver)
+        for row in _recipe_rows(recipe, cases, runs, run_indexes, resolver, labels, label)
     ]
     return ReportData(
         case_set=case_set,
@@ -45,6 +46,34 @@ def build_report(
         rows=rows,
         paired=paired_lines([row.outputs for row in rows], labels, run_indexes, label),
     )
+
+
+def _recipe_rows(
+    recipe: Recipe,
+    cases: list[RealBugCase],
+    runs: dict[tuple[str, int], RecallRun],
+    run_indexes: list[int],
+    resolver: StageIdentityResolver,
+    labels: LabelsByCase,
+    label: str,
+) -> list[ReportRow]:
+    """A recipe's rows; with a filter each also carries the row scored without it (437 D8)."""
+    rows = recipe_outputs(recipe, cases, runs, run_indexes, resolver)
+    if recipe.keep_categories is None:
+        return [ReportRow(outputs=row, metrics=row_metrics(row, labels, label)) for row in rows]
+    # Identities do not depend on the filter, so the unfiltered pass has the same rows.
+    before = {
+        row.identity: row
+        for row in recipe_outputs(unfiltered(recipe), cases, runs, run_indexes, resolver)
+    }
+    return [
+        ReportRow(
+            outputs=row,
+            metrics=row_metrics(row, labels, label),
+            unfiltered=row_metrics(before[row.identity], labels, label),
+        )
+        for row in rows
+    ]
 
 
 def resolved_labels(records: list[RecallLabels]) -> LabelsByCase:

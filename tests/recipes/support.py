@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage
 from squadron.metrology.errors import MetrologyStoreError
@@ -20,6 +22,7 @@ from squadron.recipes.recipe_outcome import RecipeOutcome, RecipeProgress
 from squadron.recipes.recipe_runner import RecipeReviewCall, run_recipe
 from squadron.recipes.stage_config import builtin_template, plan_recipe
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
+from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import ReviewTemplate
 
 #: The two-reviewer, two-comb recipe used across the tests.
@@ -29,23 +32,31 @@ COMBS = ("comb-1", "comb-2")
 RECIPE_TEXT = f"name: {RECIPE_NAME}\nreviewers: [{', '.join(REVIEWERS)}]\ncombs: [{', '.join(COMBS)}]\n"
 
 
-def recall_finding(index: int, severity: str = "CONCERN") -> RecallFinding:
+def recall_finding(
+    index: int, severity: str = "CONCERN", category: ReviewCategory | None = None
+) -> RecallFinding:
     title = f"finding {index}"
     location = f"src/app.py:{index}"
     return RecallFinding(
         finding_id=f"F{index}",
         content_key=content_key(location, title, f"text {index}"),
         severity=severity,
-        category=None,
+        category=category,
         location=location,
         title=title,
         description=f"text {index}",
     )
 
 
-def review_finding(title: str, severity: Severity = Severity.CONCERN) -> ReviewFinding:
+def review_finding(
+    title: str, severity: Severity = Severity.CONCERN, category: str | None = None
+) -> ReviewFinding:
     return ReviewFinding(
-        severity=severity, title=title, description=f"{title} detail", location="src/app.py:3"
+        severity=severity,
+        title=title,
+        description=f"{title} detail",
+        location="src/app.py:3",
+        category=category,
     )
 
 
@@ -88,6 +99,8 @@ class CallRecord:
     allowed_tools: list[str] | None
     cwd: str | None
     inputs: dict[str, str]
+    no_tools: bool | None = None
+    rules_content: str | None = None
 
 
 @dataclass
@@ -103,10 +116,18 @@ class ScriptedReviewCall:
     ) -> ReviewResult:
         import asyncio
 
+        # The fake accepts only what the real call accepts, so a mismatch fails here.
+        inspect.signature(run_review_with_profile).bind(template, inputs, **kwargs)
         alias = str(kwargs["alias"])
         self.calls.append(
             CallRecord(
-                alias, template.name, kwargs.get("allowed_tools"), inputs.get("cwd"), dict(inputs)
+                alias,
+                template.name,
+                kwargs.get("allowed_tools"),
+                inputs.get("cwd"),
+                dict(inputs),
+                no_tools=kwargs.get("no_tools"),
+                rules_content=kwargs.get("rules_content"),
             )
         )
         if self.delay_s:

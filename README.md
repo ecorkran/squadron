@@ -236,7 +236,7 @@ steps:
       emit: [stdout, clipboard, file]
 ```
 
-`review-model` (and `sq review --model`) also takes a recipe name, such as the shipped `haiku-sol-luna`: several reviewers, then comb models that drop findings that are wrong or are not behavior defects, merged into one review. Add your own in `project-documents/user/recipes/`; see [Recipe reviews](docs/PIPELINES.md#recipe-reviews).
+`review-model` (and `sq review --model`) also takes a recipe name, such as the shipped `haiku-sol-luna`: several reviewers, then comb models that drop findings that are wrong or are not behavior defects, merged into one review. The shipped `haiku-line-pass` (a tool-using reviewer plus a no-tools line pass, with findings outside the behavior categories kept out of the verdict) is the default code review of `P6`, `implement`, `implement-plan` and the `review` pipeline. Add your own in `project-documents/user/recipes/`; see [Recipe reviews](docs/PIPELINES.md#recipe-reviews).
 
 The building blocks are phase steps (`design`, `tasks`, `implement`), `dispatch` (send a prompt to a model), `review`, `gate` (decide from a review or a judge), `loop` (with `until`, `accept_if`, and an exhaustion policy), `each` (fan out over a list), `summary`, `compact`, and `devlog`. Loops can commit each round, so you can see the revision history in git.
 

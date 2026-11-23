@@ -1,0 +1,33 @@
+{
+ "verdict": "CONCERNS",
+ "findings": [
+  {
+   "severity": "CONCERN",
+   "title": "Reader thread can spin forever and the assertion can run before the reader finishes",
+   "description": "The reader thread loops on `while (!deletedAll.get())` with no pause and no join. `deletedAll.set(true)` sits after the delete `forEach` with no `finally`, so if any `remove()` throws, the flag is never set and the thread busy-loops indefinitely against the server. Separately, `assertThat(caughtExceptions, ...)` runs without joining the reader, so exceptions raised on the reader's final iterations can land after the assertion has already passed. The fix is to set the flag in a `finally`, join the thread before asserting, and make the thread a daemon or otherwise bounded.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-156",
+   "category": "test-debt"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Possible null return from `getSubGroupsCount` relies on an unverified `modelSupplier` field",
+   "description": "The hunk replaces `getGroupModel()` with `modelSupplier.get()` and returns `null` when the supplier yields nothing. I cannot confirm that a `modelSupplier` field exists in `GroupAdapter`. If callers unbox the `Long`, the new null path can cause an NPE, and the previous behavior when the model is missing is not visible in the diff. Confirm the field exists and check callers' handling of a null count.",
+   "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:274-275",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Removal of `groupMatchesSearchOrIsPathElement` may break compilation or leave imports unused",
+   "description": "The private helper is deleted with no change to its callers visible in the diff. If anything else in this file still calls it, the build breaks. The `StringUtil` import may also be left unused by the removal. Confirm there are no remaining references in the file.",
+   "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:100-111",
+   "category": "correctness"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Variable name `groupUuuids` has a typo",
+   "description": "The name has three u's. It is used consistently within the test, so this is cosmetic. Renaming it to `groupUuids` would be cleaner.",
+   "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:120",
+   "category": "consistency-rot"
+  }
+ ]
+}

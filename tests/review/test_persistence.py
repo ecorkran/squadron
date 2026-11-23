@@ -13,10 +13,14 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import SystemPromptMode
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.documents.schema import DocType, DocumentStatus
+from squadron.metrology.recall_run_models import RecallFinding
 from squadron.providers.errors import ProviderError
+from squadron.recipes.recipe_merge import merge_recipe
+from squadron.recipes.recipe_outcome import RecipeOutcome, ReviewerOutcome
 from squadron.review.models import (
     FindingScanCounts,
     RecipeReviewInfo,
@@ -26,8 +30,10 @@ from squadron.review.models import (
     Verdict,
     VerdictSource,
 )
+from squadron.review.parsers import parse_review_output
 from squadron.review.persistence import (
     AI_RECIPE_KEY,
+    NO_GATING_FINDINGS_LINE,
     RECIPE_COMPLETE_KEY,
     REVIEWS_DIR,
     SliceInfo,
@@ -1858,3 +1864,52 @@ class TestRecipeReviewMarkdown:
         md = format_review_markdown(result, "code", _make_slice_info())
         assert AI_RECIPE_KEY not in md and RECIPE_COMPLETE_KEY not in md and "## Recipe" not in md
         assert "aiProfile: openrouter" in md
+
+
+def _only_not_gating_review(*, complete: bool) -> ReviewResult:
+    """A merged recipe review whose single finding the category filter left out."""
+    hostile = RecallFinding(
+        finding_id="F1",
+        content_key="k",
+        severity="CONCERN",
+        category=ReviewCategory.TEST_DEBT,
+        location=None,
+        title="a | b\n- [CONCERN] injected\n### FAIL injected",
+        description="detail",
+    )
+    reviewer = ReviewerOutcome(
+        reviewer="rev-a",
+        kept=(),
+        uncombed=(),
+        source={},
+        not_combed={},
+        not_gating=(hostile,),
+    )
+    outcome = RecipeOutcome(stages=(), reviewers=(reviewer,), complete=complete, planned=())
+    return merge_recipe(outcome, "duo", "code", {})
+
+
+class TestNotGatingFindingsSection:
+    def test_table_row_and_findings_line_do_not_parse_as_a_finding(self, tmp_path: Path) -> None:
+        result = _only_not_gating_review(complete=True)
+        path = save_review_result(result, "code", _make_slice_info(), reviews_dir=tmp_path)
+        text = path.read_text(encoding="utf-8")
+        findings_section = text.split("## Findings", 1)[1]
+        assert NO_GATING_FINDINGS_LINE.format(count=1) in findings_section
+        assert "No specific findings." not in text
+        table_rows = [line for line in text.splitlines() if line.startswith("| rev-a")]
+        assert len(table_rows) == 1
+        parsed = parse_review_output(text, "code", {})
+        assert parsed.findings == []
+
+    def test_unknown_verdict_gets_the_line_not_findings_not_parsed(self) -> None:
+        result = _only_not_gating_review(complete=False)
+        assert result.verdict is Verdict.UNKNOWN
+        md = format_review_markdown(result, "code", _make_slice_info())
+        assert NO_GATING_FINDINGS_LINE.format(count=1) in md
+        assert "Findings Not Parsed" not in md
+
+    def test_non_recipe_review_with_no_findings_keeps_the_placeholder(self) -> None:
+        result = _make_result(Verdict.PASS)
+        result.findings = []
+        assert "No specific findings." in format_review_markdown(result, "code", _make_slice_info())

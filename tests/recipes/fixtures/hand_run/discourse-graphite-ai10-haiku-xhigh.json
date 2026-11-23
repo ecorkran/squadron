@@ -1,0 +1,166 @@
+{
+ "verdict": "FAIL",
+ "findings": [
+  {
+   "severity": "FAIL",
+   "title": "Migration raises on fresh installs and any DB without an `embed_category` row",
+   "description": "`execute(...)[0]['id'].to_i` indexes a query that returns zero rows when no `site_settings` row named `embed_category` exists. `[0]` is then nil and `nil['id']` raises. Discourse stores a settings row only when a value is overridden, and nothing in the repo seeds `embed_category` (a repo-wide grep finds it only in locales and this migration), so this breaks any install that never set it. Line 15 has the same unguarded `[0]['value']` for `uncategorized_category_id`. Fix: handle the empty result, for example by falling back to `uncategorized_category_id` and skipping the insert when neither row exists.",
+   "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Legacy URL-form host entries are migrated unnormalized and silently stop matching",
+   "description": "The removed `SiteSetting.allows_embeddable_host?` normalized each legacy entry with `URI(h).host`, and the old spec covered `\"https://eviltrout.com\\nhttps://discourse.org\"`. The migration inserts each line verbatim, and `before_validation` does not run on raw SQL inserts. `EmbeddableHost.record_for_host` compares `uri.host` against `lower(host)`, so a row stored as `https://eviltrout.com/1234` never matches, and embeds for that site stop working after upgrade without any error from the migration. Fix: strip scheme and path in Ruby before inserting, using the same logic as the model's `before_validation`.",
+   "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:20-26",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Migration interpolates host values into SQL without escaping",
+   "description": "`VALUES ('#{h}', ...)` breaks on any value containing an apostrophe and is string-built SQL. The input is admin-entered setting text, so exploitability is low, but the migration runs with database privileges. Fix: use `connection.quote(h)` or a bound insert.",
+   "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+   "category": "security-hygiene"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Migration deletes settings and cannot be rolled back",
+   "description": "The migration uses `def change` with raw `execute`, which is irreversible. A rollback raises `IrreversibleMigration`, and the `DELETE FROM site_settings` on line 31 cannot be undone. Split it into `up` and `down`, or defer the delete to a follow-up migration.",
+   "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:2 and :31",
+   "category": "other"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "`EmbeddableHost` before_validation crashes on a nil host",
+   "description": "`self.host.sub!` runs before validation, so a nil host raises NoMethodError instead of failing validation. `save_host` (app/controllers/admin/embeddable_hosts_controller.rb:23) assigns `params[:embeddable_host][:host]` directly, so a request without that key returns a 500 instead of a 422. Fix: normalize without mutating and guard nil, for example `self.host = host.to_s.sub(...)`.",
+   "location": "app/models/embeddable_host.rb:5-8",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Host validation accepts values the matcher can never match and rejects valid domains",
+   "description": "The regex allows a `:port` suffix, so `example.com:8080` saves, but `record_for_host` matches on `uri.host`, which has no port, so that row can never match. The `[a-z]{2,5}` TLD cap also rejects valid domains such as `blog.photography`. Migrated rows skip validation on insert, so such a row fails on its next save. Fix: reject ports, or match on host plus port, and drop the 5-character TLD cap.",
+   "location": "app/models/embeddable_host.rb:2 and :10-18",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Duplicate hosts are allowed, and the lookup has no ordering",
+   "description": "Nothing prevents two rows with the same host. There is no uniqueness validation, and the migration (db/migrate/20150818190757_create_embeddable_hosts.rb:3-7) creates no unique index. `where(...).first` then returns an arbitrary row, so the category for that host is nondeterministic. Fix: add a case-insensitive uniqueness validation and a unique index on `lower(host)`.",
+   "location": "app/models/embeddable_host.rb:17",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Topics from unlisted hosts are created with no category instead of the old `embed_category`",
+   "description": "The old code passed `SiteSetting.embed_category`. The new code passes `eh.try(:category_id)`, which is nil for any host not in the list. `TopicCreator#find_category` (lib/topic_creator.rb:110-121) turns nil into no category, so the topic gets no `category_id`. `Jobs::PollFeed#import_topic` (app/jobs/scheduled/poll_feed.rb:37-41) passes each feed item's URL to `TopicEmbed.import` with no host check, so feed topics on unlisted domains lose their category. The typepad and disqus import paths behave the same way. No spec covers this branch. Fix: fall back to `SiteSetting.uncategorized_category_id` or another explicit default, and add a spec.",
+   "location": "app/models/topic_embed.rb:36-43",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Admin endpoints return 500 on an unknown id or missing params, and `destroy` ignores failures",
+   "description": "`EmbeddableHost.where(id: params[:id]).first` returns nil for an unknown id, so `save_host(nil)` raises on `nil.host=`, and `destroy` raises on `nil.destroy`. Both return 500. `destroy` also reports success without checking the result of `host.destroy`. `Admin::PermalinksController#fetch_permalink` uses `find` and returns a 404 on a miss. Fix: use `EmbeddableHost.find(params[:id])`, call `params.require(:embeddable_host)` in `save_host`, and check the result of `destroy`.",
+   "location": "app/controllers/admin/embeddable_hosts_controller.rb:10 and :15-16",
+   "category": "error-handling-observability"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "`EmbeddingController#update` is a no-op that reports success, and `saveChanges` is unreachable",
+   "description": "`update` renders the current state without writing anything, and `put \"customize/embedding\"` (config/routes.rb:139) exposes it. The client's `saveChanges` (app/assets/javascripts/admin/controllers/admin-embedding.js.es6:5-7) sends an empty update, and no template calls it. A client that PUTs gets a 200 with no effect. Fix: remove the route, action, and JS action until saving is implemented, or implement saving.",
+   "location": "app/controllers/admin/embedding_controller.rb:9-11",
+   "category": "architectural-decay"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "The `_ids` branch of `_hydrateEmbedded` writes undefined entries and crashes on null",
+   "description": "`_lookupSubType` returns undefined for an id that is not side-loaded (lines 180-185), so `map` can produce `undefined` entries. `obj[k].map` throws if the value is null. The `hydrated || []` fallback on line 200 is dead, because `map` always returns an array. The branch also runs for every `__rest_serializer` payload, so any `*_ids` array without a matching root collection is rewritten and its original key deleted. Fix: use `(obj[k] || []).map(...).filter(Boolean)`, drop the dead fallback, and limit the branch to subtypes present in `root`.",
+   "location": "app/assets/javascripts/discourse/models/store.js.es6:196-201",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Edit buffer is not cleared after a successful save, so re-editing shows the un-normalized input",
+   "description": "`BufferedProxy` keeps each buffered value until `applyBufferedChanges` or `discardBufferedChanges` runs (vendor/assets/javascripts/buffered-proxy.js:23-47 and 61-73). `save()` does neither. The server strips scheme and path, so if a user enters `https://example.com/x`, the table shows `example.com`, but clicking edit again shows `https://example.com/x` from the stale buffer. Fix: call `this.rollbackBuffer()` in the success handler. `RestModel.update` has already written the server response into the record by then.",
+   "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:30-41",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "A failed delete produces no feedback",
+   "description": "`destroyRecord().then(...)` has no rejection handler. The same component's save uses `.catch(popupAjaxError)` (line 40), and the permalinks admin page alerts on failure (admin-permalinks.js.es6:21-36). Fix: add `.catch(popupAjaxError)`.",
+   "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:43-50",
+   "category": "error-handling-observability"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Controller specs assert class inheritance only",
+   "description": "The new spec checks `Admin::EmbeddableHostsController < Admin::AdminController` and nothing else. No test covers create, update, or destroy, validation errors, non-staff access, or the unknown-id path where the 500s above occur. `spec/controllers/admin/embedding_controller_spec.rb:5-7` has the same problem. Fix: add request-level specs for each action, including the no-op PUT.",
+   "location": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7",
+   "category": "test-debt"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "The JS store test passes for the wrong reason because the mock ignores the id",
+   "description": "The test calls `find('fruit', 2)`, but the mock at test/javascripts/helpers/create-pretender.js.es6:226-229 always returns `fruits[0]` (apple). The assertions match apple's `color_ids`, so the test never exercises id routing, and its name implies banana. Fix: have the mock return `fruits.findBy('id', parseInt(request.params.id))`.",
+   "location": "test/javascripts/models/store-test.js.es6:109-111",
+   "category": "test-debt"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Fabricator contents are in the wrong files",
+   "description": "`category_fabricator.rb` now holds the `:embeddable_host` fabricator, and `embeddable_host_fabricator.rb` holds the `:category`, `:diff_category`, `:happy_category`, and `:private_category` fabricators. The specs still load because Fabrication reads every file in the directory, but the file names are wrong and future edits will land in the wrong place. Fix: swap the two files' contents back.",
+   "location": "spec/fabricators/category_fabricator.rb:1-4",
+   "category": "consistency-rot"
+  },
+  {
+   "severity": "NOTE",
+   "title": "The topic_spec case \"is false if embeddable_host is blank\" does not test a host check",
+   "description": "No host is created. The expected false comes from `has_topic_embed?` being unstubbed on an unsaved topic, so the test name describes behavior that no longer exists. Also fix the `'with an emeddable host'` typo on line 1407.",
+   "location": "spec/models/topic_spec.rb:1403-1405",
+   "category": "test-debt"
+  },
+  {
+   "severity": "NOTE",
+   "title": "The adapter's type normalization is fragile",
+   "description": "Hydrated subtypes arrive underscored (`'embeddable_host'`, from the regex at store.js.es6:192), and the adapter converts them back with `replace('_', '-')`. That replaces only the first underscore, so a type with two underscores would not match. Use `Ember.String.dasherize(type)`, or normalize the type once at the store boundary.",
+   "location": "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+   "category": "consistency-rot"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Redundant filters, serializer methods, and route actions",
+   "description": "`Admin::AdminController` already runs `ensure_logged_in` and `ensure_staff` (app/controllers/admin/admin_controller.rb:3-4). `Admin::PermalinksController` does not re-declare them, and these controllers should not either. The same applies to app/controllers/admin/embedding_controller.rb:3. `EmbeddableHostSerializer` and `EmbeddingSerializer` define `id`, `host`, and `category_id` methods that duplicate the default attribute readers. `resources :embeddable_hosts` (config/routes.rb:153) generates index, show, new, and edit routes with no actions; use `only: [:create, :update, :destroy]`, as routes.rb:121-123 does.",
+   "location": "app/controllers/admin/embeddable_hosts_controller.rb:3",
+   "category": "consistency-rot"
+  },
+  {
+   "severity": "NOTE",
+   "title": "`record_for_host` compares a non-lowercased host against `lower(host)`",
+   "description": "The query lowercases the stored value but not the input, so a referer host with capitals will not match. Browsers normally lowercase Referer hosts, so the practical impact is low, and the old code was also case-sensitive. Fix: `host = uri.host.downcase`. The method also returns `false` on some paths and a record or nil on others (lines 11-12 and 15).",
+   "location": "app/models/embeddable_host.rb:14-17",
+   "category": "correctness"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Minor naming and import style",
+   "description": "Two imports come from `ember-addons/ember-computed-decorators`; combine them. `spec/models/embeddable_host_spec.rb:23` still names the describe block `\"allows_embeddable_host\"` for a method that was removed.",
+   "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:2-3",
+   "category": "consistency-rot"
+  },
+  {
+   "severity": "PASS",
+   "title": "The embed access gate is equivalent to the old check",
+   "description": "The removed `embeddable_hosts.blank?` guard is covered by `EmbeddableHost.host_allowed?`, which returns false when there are no rows, when the referer is nil, or when the host is unmatched. Each case still raises `InvalidAccess`. A repo-wide grep finds no remaining references to `SiteSetting.embeddable_hosts`, `embed_category`, or `allows_embeddable_host?` outside migrations and locale files.",
+   "location": "app/controllers/embed_controller.rb:61",
+   "category": "correctness"
+  },
+  {
+   "severity": "PASS",
+   "title": "Route, template, locale, and component wiring resolves",
+   "description": "Checked by reading: `/admin/embeddable_hosts` matches the adapter's path and config/routes.rb:153; `/admin/customize/embedding` matches config/routes.rb:138-139; the `admin.embedding.*` keys exist in config/locales/client.en.yml:2494-2500; and `category-chooser`, `category-badge`, `d-button`, `popupAjaxError`, `bufferedProperty`, and the `on`/`observes` decorator exports all exist. This is verified by reading only; the app was not built or run.",
+   "location": "app/assets/javascripts/admin/routes/admin-route-map.js.es6:30",
+   "category": "other"
+  }
+ ]
+}

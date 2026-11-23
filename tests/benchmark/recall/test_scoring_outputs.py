@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from squadron.benchmark.recall.scoring import recipe_outputs
+from squadron.benchmark.recall.scoring import recipe_outputs, unfiltered
 from squadron.benchmark.recall.scoring_select import ImportOnlyResolver, StageIdentity, identity_of
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.recall_run_models import (
     LIVE_SOURCE,
     CombVerdict,
@@ -11,7 +12,7 @@ from squadron.metrology.recall_run_models import (
     RecallRun,
     StageOutcome,
 )
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions
 from tests.benchmark.recall.scoring_support import (
     StubResolver,
     add_chain,
@@ -152,3 +153,54 @@ def test_nothing_stored_leaves_every_pair_out() -> None:
         0
     ]
     assert row.pairs == [] and row.left_out == [("demo-1", 1), ("demo-1", 2)]
+
+
+def test_reviewer_with_options_matches_no_stored_entry_live_or_imported() -> None:
+    """A tool-enabled live `haiku` and an imported `haiku` never score as the line pass (#393)."""
+    live = review("haiku", (finding(1, "src/a.py"),), source=LIVE_SOURCE)
+    imported = review("haiku", (finding(2, "src/b.py"),), model="haiku-imported")
+    run = make_run(CASE, 1, live, imported)
+    recipe = Recipe(
+        name="line",
+        reviewers=("haiku",),
+        reviewer_options={"haiku": ReviewerOptions(tools=False, rules="line.md")},
+    )
+    resolver = StubResolver({"haiku": identity_of(live)})
+    plain = Recipe(name="plain", reviewers=("haiku",))
+    assert recipe_outputs(plain, [CASE], _runs(run), [1], resolver)[
+        0
+    ].pairs  # the entries do serve a plain one
+    (row,) = recipe_outputs(recipe, [CASE], _runs(run), [1, 2], resolver)
+    assert row.pairs == []
+    assert row.left_out == [(CASE.name, 1), (CASE.name, 2)]
+
+
+def test_filter_splits_the_scored_findings_and_the_unfiltered_pass_holds_both() -> None:
+    gate = finding(1, "src/a.py", category=ReviewCategory.CORRECTNESS)
+    debt = finding(2, "src/b.py", category=ReviewCategory.TEST_DEBT)
+    note = finding(3, None, severity="NOTE", category=ReviewCategory.TEST_DEBT)
+    rev = review("a", (gate, debt, note))
+    recipe = Recipe(name="r", reviewers=("a",), keep_categories=(ReviewCategory.CORRECTNESS,))
+    runs = _runs(make_run(CASE, 1, rev))
+    (filtered,) = recipe_outputs(recipe, [CASE], runs, [1], ImportOnlyResolver())
+    (before,) = recipe_outputs(unfiltered(recipe), [CASE], runs, [1], ImportOnlyResolver())
+    after_output = filtered.pairs[0].reviewers[0]
+    assert [f.finding_id for f in after_output.upper] == ["F1"]
+    assert [f.finding_id for f in after_output.lower] == ["F1"]
+    assert [f.finding_id for f in after_output.not_gating] == ["F2"]
+    before_output = before.pairs[0].reviewers[0]
+    assert [f.finding_id for f in before_output.upper] == ["F1", "F2"]
+    assert before_output.not_gating == ()
+
+
+def test_reviewer_options_that_change_nothing_still_match_stored_entries() -> None:
+    live = review("haiku", (finding(1, "src/a.py"),), source=LIVE_SOURCE)
+    run = make_run(CASE, 1, live)
+    recipe = Recipe(
+        name="plain-options",
+        reviewers=("haiku",),
+        reviewer_options={"haiku": ReviewerOptions()},
+    )
+    resolver = StubResolver({"haiku": identity_of(live)})
+    (row,) = recipe_outputs(recipe, [CASE], _runs(run), [1], resolver)
+    assert row.pairs

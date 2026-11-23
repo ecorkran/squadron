@@ -1,0 +1,12 @@
+name: haiku-line-pass
+reviewers: [haiku-xhigh, haiku]
+reviewer_options:
+  haiku:
+    tools: false
+    rules: line-pass.rules.md
+keep_categories:
+  - correctness
+  - security-hygiene
+  - error-handling-observability
+  - consistency-rot
+  - type-contract-debt

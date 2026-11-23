@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.recall_run_models import (
@@ -85,6 +86,9 @@ class RecipeReview(BaseModel):
     complete: bool
     #: Why the recipe did not finish (an unexpected error or a cancellation), else ``None``.
     aborted: str | None = None
+    #: The category filter the review ran with (437 D6); ``None`` for a recipe with none.
+    #: Which findings were gating derives from this and the stages' findings.
+    keep_categories: tuple[ReviewCategory, ...] | None = None
     created: datetime
 
 

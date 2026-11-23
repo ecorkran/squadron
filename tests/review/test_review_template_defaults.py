@@ -1,4 +1,10 @@
-"""Standalone review defaults agree with the pipelines' reviewers (#378)."""
+"""The review templates' default models (#378).
+
+The ``slice`` and ``tasks`` templates agree with the pipelines' document reviewer. The
+``code`` template keeps ``haiku-xhigh`` (its model is part of the template hash, so changing
+it would give every stored code-review stage a new identity), while four pipelines now review
+code with the ``haiku-line-pass`` recipe (slice 437).
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,8 @@ _PACKAGE_DATA = Path(squadron.__file__).parent / "data"
 _TEMPLATES_DIR = _PACKAGE_DATA / "templates"
 _PIPELINES_DIR = _PACKAGE_DATA / "pipelines"
 
-#: The reviewer every shipped pipeline uses, set from the review-recall results (#339).
+#: The single reviewer the document templates and the ``code`` template default to, set from
+#: the review-recall results (#339); four pipelines override it for code (slice 437).
 PIPELINE_REVIEW_MODEL = "haiku-xhigh"
 #: The arch reviewer, from RESULTS.md sections 16, 19 and 20 (#378).
 ARCH_REVIEW_MODEL = "fable-medium"
@@ -29,7 +36,7 @@ ARCH_REVIEW_MODEL = "fable-medium"
         ("arch", ARCH_REVIEW_MODEL),
     ],
 )
-def test_standalone_review_default_matches_the_pipeline(template: str, expected: str) -> None:
+def test_review_template_default_model(template: str, expected: str) -> None:
     loaded = load_template(_TEMPLATES_DIR / f"{template}.yaml")
 
     assert loaded.model == expected

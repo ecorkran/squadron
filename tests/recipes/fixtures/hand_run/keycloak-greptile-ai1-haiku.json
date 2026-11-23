@@ -1,0 +1,26 @@
+{
+ "verdict": "FAIL",
+ "findings": [
+  {
+   "severity": "FAIL",
+   "title": "UsernameForm calls `isConditionalPasskeysEnabled()` with no arguments, but the only definition in the diff takes a `UserModel`",
+   "description": "The new condition `if (context.getUser() != null && !isConditionalPasskeysEnabled())` calls a zero-argument method. The diff adds only `protected boolean isConditionalPasskeysEnabled(UserModel user)` to `UsernamePasswordForm`, and `UsernameForm` extends that class. Unless an inherited zero-argument overload exists that the diff does not show, this will not compile. The intended call is probably `isConditionalPasskeysEnabled(context.getUser())`. I could not confirm whether an overload exists.",
+   "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java#authenticate",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "`challenge()` gate is inverted relative to the code it replaces",
+   "description": "The removed guard was `context.getUser() == null && webauthnAuth != null && webauthnAuth.isPasskeysEnabled()`. The replacement is `isConditionalPasskeysEnabled(context.getUser())`, and the new helper returns true only when `user != null`. Passkeys are therefore filled in on the error path when a user is set, and no longer when the user is unset. The new comment says \"setup webauthn data when possible\", so this may be deliberate. The new `authenticate()` path also gates on `user != null`, which is the same inversion. Confirm that the username-first login page still gets the webauthn form, since the new tests expect it on initial login.",
+   "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java#challenge",
+   "category": "correctness"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Removed `events.clear()` before the first passkey login in the external-key test",
+   "description": "The diff removes `events.clear();` after `logout()` and before the first `events.expectLogin()`. Events from registration and logout may now sit ahead of the expected LOGIN event and fail the assertion. Confirm that `registerDefaultUser()` or `logout()` clears the events queue. Otherwise, restore the clear.",
+   "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java#webauthnLoginWithExternalKey_reauthenticationWithPasswordOrPasskey",
+   "category": "test-debt"
+  }
+ ]
+}

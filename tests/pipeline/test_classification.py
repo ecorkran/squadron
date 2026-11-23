@@ -33,6 +33,7 @@ from squadron.pipeline.intelligence.pools.models import (
     PoolNotFoundError,
     SelectionContext,
 )
+from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.steps.collection import EachStepType
@@ -1186,6 +1187,43 @@ def test_review_model_recipe_passes_the_pre_run_check() -> None:
     assert result.steps[0].rationale.startswith("recipe haiku-sol-luna")
 
 
+@pytest.mark.parametrize(
+    ("name", "param"),
+    [
+        ("P6", "review-model"),
+        ("implement", "review-model"),
+        ("implement-plan", "review-model"),
+        ("review", "model"),
+    ],
+)
+def test_default_code_pipelines_pass_the_pre_run_check_with_the_line_pass_recipe(
+    name: str, param: str
+) -> None:
+    definition = load_pipeline(name)
+    params = {**definition.params, param: "haiku-line-pass"}
+    resolver = make_resolver(pipeline_model="sonnet")
+    result = classify_pipeline(definition, resolver, params=params, cwd=".")
+    recipe_steps = [s for s in result.steps if s.rationale.startswith("recipe haiku-line-pass")]
+    assert recipe_steps
+
+
+def test_code_step_with_files_and_a_filter_recipe_passes_the_pre_run_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check knows only the template; the refusal comes when the step runs (437 D7)."""
+    _project_recipe(tmp_path, "filtered", "reviewers: [haiku-xhigh]\nkeep_categories: [correctness]\n")
+    monkeypatch.chdir(tmp_path)
+    steps = [
+        make_step(
+            "review",
+            "review-step",
+            {"template": "code", "model": "filtered", "files": "src/**/*.py"},
+        )
+    ]
+    result = classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")
+    assert result.steps[0].rationale.startswith("recipe filtered")
+
+
 def test_unknown_review_model_lists_the_recipe_names() -> None:
     steps = [make_step("review", "review-step", {"template": "code", "model": "no-such-name"})]
     with pytest.raises(ClassificationError) as excinfo:
@@ -1203,7 +1241,7 @@ def test_recipe_no_longer_shipped_is_refused_at_the_pre_run_check(tmp_path: Path
         classify_pipeline(make_pipeline(steps), make_resolver(), cwd=str(tmp_path))
     message = str(excinfo.value)
     assert f"unknown model alias '{removed}'" in message
-    assert "Known recipes: haiku-sol-luna, haiku-solr-luna." in message
+    assert "Known recipes: haiku-line-pass, haiku-sol-luna, haiku-solr-luna." in message
 
 
 def test_recipe_with_unknown_member_fails_naming_it(

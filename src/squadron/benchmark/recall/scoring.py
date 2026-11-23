@@ -20,6 +20,7 @@ from squadron.benchmark.recall.scoring_select import (
     matching_chains,
     matching_reviews,
 )
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import (
     DROPPED_LEAK_VERDICTS,
@@ -29,6 +30,7 @@ from squadron.metrology.recall_run_models import (
     StageEntry,
     StageOutcome,
 )
+from squadron.recipes.kept_findings import split_by_category
 from squadron.recipes.recipe import Recipe
 from squadron.review.models import SCORED_SEVERITIES
 
@@ -49,6 +51,8 @@ class ReviewerOutput:
     upper: tuple[RecallFinding, ...]
     undecided_comb: int
     entries: tuple[StageEntry, ...]
+    #: Scored findings the recipe's category filter left out (437 D8); not in lower or upper.
+    not_gating: tuple[RecallFinding, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,6 +94,11 @@ class RowOutputs:
         return {frozenset({True}): "live", frozenset({False}): "imported"}.get(
             frozenset(sources), "mixed"
         )
+
+
+def unfiltered(recipe: Recipe) -> Recipe:
+    """*recipe* without its category filter: the pass that gives before-filter numbers."""
+    return recipe.model_copy(update={"keep_categories": None})
 
 
 def recipe_outputs(
@@ -144,8 +153,13 @@ def _pair_variants(
     """Each combination of the reviewers' matching (review, chain) choices."""
     per_reviewer: list[list[ReviewerOutput]] = []
     for alias in recipe.reviewers:
+        if alias in recipe.reviewers_with_options():
+            # A stored entry carries no record of the options it ran with: a live `haiku`
+            # entry ran with tools and an imported one by alias only, so neither can stand
+            # in for the reviewer with options. Left out until #393 stores them.
+            return {}
         choices = [
-            reviewer_output(alias, review, chain)
+            reviewer_output(alias, review, chain, keep=recipe.keep_categories)
             for key, review in matching_reviews(run, alias, resolver)
             for chain in matching_chains(run, key, recipe.combs, resolver)
         ]
@@ -159,11 +173,23 @@ def _pair_variants(
     return found
 
 
-def reviewer_output(alias: str, review: StageEntry, chain: tuple[StageEntry, ...]) -> ReviewerOutput:
-    """Walk the chain: a stage decides only what the previous stage kept (D3)."""
-    findings = [f for f in review.findings if f.severity in SCORED_SEVERITIES]
+def reviewer_output(
+    alias: str,
+    review: StageEntry,
+    chain: tuple[StageEntry, ...],
+    *,
+    keep: tuple[ReviewCategory, ...] | None = None,
+) -> ReviewerOutput:
+    """Walk the chain: a stage decides only what the previous stage kept (D3).
+
+    *keep* is the recipe's category filter (437 D8): findings it does not keep are
+    ``not_gating`` and enter neither bound. A recipe never has both a filter and combs.
+    """
+    scored = [f for f in review.findings if f.severity in SCORED_SEVERITIES]
     if review.outcome is not StageOutcome.OK:
-        findings = []
+        scored = []
+    gating, not_gating = split_by_category(scored, keep)
+    findings = list(gating)
     state = {finding.finding_id: CombVerdict.KEEP for finding in findings}
     for comb in chain:
         if comb.outcome is not StageOutcome.OK:
@@ -182,4 +208,5 @@ def reviewer_output(alias: str, review: StageEntry, chain: tuple[StageEntry, ...
         upper=upper,
         undecided_comb=len(upper) - len(lower),
         entries=(review, *chain),
+        not_gating=not_gating,
     )

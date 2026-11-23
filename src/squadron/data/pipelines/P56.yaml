@@ -6,7 +6,8 @@ params:
   summary-model: sonnet
   tasks-model: opus-high
   model: sonnet
-  # review-model: see the note in P6.yaml.
+  # review-model stays haiku-xhigh: it also reviews documents, where the haiku-line-pass
+  # recipe is refused (#390). P6.yaml explains the recipe.
   review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass
