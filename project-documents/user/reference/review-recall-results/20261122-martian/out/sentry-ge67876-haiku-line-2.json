@@ -1,0 +1,81 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "No line-level slips found in the changed hunks",
+      "description": "I read each changed hunk for the slip types the rules name and found none:\n\n- **Variables:** `installation_id` is read from the request or pipeline state and then used consistently. The `Integration.objects.get` calls and the `sender.login` comparison use the intended values.\n- **Return values:** `error()` and `get_document_origin()` return the rendered response and the origin string as their names imply. `OAuthLoginView.dispatch` returns a redirect, an error response, or `pipeline.next_step()` on each path.\n- **Names and imports:** `parse_qsl`, `reverse`, `absolute_uri`, `safe_urlopen`, `safe_urlread`, `GitHubIdentityProvider`, `get_user_info`, and `ObjectStatus` are all imported and used. `generate_organization_url` is still used after the refactor.\n- **Conditions:** the `state` checks, the `installation_id is None` check, and the login-match check all have the intended polarity.\n- **Tests:** the `responses.calls[2]` index matches the order of the three stubbed GitHub calls (token exchange, `/user`, then installation token). The test names match what the tests exercise.\n\nI did not confirm the webhook signature constant `sha1=d184\u2026` in `test_github_user_mismatch` against the modified payload. Checking that would need the file and the fixture, so it is not covered by this PASS.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No line-level slips found in the changed hunks",
+      "location": "src/sentry/integrations/github/integration.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:41.174382",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10503,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8530,
+  "completion_tokens": 4383,
+  "reasoning_tokens": null,
+  "duration_seconds": 20.314281625207514,
+  "cost_usd": 0.00483631,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

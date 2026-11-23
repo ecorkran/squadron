@@ -1,0 +1,81 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Lock-guarded cache read and write have no slips in the changed lines",
+      "description": "The changed hunk reads `entryPointAssetsCache` into `ret` under `RLock`/`RUnlock` and returns `ret` on the non-dev path when it is non-nil. The write lock is taken only after that early return and released with `defer`. The `sync` import is added and used, the `var` block declares both the mutex and the guarded pointer, and the condition `cfg.Env != setting.Dev && ret != nil` matches the original logic. I found no misspelled identifiers, inverted conditions, or returned values that differ from what the code intends. This review is limited to the diff, so I did not inspect the unchanged remainder of `GetWebAssets` that assigns the cache.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go#GetWebAssets"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lock-guarded cache read and write have no slips in the changed lines",
+      "location": "pkg/api/webassets/webassets.go#GetWebAssets",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "diff": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:40.639419",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 1187,
+  "diff_chars_injected": 1187,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 3695,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 1722,
+  "completion_tokens": 949,
+  "reasoning_tokens": null,
+  "duration_seconds": 5.765258042141795,
+  "cost_usd": 0.00107641,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

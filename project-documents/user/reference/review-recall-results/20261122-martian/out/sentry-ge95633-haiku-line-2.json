@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Error-handling test asserts no commit, contradicting its docstring and the offset-commit design",
+      "description": "The docstring says \"errors in processing don't block offset commits for other messages\", and the sibling tests expect a commit after successful processing. The first processing call raises, but `OrderedQueueWorker.run` catches the exception and still calls `complete_offset` in `finally`. Offset 101 should therefore be committable, and `committed_offsets[test_partition]` should be 102. The final assertion instead requires that `test_partition` is absent, or that `committed_offsets` is empty. That passes when no commit happens at all, so the test does not verify the behavior it describes. The assertion should check for the committed value (102) after the failure.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py#ProcessResultSerialTest.test_thread_queue_parallel_error_handling"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Immediate `total_items > 0` assertion races with worker threads",
+      "description": "The test submits 10 items to a pool whose workers are already running, then immediately asserts `stats[\"total_items\"] > 0`. Workers can drain the queues before `get_stats()` runs, so the count can be 0 and the test can fail intermittently. The assertion should either be removed or made deterministic, for example by blocking the result processor on an event before reading the stats.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py#TestFixedQueuePool.test_stats_reporting"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Error-handling test asserts no commit, contradicting its docstring and the offset-commit design",
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py#ProcessResultSerialTest.test_thread_queue_parallel_error_handling",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Immediate `total_items > 0` assertion races with worker threads",
+      "location": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py#TestFixedQueuePool.test_stats_reporting",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "diff": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:21.312892",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 55882,
+  "diff_chars_injected": 55882,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 23564,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 21591,
+  "completion_tokens": 6429,
+  "reasoning_tokens": null,
+  "duration_seconds": 27.951775250025094,
+  "cost_usd": 0.00977861,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

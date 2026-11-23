@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Team admin/owner check combines the two conditions with && instead of ||",
+      "description": "`isTeamAdminOrOwner` is computed as `(await isTeamAdmin(...)) && (await isTeamOwner(...))`. The name and intent call for \"admin or owner\", so this should be `||`. As written, a team admin who is not the owner (or the reverse) fails the check. The permission gate at the following `if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee)` then rejects users who should be allowed to add guests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blacklist lookup compares a lowercased list against non-lowercased guest input",
+      "description": "`blacklistedGuestEmails` is built with `.toLowerCase()`, but `guests` is filtered with `blacklistedGuestEmails.includes(guest)` without lowercasing `guest`. An input such as `Blocked@Example.com` bypasses a blacklist entry `blocked@example.com`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Email notification receives the raw `guests` input instead of the filtered `uniqueGuests`",
+      "description": "The handler computes `uniqueGuests` (dropping existing attendees and blacklisted emails) and creates attendees only for those. It then calls `sendAddGuestsEmails(evt, guests)`. `newGuests` is used in `sendAddGuestsEmails` to decide who gets the full scheduled invitation, so already-present or blacklisted addresses from the raw input can be treated as newly added guests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Email failure is swallowed with a generic log that drops the error",
+      "description": "The `catch (err)` block logs the fixed string `\"Error sending AddGuestsEmails\"` and never logs `err`, so the failure cause is lost. The handler then returns success even though notifications failed.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallback toast message is unreachable",
+      "description": "In `onError`, `const message = \\`${err.data?.code}: ${t(err.message)}\\`` is always a non-empty string, so `message || t(\"unable_to_add_guests\")` always evaluates to `message`. The fallback can never display.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx#AddGuestsDialog"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Team admin/owner check combines the two conditions with && instead of ||",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Blacklist lookup compares a lowercased list against non-lowercased guest input",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Email notification receives the raw `guests` input instead of the filtered `uniqueGuests`",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Email failure is swallowed with a generic log that drops the error",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts#addGuestsHandler",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fallback toast message is unreachable",
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx#AddGuestsDialog",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "diff": "727ce43337184249d174cc06314c8cd7209320be...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:46.536958",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 26333,
+  "diff_chars_injected": 26333,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14604,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12631,
+  "completion_tokens": 5324,
+  "reasoning_tokens": null,
+  "duration_seconds": 22.434840458910912,
+  "cost_usd": 0.00653501,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

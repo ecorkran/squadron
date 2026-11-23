@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`updateDevice` appends the query to `args` inside the `WithDbSession` closure, so a repeated invocation would prepend it again",
+      "description": "The closure passed to `s.sqlStore.WithDbSession` does `args = append([]interface{}{query}, args...)`. This reassigns the captured outer `args` slice. If the session helper ever invokes the callback more than once, for example on retry, the query string is prepended again and the `Exec` call receives a malformed argument list. The prepend belongs before the closure, where `args` is built, or the call should use a fresh local slice.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go#updateDevice"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `BETWEEN` bounds in `updateDevice` are derived from the incoming `device.UpdatedAt` rather than the stored row's `updated_at`",
+      "description": "The `WHERE device_id = ? AND updated_at BETWEEN ? AND ?` clause uses `device.UpdatedAt` (the value being written) to build the window. The check is therefore against the stored `updated_at` but anchored to the new timestamp. A stored row older than 30 days is treated as \"limit reached\" even when the incoming update is current. This may be intended, but the doc comment (\"has been updated between the given times\") does not say so, and the function has no time parameters, so the intent is unclear.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go#updateDevice"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`updateDevice` appends the query to `args` inside the `WithDbSession` closure, so a repeated invocation would prepend it again",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go#updateDevice",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `BETWEEN` bounds in `updateDevice` are derived from the incoming `device.UpdatedAt` rather than the stored row's `updated_at`",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go#updateDevice",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "diff": "6eaae19a37e6ac5d60f9e1a278019416fd5c60b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:15.732961",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 14673,
+  "diff_chars_injected": 14673,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10628,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8655,
+  "completion_tokens": 4620,
+  "reasoning_tokens": null,
+  "duration_seconds": 20.912602417171,
+  "cost_usd": 0.00499031,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

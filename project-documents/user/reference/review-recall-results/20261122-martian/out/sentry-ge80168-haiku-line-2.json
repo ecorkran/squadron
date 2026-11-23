@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "MetricAlertDetectorHandler does not implement the new abstract build_occurrence_and_event_data",
+      "description": "The class body is now `pass`, but `StatefulDetectorHandler` gains `@abc.abstractmethod build_occurrence_and_event_data` in processors/detector.py. Since `DetectorHandler` derives from `abc.ABC`, instantiating `MetricAlertDetectorHandler` will raise `TypeError`. This is latent if the class is never instantiated, but any path that builds it through `detector_handler` will fail.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/incidents/grouptype.py:9-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "test_results_on_change builds expected occurrence with value 6 while evaluating value 100",
+      "description": "The handler is evaluated with `{\"val1\": 100}`, but the expected occurrence is built via `build_mock_occurrence_and_event(handler, \"val1\", 6, ...)`. The mock currently ignores `value`, so the test passes, but the fixture does not match the input and would hide a regression if the value were used.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluate.test_results_on_change"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "test_dedupe builds expected occurrence with value 6 while evaluating value 8",
+      "description": "The first evaluate call uses `{\"val1\": 8}`, but the expected occurrence is built with `6`. Same problem as above: the fixture is inconsistent with the input.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluate.test_dedupe"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "TestEvaluateGroupKeyValue.test_dedupe builds occurrence for \"val1\" but expects group_key \"group_key\"",
+      "description": "The occurrence is built with `build_mock_occurrence_and_event(handler, \"val1\", 6, ...)`, while `expected_result` is constructed with `\"group_key\"`. The occurrence fingerprint is derived from the group key, so the fixture mixes two different group keys. The `evaluate_group_key_value` call is cut off in the diff, so I could not confirm the input key it uses.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluateGroupKeyValue.test_dedupe"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New annotations reference names whose imports are not visible in the diff",
+      "description": "`DetectorGroupKey` (in `process_detectors`, `evaluate`, and `build_occurrence_and_event_data`) and `Any` (in `build_occurrence_and_event_data`) are used in the new signatures. The diff only adds the `PriorityLevel` import, and I could not confirm from the hunks that `DetectorGroupKey` and `Any` are already imported. Please verify, since a missing import would fail type checking.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/processors/detector.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "MetricAlertDetectorHandler does not implement the new abstract build_occurrence_and_event_data",
+      "location": "src/sentry/incidents/grouptype.py:9-10",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "test_results_on_change builds expected occurrence with value 6 while evaluating value 100",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluate.test_results_on_change",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "test_dedupe builds expected occurrence with value 6 while evaluating value 8",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluate.test_dedupe",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "TestEvaluateGroupKeyValue.test_dedupe builds occurrence for \"val1\" but expects group_key \"group_key\"",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py#TestEvaluateGroupKeyValue.test_dedupe",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "New annotations reference names whose imports are not visible in the diff",
+      "location": "src/sentry/workflow_engine/processors/detector.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "diff": "feafc4b297275021a56ba865840b8849899b3f3e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:01.107959",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29492,
+  "diff_chars_injected": 29492,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14814,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12841,
+  "completion_tokens": 5902,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.486312916968018,
+  "cost_usd": 0.00689011,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

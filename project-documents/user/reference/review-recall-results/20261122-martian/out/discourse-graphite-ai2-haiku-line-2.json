@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`unsubscribe` dereferences a `TopicUser` that `find_by` may return as nil",
+      "description": "The new action does `tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` and then immediately calls `tu.notification_level`. A logged-in user who has never interacted with the topic has no `TopicUser` row, so `find_by` returns nil and the action raises `NoMethodError` (a 500). The fix is to use `TopicUser.find_or_initialize_by(...)` or to handle the nil case explicitly before the comparison.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb#unsubscribe"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Topic title is rendered with triple-stash inside the unsubscribe template",
+      "description": "`{{{stopNotificiationsText}}}` renders unescaped HTML. The controller interpolates `model.fancyTitle` into that string. This is only safe if `fancyTitle` is already HTML-escaped on the server, which I could not confirm from the diff. Confirm that `fancy_title` escapes its input, or switch to double-stash and avoid HTML in the i18n string.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`unsubscribe` dereferences a `TopicUser` that `find_by` may return as nil",
+      "location": "app/controllers/topics_controller.rb#unsubscribe",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Topic title is rendered with triple-stash inside the unsubscribe template",
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "diff": "8ed1eef2746ad2b5bc996a74233852e5d83a765d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:09.045089",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19364,
+  "diff_chars_injected": 19364,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11392,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9419,
+  "completion_tokens": 3913,
+  "reasoning_tokens": null,
+  "duration_seconds": 17.687692707870156,
+  "cost_usd": 0.00486821,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

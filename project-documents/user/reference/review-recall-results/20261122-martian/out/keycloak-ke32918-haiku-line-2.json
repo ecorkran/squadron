@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test cleanup removes a hardcoded \"alias\" IDP instead of the IDP it created",
+      "description": "In the creation loop, each provider is created as `\"idp-alias-\" + i`, but the cleanup registration is `getCleanup().addCleanup(testRealm().identityProviders().get(\"alias\")::remove);`. The `get(\"alias\")` call is evaluated when `addCleanup` runs, so the cleanup targets a nonexistent IDP named `\"alias\"`. The 20 IDPs created by the loop are never removed. The same mistake appears again after the `idp-alias-20` creation near the step 1 block. Cleanup should bind to the alias that was actually created, for example `getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-\" + i)::remove)`, with the equivalent fix for `idp-alias-20`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java#testCacheIDPForLogin"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Test cleanup removes a hardcoded \"alias\" IDP instead of the IDP it created",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java#testCacheIDPForLogin",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "diff": "d7fe6b4e11d37a69fbabd9be670162f59430de44...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:36.340218",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23352,
+  "diff_chars_injected": 23352,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 12491,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 10518,
+  "completion_tokens": 2929,
+  "reasoning_tokens": null,
+  "duration_seconds": 13.783571916166693,
+  "cost_usd": 0.0047071100000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

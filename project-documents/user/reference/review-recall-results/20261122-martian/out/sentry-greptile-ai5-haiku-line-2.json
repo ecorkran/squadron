@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`fetch_error_details` pairs error IDs with nodestore values by position, so titles and messages can attach to the wrong error",
+      "description": "The new code builds `node_ids` from `error_ids`, then calls `events = nodestore.backend.get_multi(node_ids)`. It then does `zip(error_ids, events.values())` and filters with `if data is not None`. `get_multi` returns a dict keyed by node ID, and missing nodes are omitted. Any missing node shifts every later pairing, so an error ID can receive another event's title, message, and timestamp. The fix is to look up each value by its own node ID, for example `events.get(node_id)` inside the loop over `error_ids`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py#fetch_error_details"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Table widget flag branch renders hardcoded empty data and ignores the query result",
+      "description": "When `use-table-widget-visualization` is enabled, the new `TableWidgetVisualization` is rendered with `columns={[]}` and `tableData={{data: [], meta: {fields: {}, units: {}}}}`. It ignores `result.data`, `result.meta`, and `fields`, so flagged users see an empty table for every table widget. The branch should pass the real `result.data`, `result.meta`, and the computed columns.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx#tableResultComponent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tooFewFeedbacks` condition does not match its name",
+      "description": "`tooFewFeedbacks: data.numFeedbacksUsed === 0 && !data.success` is true only when there are zero feedbacks and the call failed. A response with a few feedbacks and `success: false` is not \"too few,\" and it reaches `FeedbackSummary`, which renders the header with a null summary. The condition should be checked against the intended threshold, and the `success` term should be justified or removed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/components/feedback/list/useFeedbackSummary.tsx#useFeedbackSummary"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "AI summary shows \"Project not found\" while the project is still loading",
+      "description": "The new check `if (replayRecord?.project_id && !project)` treats `project` being undefined as \"not found.\" `useProjectFromId` can return undefined while project data is still loading, so the error alert can appear before the project resolves. The check should be gated on the project's loading state, not only on a missing value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/replays/detail/ai/index.tsx#AiContent"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Browser report serializer uses truthiness on `age` and `timestamp`, so a value of 0 bypasses the mutual-exclusion check",
+      "description": "`validate_timestamp` and `validate_age` use `self.initial_data.get(\"age\")` and `.get(\"timestamp\")` as truthy checks. A payload with `timestamp` present and `age: 0` passes validation even though both fields are present. Checking `is not None` (or key presence) would enforce the rule as the messages describe.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py#BrowserReportSerializer"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`log_context.get_logger` and `NoiseConfig` are used but not visible as defined or imported in the diff",
+      "description": "`workflow.py` now calls `log_context.get_logger(__name__)`, and `grouptype.py` adds `noise_config = NoiseConfig(ignore_limit=5)`. The diff does not show that `get_logger` exists on `log_context` or that `NoiseConfig` is imported in `grouptype.py`. These should be confirmed in the source files.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`fetch_error_details` pairs error IDs with nodestore values by position, so titles and messages can attach to the wrong error",
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py#fetch_error_details",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Table widget flag branch renders hardcoded empty data and ignores the query result",
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx#tableResultComponent",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`tooFewFeedbacks` condition does not match its name",
+      "location": "static/app/components/feedback/list/useFeedbackSummary.tsx#useFeedbackSummary",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "AI summary shows \"Project not found\" while the project is still loading",
+      "location": "static/app/views/replays/detail/ai/index.tsx#AiContent",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Browser report serializer uses truthiness on `age` and `timestamp`, so a value of 0 bypasses the mutual-exclusion check",
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py#BrowserReportSerializer",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`log_context.get_logger` and `NoiseConfig` are used but not visible as defined or imported in the diff",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "diff": "0b1504e563dc2ce5648b38af85faf3ed1cb30472...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:08.114318",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 248902,
+  "diff_chars_injected": 248902,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 109489,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 107516,
+  "completion_tokens": 13139,
+  "reasoning_tokens": null,
+  "duration_seconds": 56.26807395834476,
+  "cost_usd": 0.19454155,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

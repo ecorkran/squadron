@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`end if` in the embed view is invalid ERB/Ruby",
+      "description": "The closing tag of the header conditional is written as `<%- end if %>`. `end if` is not valid Ruby, so the template fails to compile whenever `EmbedController#best` renders a topic. The block is already closed by the `if`/`else` on lines 2\u20134, so the trailing `if` should simply be `<%- end %>`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/embed/best.html.erb:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Controller spec name says 404, but the assertion and code path do not match",
+      "description": "The example \"is 404 without an embed_url\" only asserts `response.should_not be_success`. The controller calls `params.require(:embed_url)`, which raises `ActionController::ParameterMissing` and yields a 400, not a 404. Either the name or the expectation should be corrected so they describe the same behavior.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/embed_controller_spec.rb:8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Disqus import drops `created_at` and the `--category` option without replacement",
+      "description": "The change to `TopicEmbed.import_remote(user, t[:link], title: t[:title])` removes the previous `created_at: Date.parse(t[:created_at])` argument, so imported posts no longer keep their original dates. The `method_option :category` declaration and the `category_id` lookup are also removed, so any user who passes `-c` will now get an unknown-option error or a silently ignored value. The diff does not show either behavior change being intentional or documented.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/tasks/disqus.thor#import"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`TopicEmbed.import` mutates the caller's `contents` string",
+      "description": "`contents << \"\\n<hr>...\"` appends to the string passed in by the caller. Any caller that reuses that string will see the footer appended. The current callers pass a fresh string, so this is not a bug today, but it is an unexpected side effect for a method named `import`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:13"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`end if` in the embed view is invalid ERB/Ruby",
+      "location": "app/views/embed/best.html.erb:6",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Controller spec name says 404, but the assertion and code path do not match",
+      "location": "spec/controllers/embed_controller_spec.rb:8",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Disqus import drops `created_at` and the `--category` option without replacement",
+      "location": "lib/tasks/disqus.thor#import",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TopicEmbed.import` mutates the caller's `contents` string",
+      "location": "app/models/topic_embed.rb:13",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "diff": "40c0c041eef5dc44025770d153a3608edf852aed...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:08.566514",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 25589,
+  "diff_chars_injected": 25589,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14872,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12899,
+  "completion_tokens": 5982,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.500263041816652,
+  "cost_usd": 0.00694621,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

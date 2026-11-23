@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`authConditions` is always truthy, so two branches in `getBaseConditions` are unreachable",
+      "description": "`getAuthorizationConditions()` is typed `Promise<Prisma.Sql>` and always returns a `Sql` object, never `null`. The checks `if (authConditions && filterConditions)` and `else if (authConditions)` therefore reduce to `if (filterConditions)` and an unconditional return. The `else if (filterConditions)` branch and the final `else` returning `NOTHING_CONDITION` can never run. The results are still correct, because an always-present auth condition is combined with the filter, and `NOTHING_CONDITION` is applied inside the auth result. The problem is that the code reads as if auth can be absent, which misleads future maintainers. The old code filtered with `c !== null` against a nullable type, so this is a new mismatch introduced by the rewrite. Either drop the dead branches or make the nullability of `authConditions` match the code.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts#getBaseConditions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`authConditions` is always truthy, so two branches in `getBaseConditions` are unreachable",
+      "location": "packages/lib/server/service/insightsBooking.ts#getBaseConditions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "diff": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:32.171825",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17894,
+  "diff_chars_injected": 17894,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10569,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8596,
+  "completion_tokens": 4594,
+  "reasoning_tokens": null,
+  "duration_seconds": 21.80111504206434,
+  "cost_usd": 0.00496351,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

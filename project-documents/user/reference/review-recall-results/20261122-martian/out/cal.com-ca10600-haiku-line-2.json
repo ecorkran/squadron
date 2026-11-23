@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "BackupCode component is named `TwoFactor`, which mismatches its file and the component it replaces",
+      "description": "The new file `BackupCode.tsx` declares `export default function TwoFactor({ center = true })`. The name is a copy-paste leftover from `TwoFactor.tsx`. Callers import it as `BackupCode` (`DisableTwoFactorModal.tsx` and `login.tsx`), so the default import name is unaffected at runtime. In React DevTools, stack traces, and any future named import, however, it appears as `TwoFactor`, which is ambiguous next to the real `TwoFactor` component. Renaming the function to `BackupCode` would remove the confusion.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "apps/web/components/auth/BackupCode.tsx:4"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backup-code state is initialised with an untyped empty array",
+      "description": "`const [backupCodes, setBackupCodes] = useState([]);` infers `never[]`. The value is then written from `body.backupCodes`, which comes from an untyped `response.json()` result, and read through `.map(formatBackupCode)` and `key={code}`. The compiler accepts this, but nothing constrains the element type to `string`. Declaring `useState<string[]>([])` would make the contract explicit and let the compiler catch a wrong response shape.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx#EnableTwoFactorModal"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "BackupCode component is named `TwoFactor`, which mismatches its file and the component it replaces",
+      "location": "apps/web/components/auth/BackupCode.tsx:4",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Backup-code state is initialised with an untyped empty array",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx#EnableTwoFactorModal",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+    "diff": "a23cab01b20e33a0a8dee9c5d42f07da237335a7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:52.176075",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 28845,
+  "diff_chars_injected": 28845,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 15528,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 13555,
+  "completion_tokens": 4200,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.319772584363818,
+  "cost_usd": 0.00625221,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

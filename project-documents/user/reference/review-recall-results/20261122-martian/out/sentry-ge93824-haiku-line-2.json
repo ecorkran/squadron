@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The `isinstance(process, multiprocessing.Process)` guard skips `kill()` for spawned processes, so hung flusher processes are never killed on restart",
+      "description": "In `_ensure_processes_alive`, the restart path now calls `process.kill()` only when `isinstance(process, multiprocessing.Process)`. The processes are created with `self.mp_context.Process`, where `mp_context = multiprocessing.get_context(\"spawn\")`. That yields a `SpawnProcess`, which in CPython derives from `BaseProcess`, not from `multiprocessing.Process`. The check is therefore False, `kill()` is never called, and the old process is left running when `_create_process_for_shards` starts a replacement. The original code called `self.process.kill()` unconditionally, so this is a regression. `join()` has the same guard around `terminate()`, which was already present before this diff. Checking the type with `isinstance(process, BaseProcess)` or dropping the guard for process objects would fix it. I could not run code in this session, so this rests on the CPython class hierarchy as I know it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py#_ensure_processes_alive"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `time.sleep(0.1)` in `test_basic` is a no-op because the test patches `time.sleep`",
+      "description": "`test_basic` starts with `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `time.sleep` for the whole process. The newly added `time.sleep(0.1)` that is meant to give flusher threads time to process after the drift change therefore returns immediately. The comment says it waits, but it does not. The test may pass or fail depending on thread timing, not on the behavior under test. Either wait with a real timer captured before patching, or poll for the expected output with a bounded loop.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `isinstance(process, multiprocessing.Process)` guard skips `kill()` for spawned processes, so hung flusher processes are never killed on restart",
+      "location": "src/sentry/spans/consumers/process/flusher.py#_ensure_processes_alive",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The `time.sleep(0.1)` in `test_basic` is a no-op because the test patches `time.sleep`",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "diff": "c1449270812b3fd722c26d64b8530922be72789e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:30.609842",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19169,
+  "diff_chars_injected": 19169,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10286,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8313,
+  "completion_tokens": 4845,
+  "reasoning_tokens": null,
+  "duration_seconds": 20.97596687497571,
+  "cost_usd": 0.0050027100000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

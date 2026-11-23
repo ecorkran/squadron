@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Spec calls `be_within_one_second_of`, a matcher that may not exist in this suite",
+      "description": "The shared example asserts `blocked_email.last_match_at.should be_within_one_second_of(Time.zone.now)`. RSpec's predicate matcher would call `within_one_second_of?` on the timestamp. That method is not part of ActiveSupport or core RSpec, so it is unclear whether a custom matcher in the spec helpers defines it. If none does, this example fails with a NoMethodError or unknown-matcher error rather than testing the timestamp. I could not confirm this without reading the spec helpers. Confirm the matcher is defined, or replace it with a plain comparison such as `be_within(1.second).of(Time.zone.now)` or `(blocked_email.last_match_at - Time.zone.now).abs.should < 1`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "spec/models/blocked_email_spec.rb:43"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Spec calls `be_within_one_second_of`, a matcher that may not exist in this suite",
+      "location": "spec/models/blocked_email_spec.rb:43",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "diff": "2ff4f3124a6dab409f1cb60714c0fc7bbae546db...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:34.905760",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9743,
+  "diff_chars_injected": 9743,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 7226,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 5253,
+  "completion_tokens": 2625,
+  "reasoning_tokens": null,
+  "duration_seconds": 12.20943145873025,
+  "cost_usd": 0.00297391,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`Profile` used in AdminPermissions listener without an import added in this diff",
+      "description": "The listener body now starts with `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ))`, but the hunk adds no `import org.keycloak.common.Profile;` (or equivalent). If the file does not already import `Profile`, it will not compile. This could not be confirmed from the diff alone, so the file's import block should be checked before merge.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "JUnit 4 `fail` imported into a JUnit 5 test",
+      "description": "The new static import `import static org.junit.Assert.fail;` is JUnit 4, while the same file also imports `org.junit.jupiter.api.Assertions` and `@Test` is JUnit 5. The new tests call `fail(...)` in several places. This works only if JUnit 4 is on the test classpath, and it mixes two assertion libraries in one class. Using `org.junit.jupiter.api.Assertions.fail` would be consistent with the rest of the file.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`Profile` used in AdminPermissions listener without an import added in this diff",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "JUnit 4 `fail` imported into a JUnit 5 test",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "diff": "d59c0fbb0ca50c9e9c54e7deec77bb7cbbb212d5...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:08.196523",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 78806,
+  "diff_chars_injected": 78806,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 34892,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 32919,
+  "completion_tokens": 7537,
+  "reasoning_tokens": null,
+  "duration_seconds": 31.554881624877453,
+  "cost_usd": 0.013730909999999999,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Create records the storage-failure metric on the legacy duration recorder",
+      "description": "In the `Create` error branch, `d.recordLegacyDuration(true, ...)` is called right after the unified-storage `Create` fails. This is the storage path, so it should call `recordStorageDuration`. As written, storage failures are counted as legacy failures and the storage metric is never recorded for them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Create"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Update records the storage-failure metric on the legacy duration recorder",
+      "description": "The early-return branch after `d.Storage.Update` fails calls `d.recordLegacyDuration(true, ...)`. It should call `recordStorageDuration`, the same mistake as in `Create`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update"
+    },
+    {
+      "severity": "FAIL",
+      "title": "DeleteCollection's legacy goroutine records its duration on the storage recorder",
+      "description": "Inside the goroutine that calls `d.Legacy.DeleteCollection`, the result is recorded with `d.recordStorageDuration(err != nil, ...)`. It should be `recordLegacyDuration`. Legacy-side failures are otherwise lost from the legacy metrics.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.DeleteCollection"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Delete's success path passes `name` where the kind label belongs",
+      "description": "After a successful storage delete, `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` passes `name` in the position that the other calls fill with `options.Kind`. This pollutes the kind label with object names, which causes cardinality problems in the metric.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Delete builds a contextual logger and then attaches a different logger to the context",
+      "description": "`log` is built with `name`, `kind`, and `method`, but the context is set with `ctx = klog.NewContext(ctx, d.Log)`. The enriched `log` is therefore not propagated to the storage call, and the added fields are lost there. The argument should be `log`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Create's storage-failure test configures the legacy mock instead of the storage mock",
+      "description": "The case \"error when creating object in the unified store fails\" sets up expectations through `setupLegacyFn` and leaves `setupStorageFn` nil. The code under test calls `Storage.Create` first, so that call hits a mock with no expectation. The test is wired to the wrong mock and does not test what its name says.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Create"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Update path now hands the legacy store the raw input rather than the object storage produced",
+      "description": "The goroutine calls `d.Legacy.Update(ctx, name, objInfo, ...)`. The previous code wrapped the result of the storage write in `updateWrapper{updated: obj}` for the legacy call. Now the legacy store receives the unmodified input, so it may write a different object than unified storage did. Confirm this is intended. If it is not, `res` should be passed through.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The List test case name describes behavior the code no longer has",
+      "description": "The case named \"error when listing an object in the unified store is not implemented\" tests a storage error. `List` is now implemented in `dualwriter_mode3.go`, so the name no longer matches what the test exercises.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_List"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Mode1 test relies on a `p` that is no longer declared locally",
+      "description": "The diff removes `p := prometheus.NewRegistry()` from `TestMode1_Get`, but the `NewDualWriter(Mode1, ls, us, p)` call remains. The code compiles only if a package-level `p` exists elsewhere in the test package. The Mode3 tests use the same bare `p`, while the Mode3 `Get` test still declares its own, so the test package's setup is inconsistent. Confirm where `p` is defined.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode1_test.go"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "go.work.sum gains a duplicate entry for an existing module hash",
+      "description": "The line `github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240701135906-559738ce6ae1/go.mod` is added, but the same line already appears in the context just above the hunk. Duplicate sum lines are generally harmless to the Go toolchain, but they indicate the file was not normalized and should be cleaned up.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.work.sum"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new mode3 tests pass the actual value as the first argument to `assert.Equal`",
+      "description": "Several assertions are written `assert.Equal(t, obj, exampleObj)`, which reverses the expected and actual arguments. Failure messages will be misleading. This is consistent across the file and is a readability issue rather than a correctness bug.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Get"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Create records the storage-failure metric on the legacy duration recorder",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Create",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update records the storage-failure metric on the legacy duration recorder",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "DeleteCollection's legacy goroutine records its duration on the storage recorder",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.DeleteCollection",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete's success path passes `name` where the kind label belongs",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete builds a contextual logger and then attaches a different logger to the context",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Create's storage-failure test configures the legacy mock instead of the storage mock",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Create",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Update path now hands the legacy store the raw input rather than the object storage produced",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The List test case name describes behavior the code no longer has",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_List",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The Mode1 test relies on a `p` that is no longer declared locally",
+      "location": "pkg/apiserver/rest/dualwriter_mode1_test.go",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "go.work.sum gains a duplicate entry for an existing module hash",
+      "location": "go.work.sum",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new mode3 tests pass the actual value as the first argument to `assert.Equal`",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Get",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+    "diff": "77572e87ff64663c748ff103d92d3d53650d37dd...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:04.429497",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32103,
+  "diff_chars_injected": 32103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 20067,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 18094,
+  "completion_tokens": 6159,
+  "reasoning_tokens": null,
+  "duration_seconds": 26.55010766722262,
+  "cost_usd": 0.008594010000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The `align-items` mixin emits `-ms-align-items`, which is not a real CSS property",
+      "description": "The new `align-items($alignment)` mixin includes `-ms-align-items: $alignment;`. No browser recognizes this property. The vendor-prefixed flexbox alignment property for IE10 is `-ms-flex-align`, and the mixin already emits that on the line above. The bogus declaration is ignored at runtime, so it does no harm, but it misstates the intended prefix set and should be removed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:121"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `align-items` mixin emits `-ms-align-items`, which is not a real CSS property",
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:121",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "diff": "53963048419d79170560938c003ae9ed1172f8ee...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:42.813625",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3645,
+  "diff_chars_injected": 3645,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 4809,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 2836,
+  "completion_tokens": 2355,
+  "reasoning_tokens": null,
+  "duration_seconds": 11.171847500372678,
+  "cost_usd": 0.0021133099999999998,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

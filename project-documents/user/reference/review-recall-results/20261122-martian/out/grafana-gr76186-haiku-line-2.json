@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "TestLogger.FromContext returns a fresh logger instead of the receiver, so logs go somewhere the test cannot inspect",
+      "description": "`FromContext(_ context.Context) Logger` ignores its argument and returns `NewTestLogger()`, a new object with empty state. It does not return `f`, so any call made through the returned logger is recorded in a different `TestLogger` than the one the test holds. This matters because the diff changes `LoggerMiddleware.logRequest` to call `m.logger.FromContext(ctx).Info(...)`. If `LoggerMiddleware` is tested with a `TestLogger` and then checks `InfoLogs` or `Calls` on that instance, those assertions will see nothing. The fix is for `FromContext` to return `f` (or to share state with it). The diff alone does not show whether such a test exists, so this is a visible slip in the changed lines and the consequence is unverified.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/plugins/log/fake.go#TestLogger.FromContext"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test name still refers to the removed InstrumentationMiddleware",
+      "description": "The file was renamed to `metrics_middleware_test.go` and the constructor call was changed to `newMetricsMiddleware`, but the test function is still named `TestInstrumentationMiddleware`. The type it exercises is now `MetricsMiddleware`, and the `InstrumentationMiddleware` type no longer exists. The name no longer matches the code under test.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go#TestInstrumentationMiddleware"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "TestLogger.FromContext returns a fresh logger instead of the receiver, so logs go somewhere the test cannot inspect",
+      "location": "pkg/plugins/log/fake.go#TestLogger.FromContext",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test name still refers to the removed InstrumentationMiddleware",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go#TestInstrumentationMiddleware",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+    "diff": "b29f69288de1f9c8d7ecadb882b85ba44f379789...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:21.464364",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21622,
+  "diff_chars_injected": 21622,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 13387,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 11414,
+  "completion_tokens": 3479,
+  "reasoning_tokens": null,
+  "duration_seconds": 15.672251457814127,
+  "cost_usd": 0.005249510000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

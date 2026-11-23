@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "getBouncyCastleProvider returns the default KeyStore's provider instead of a BouncyCastle provider",
+      "description": "The method is named and typed as the BouncyCastle provider accessor, but its body returns `KeyStore.getInstance(KeyStore.getDefaultType()).getProvider()`. That is the JDK keystore's provider, not a BouncyCastle provider. Callers that expect a BC provider (for example, a lookup by name) will receive an unrelated provider. The other providers in this diff (`DefaultCryptoProvider`, `FIPS1402Provider`) return a real BC instance from this method.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#getBouncyCastleProvider"
+    },
+    {
+      "severity": "NOTE",
+      "title": "concatenatedRSToASN1DER builds two encoders and discards them",
+      "description": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` have no effect because their results are not used. The return value is built correctly by the subsequent `writeDerSeq(...)` call, so these lines are dead code and can be removed.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#concatenatedRSToASN1DER"
+    },
+    {
+      "severity": "NOTE",
+      "title": "getKeyStore uses format.name() while the FIPS provider uses format.toString()",
+      "description": "`AuthzClientCryptoProvider.getKeyStore` calls `KeyStore.getInstance(format.name())`, while `FIPS1402Provider.getKeyStore` calls `format.toString()`. Both produce the same result only if `KeystoreFormat.toString()` is not overridden. This should be checked against the enum definition.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#getKeyStore"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Ignored-provider log passes a built string as the format argument, and leaves a trailing separator",
+      "description": "`logger.debugf(builder.toString())` uses a non-literal string as the format pattern. Any `%` in a provider class name would be interpreted as a format specifier. The loop also appends `\", \"` after every name, leaving a trailing separator. Passing the format as a literal with a `%s` argument, and joining the names without a trailing separator, would fix both.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java#detectProvider"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "getBouncyCastleProvider returns the default KeyStore's provider instead of a BouncyCastle provider",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#getBouncyCastleProvider",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "concatenatedRSToASN1DER builds two encoders and discards them",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#concatenatedRSToASN1DER",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "getKeyStore uses format.name() while the FIPS provider uses format.toString()",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java#getKeyStore",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Ignored-provider log passes a built string as the format argument, and leaves a trailing separator",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java#detectProvider",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "diff": "9e01551928c12485c55ca9e77d60d663de9966f9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:03.323045",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 31609,
+  "diff_chars_injected": 31609,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 16342,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 14369,
+  "completion_tokens": 3869,
+  "reasoning_tokens": null,
+  "duration_seconds": 17.158446250017732,
+  "cost_usd": 0.00633191,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

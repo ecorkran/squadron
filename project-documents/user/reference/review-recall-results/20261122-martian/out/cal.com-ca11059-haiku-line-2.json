@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Google Calendar stores the zod SafeParse wrapper instead of the parsed key",
+      "description": "The old code was `const key = googleCredentialSchema.parse(googleCredentials);`, which returned the parsed object. The new line `const key = parseRefreshTokenResponse(googleCredentials, googleCredentialSchema);` receives the return value of `parseRefreshTokenResponse`, which is the `safeParse` result object (`{ success, data }`), not the parsed data. The subsequent `prisma.credential.update({ data: { key } })` therefore persists `{ success: true, data: {...} }` as the credential key, and the next read will not find `access_token` or `refresh_token` at the top level.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#refreshAccessToken"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Zoho Bigin passes credentialId where the userId is expected",
+      "description": "The call `refreshOAuthTokens(..., \"zoho-bigin\", credentialId)` passes `credentialId` as the `userId` argument. Every other changed call site passes `credential.userId`. The sync branch of `refreshOAuthTokens` sends `calcomUserId: userId.toString()` to the external sync endpoint, so this sends a credential ID as a user ID and can resolve the wrong user's credentials.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts#refreshAccessToken"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Zod computed keys do not express a wildcard and break the minimum schema",
+      "description": "`[z.string().toString()]: z.number()` and `[z.string().optional().toString()]: z.unknown().optional()` do not create index signatures. `ZodType.toString()` yields a constant string such as `\"[object Object]\"`, so the schema requires a literal property with that name and does not match an expiry field. On the credential-sync path (`APP_CREDENTIAL_SHARING_ENABLED && CALCOM_CREDENTIAL_SYNC_ENDPOINT`), a real token response lacking that property will fail `safeParse` and throw \"Invalid refreshed tokens were returned\". The intent of \"any numeric property is the expiry\" is not implemented.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:8-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sync branch of refreshOAuthTokens returns a fetch Response that callers do not expect",
+      "description": "When the sync endpoint is configured, the function returns a `fetch` `Response`. Callers were written against other shapes: Google reads `res?.data` (gaxios), HubSpot expects a `HubspotToken` object, and Zoho Bigin and Zoho CRM read `.data.error` and `.data.expiryDate` (axios). On the sync path these reads yield `undefined` and throw a TypeError, so the sync path is only compatible with callers that consume a raw `Response`. The function also returns the sync-endpoint response without checking `response.ok`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:6-16"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Literal placeholder string is written as refresh_token",
+      "description": "When the provider response omits `refresh_token`, the code assigns the literal string `\"refresh_token\"` to it and returns that as valid data. The caller then persists this string as the stored refresh token, which will fail on the next refresh. The existing stored refresh token should be kept, or the refresh should be rejected.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:24-26"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Office365 refresh now throws on schema mismatch instead of tolerating it",
+      "description": "The `if (!tokenResponse.success)` branch with the logged zod error was removed, and `parseRefreshTokenResponse` throws on failure. Previously a schema mismatch was logged and the credential update still ran with the old tokens. Now the refresh fails with a generic error, and the zod error details that were logged are no longer available.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts#refreshAccessToken"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Zoho Bigin add.ts hardcodes the callback slug instead of using config",
+      "description": "`redirectUri` now hardcodes `/api/integrations/zoho-bigin/callback` in place of `appConfig.slug`. The value matches today, but the `appConfig` import remains in this file and the slug is now duplicated. If `appConfig` is no longer referenced in this file, the import is unused.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/api/add.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google Calendar stores the zod SafeParse wrapper instead of the parsed key",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zoho Bigin passes credentialId where the userId is expected",
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zod computed keys do not express a wildcard and break the minimum schema",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:8-10",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sync branch of refreshOAuthTokens returns a fetch Response that callers do not expect",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:6-16",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Literal placeholder string is written as refresh_token",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:24-26",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Office365 refresh now throws on schema mismatch instead of tolerating it",
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Zoho Bigin add.ts hardcodes the callback slug instead of using config",
+      "location": "packages/app-store/zoho-bigin/api/add.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "diff": "9a840be7da9c94c1ca453cf0c63bebebe835ab53...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:47.613963",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 45943,
+  "diff_chars_injected": 45943,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 23727,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 21754,
+  "completion_tokens": 7936,
+  "reasoning_tokens": null,
+  "duration_seconds": 34.53839791705832,
+  "cost_usd": 0.01057941,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

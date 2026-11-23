@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Lithuanian login `loginTotpStep1` value replaced with Italian text",
+      "description": "The changed value is `Installa una delle seguenti applicazioni sul tuo cellulare:`, which is Italian. The previous Lithuanian text was dropped, so Lithuanian users will see Italian on the TOTP setup page. The same key in the other locales was changed to the correct language.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lithuanian account `totpStep1` value replaced with Italian text",
+      "description": "The new value `Installa una delle seguenti applicazioni sul tuo cellulare:` is Italian, not Lithuanian. This is the same copy-paste slip as the login bundle above.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Simplified Chinese account `totpStep1` uses Traditional Chinese characters",
+      "description": "The `messages_zh_CN` file is Simplified Chinese, but the new value `\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a` uses Traditional characters (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f). The Simplified form would be \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mismatched prefix and suffix ranges can throw in the \"Illegal HTML\" message builder",
+      "description": "The prefix loop and the suffix loop can overlap on the same characters. For example, if `value` is `aa` and `sanitized` is `a`, `start` becomes 1 and `end` becomes 1. Then `sanitized.substring(start, sanitized.length() - end)` becomes `substring(1, 0)`, which throws `StringIndexOutOfBoundsException` instead of adding the diagnostic message. The fix is to cap `end` so that `end <= min(value.length(), sanitized.length()) - start`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java#verifySafeHtml"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lithuanian login `loginTotpStep1` value replaced with Italian text",
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lithuanian account `totpStep1` value replaced with Italian text",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Simplified Chinese account `totpStep1` uses Traditional Chinese characters",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mismatched prefix and suffix ranges can throw in the \"Illegal HTML\" message builder",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java#verifySafeHtml",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "diff": "ea94b5d50e6de265cb7ddcd13f76a1cff31232cf...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:32:47.409485",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 77585,
+  "diff_chars_injected": 77585,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 40566,
+  "cached_tokens": 0,
+  "cache_write_tokens": 40564,
+  "completion_tokens": 5530,
+  "reasoning_tokens": null,
+  "duration_seconds": 25.832598791923374,
+  "cost_usd": 0.014802600000000003,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

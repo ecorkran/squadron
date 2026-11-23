@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fabricator contents are swapped between the two fabricator files",
+      "description": "`category_fabricator.rb` now defines `Fabricator(:embeddable_host)`, and `embeddable_host_fabricator.rb` now holds the `:category`, `:diff_category`, `:happy_category`, and `:private_category` fabricators. Each file's name points to the wrong content. The `category` fabricators still load, but anyone looking for the `:category` fabricator in `category_fabricator.rb` won't find it, and the embeddable_host fabricator is filed under the category name.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/fabricators/category_fabricator.rb:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host lookup lowercases the column but not the bound value",
+      "description": "`where(\"lower(host) = ?\", host)` lowercases only the stored column. `uri.host` is not downcased, so a referer such as `http://EvilTrout.com/page` yields `host = 'EvilTrout.com'`, which never equals a lowercased column value. The lookup then returns no match and the embed is rejected. The bound value needs `host.downcase`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration indexes a query result that may be empty",
+      "description": "`execute(\"SELECT c.id FROM categories ... WHERE s.name = 'embed_category'\")[0]['id']` raises `NoMethodError` on `nil` when no `embed_category` row matches a category, because `[0]` is nil on an empty result. The next line's `uncategorized_category_id` lookup has the same unguarded `[0]['value']` pattern.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Store test requests fruit 2 but the fixture always returns fruit 1",
+      "description": "The test now calls `store.find('fruit', 2)`, but the pretender route `/fruits/:id` still returns `fruits[0]` (apple, `color_ids: [1,2]`) for any id. The assertions on colors 1 and 2 pass only because the fixture ignores the id. The test looks like it covers banana (id 2, `color_ids: [3]`) but actually covers apple.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/javascripts/models/store-test.js.es6#find embedded"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test describe block misspells \"embeddable\"",
+      "description": "The new block is named `'with an emeddable host'`, which is a misspelling of \"embeddable\".",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/models/topic_spec.rb#expandable_first_post?"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test describe name refers to the removed method",
+      "description": "The block is named `\"allows_embeddable_host\"`, the name of the removed `SiteSetting.allows_embeddable_host?`, but the examples exercise `EmbeddableHost.host_allowed?`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/models/embeddable_host_spec.rb#allows_embeddable_host"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallback `|| []` is unreachable",
+      "description": "`hydrated` is the result of `Array.prototype.map`, which is always an array and never falsy, so `hydrated || []` never uses the fallback. Separately, `_lookupSubType` can return `undefined` for a missing id, which leaves `undefined` entries in the array.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`self.pluralize` existence could not be verified",
+      "description": "The new `_ids` branch calls `self.pluralize(subType)`. I could not confirm from the diff that the store defines `pluralize`. If it does not, the branch throws on any `*_ids` key.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`replace('_', '-')` only replaces the first underscore",
+      "description": "`type.replace('_', '-')` replaces only the first occurrence. The current `ADMIN_MODELS` entries have at most one underscore, so this does not break today. A type with two underscores would fail the lookup. A `/_/g` regex would avoid this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6#basePath"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Migration interpolates host values into SQL",
+      "description": "The `INSERT` builds its values with `'#{h}'` string interpolation. The values come from an existing site setting, so the risk is low, but a host containing a quote would break the statement. Parameterized inserts would avoid this.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fabricator contents are swapped between the two fabricator files",
+      "location": "spec/fabricators/category_fabricator.rb:1",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Host lookup lowercases the column but not the bound value",
+      "location": "app/models/embeddable_host.rb:17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration indexes a query result that may be empty",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Store test requests fruit 2 but the fixture always returns fruit 1",
+      "location": "test/javascripts/models/store-test.js.es6#find embedded",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test describe block misspells \"embeddable\"",
+      "location": "spec/models/topic_spec.rb#expandable_first_post?",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test describe name refers to the removed method",
+      "location": "spec/models/embeddable_host_spec.rb#allows_embeddable_host",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fallback `|| []` is unreachable",
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`self.pluralize` existence could not be verified",
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`replace('_', '-')` only replaces the first underscore",
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6#basePath",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Migration interpolates host values into SQL",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "diff": "7922902c7f148c6ed71d530b47565a9c106175f1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:35:49.914812",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32611,
+  "diff_chars_injected": 32611,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 17986,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 16013,
+  "completion_tokens": 8986,
+  "reasoning_tokens": null,
+  "duration_seconds": 39.45095520885661,
+  "cost_usd": 0.00938291,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`UsernameForm.authenticate` calls `isConditionalPasskeysEnabled()` with no arguments",
+      "description": "The new condition `context.getUser() != null && !isConditionalPasskeysEnabled()` calls a zero-argument method. The only definition in this diff is `protected boolean isConditionalPasskeysEnabled(UserModel user)` in `UsernamePasswordForm.java`, which takes a `UserModel`. Unless `UsernamePasswordForm` or its superclass has a zero-argument overload that the diff doesn't show, this is a compile error. If the intent was to pass the user, the call should be `isConditionalPasskeysEnabled(context.getUser())`. I could not open the base classes to confirm an overload exists.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`UsernamePasswordForm.challenge` inverts the original null check on the user",
+      "description": "The old guard was `context.getUser() == null && webauthnAuth != null && webauthnAuth.isPasskeysEnabled()`. The new guard is `isConditionalPasskeysEnabled(context.getUser())`, and the helper returns true only when `user != null`. Passkey data is now filled only when a user is already identified, which is the opposite of the old behavior and of the comment \"setup webauthn data when possible\". Also, the `authenticate` hunk now fills passkey data outside the old user-null block. Please confirm this is intended; if it is, the helper's name and the comment should say so.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`PasskeysUsernameFormTest` uses `Assert.assertNotNull` without an import shown in the diff",
+      "description": "The new test `webauthnLoginWithDiscoverableKey_reauthentication` calls `Assert.assertNotNull(...)`. The import hunks in this file add only `OIDCLoginProtocol`, so `org.junit.Assert` must already be imported elsewhere in the file. I could not check that, so this may be a compile error if the import is missing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`PasskeysUsernamePasswordFormTest.setUp` calls `configureTestRealm`, whose definition is not in the diff",
+      "description": "The new line `configureTestRealm(realmRepresentation);` is added in the setup method. The method is not defined in any hunk shown, so it must come from the base class or elsewhere in the file. This is informational only, since I could not verify it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`UsernameForm.authenticate` calls `isConditionalPasskeysEnabled()` with no arguments",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`UsernamePasswordForm.challenge` inverts the original null check on the user",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:137",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`PasskeysUsernameFormTest` uses `Assert.assertNotNull` without an import shown in the diff",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`PasskeysUsernamePasswordFormTest.setUp` calls `configureTestRealm`, whose definition is not in the diff",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "diff": "c851f7883d229dd2a940a77cd49220ecb126ec84...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:35.222665",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 35663,
+  "diff_chars_injected": 35663,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 17936,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 15963,
+  "completion_tokens": 6864,
+  "reasoning_tokens": null,
+  "duration_seconds": 30.50471341656521,
+  "cost_usd": 0.00830781,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

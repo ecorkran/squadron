@@ -103,6 +103,9 @@ The last row judged as one entry (`sq-haiku-line-lane-t`: both reviewers' findin
 | Entry | $/review | Recall | Precision | Critical | Critical + High | Low | False flags |
 |---|---|---|---|---|---|---|---|
 | haiku-xhigh run 1 + line pass, behavior-lane filter on both | $0.13 | 69.1% (96) | 33.4% | 11/12 | 55/66 | 6/18 | 191 |
+| the same with run 2 of each reviewer (`sq-haiku-line-lane-2-t`, 313 titles) | $0.13 | 66.9% (93) | 34.8% | 8/12 | 52/66 | 7/18 | 174 |
+
+- The pair repeats: 69.1% and 66.9% recall, 33.4% and 34.8% precision. haiku-xhigh alone gave 64.7% and 59.7% on the same two runs, so the pair is ahead of its own haiku-xhigh run both times, by 4 and 7 points of recall and 8 and 11 of precision. Critical items still swing with the haiku-xhigh run (11 and 8 of 12). 84 golden comments are found by both pair runs, 105 (75.5%) by either.
 
 - Judged as one entry the pair holds up: 6 more hits than haiku-xhigh run 1 alone, 3 more critical or high, and 69 fewer false flags. The union row filters only haiku-xhigh's findings; the judged entry also filters the line pass's (113 of its 134 kept), so the two differ by more than the judge run.
 - Telling the reviewer to leave out the rules categories gives the same precision as filtering those categories out afterwards, and ten fewer hits. One run each, so part of that gap may be run-to-run spread.
@@ -155,9 +158,7 @@ Greptile names one bug per PR. Matching those 50 to the judged golden comments, 
 Every review, comb and judge run started on 2026-11-22 finished and is in this file. Not done:
 
 - Opus 4.5 and GPT-5.2 judges on a final entry (`judge.sh` with `anthropic/claude-opus-4.5` and `openai/gpt-5.2`). Every number here is from one judge model.
-- A second run of the judged pair. It is one run of each reviewer, and a second haiku-xhigh run differed by five points of recall.
-
-Done after that list was written: the pair judged as one entry (table above), and the shipped comb prompt (`src/squadron/data/templates/comb.yaml`) now carries the truth-only wording (6778d02a; the recipe fix is 32089d9d; both #389).
+Done after that list was written: the pair judged as one entry, twice (table above), and the shipped comb prompt (`src/squadron/data/templates/comb.yaml`) now carries the truth-only wording (6778d02a; the recipe fix is 32089d9d; both #389).
 
 The harness checkout and the 50 sandboxes are in `~/.config/squadron/martian-20261122/` (copied there from the session scratch folder so a reboot does not clear them) and can be rebuilt (`setup.py`, then clone the harness, add entries with `convert.py`). The judge results are copied to `harness-results/`; copy again after each judge run.
 

@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Async callback in `forEach` in vital reschedule discards the calendar delete promise and escapes the try/catch",
+      "description": "`bookingRefsFiltered.forEach(async (bookingRef) => {` now returns a promise per element, but `forEach` ignores it. The `return calendar?.deleteEvent(...)` value is never awaited or collected, and a rejection from `getCalendar` or `deleteEvent` becomes an unhandled rejection rather than being caught by the surrounding `try`. The reschedule can report success while calendar deletions are still pending or have failed silently. Use `for...of` or `Promise.all(bookingRefsFiltered.map(...))`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/vital/lib/reschedule.ts:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Async callback in `forEach` in wipemycalother reschedule discards the calendar delete promise and escapes the try/catch",
+      "description": "Same slip as the vital reschedule: `bookingRefsFiltered.forEach(async (bookingRef) => {` drops the promise from `calendar?.deleteEvent(...)`, so failures bypass the `try` and deletions are not awaited. Replace with `for...of` or `Promise.all` over `map`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/wipemycalother/lib/reschedule.ts:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Async callback in `forEach` in trpc bookings reschedule discards the calendar delete promise",
+      "description": "`bookingRefsFiltered.forEach(async (bookingRef) => {` has the same defect. The awaited `getCalendar` and the returned `deleteEvent` promise are not joined to the mutation's flow, so the procedure can finish before calendar cleanup completes and rejections are unhandled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recurring-booking calendar updates run inside an un-awaited `forEach(async ...)`",
+      "description": "The newly added `const calendar = await getCalendar(credential);` sits inside `.forEach(async (credential) => {`. `forEach` does not wait for the callbacks, so the `updateEvent` calls queued in `apiDeletes`-style flows may still be running when the handler continues, and any error is not caught by the handler's error path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:460-461"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Async callback in `forEach` in vital reschedule discards the calendar delete promise and escapes the try/catch",
+      "location": "packages/app-store/vital/lib/reschedule.ts:125",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Async callback in `forEach` in wipemycalother reschedule discards the calendar delete promise and escapes the try/catch",
+      "location": "packages/app-store/wipemycalother/lib/reschedule.ts:125",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Async callback in `forEach` in trpc bookings reschedule discards the calendar delete promise",
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Recurring-booking calendar updates run inside an un-awaited `forEach(async ...)`",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:460-461",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "diff": "9246bad445bbd2085138c9b707f0c54eededc4d9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:37:06.763521",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 20721,
+  "diff_chars_injected": 20721,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11849,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9876,
+  "completion_tokens": 4333,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.878892541863024,
+  "cost_usd": 0.00521601,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

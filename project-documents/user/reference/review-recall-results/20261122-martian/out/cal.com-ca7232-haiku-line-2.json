@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`PrismaPromise` and `Prisma` imports appear unused after the `deleteMany` removal",
+      "description": "The diff removes the only visible uses of `PrismaPromise<Prisma.BatchPayload>` (the `deleteReminderPromise` array). Both names are still imported from `@prisma/client` in the top import block. Unless other uses exist elsewhere in the file (not verifiable from the diff), these imports are dead and will fail lint's unused-import rule. Also, the `Prisma` specifier on line 10 has no trailing comma, unlike its neighbors.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`deleteScheduledSMSReminder` calls `prisma` without an import visible in the diff",
+      "description": "The new body calls `prisma.workflowReminder.delete(...)`. The hunk does not add a `prisma` import, so it is unverified whether the file already imports `prisma`. If it does not, the module fails to compile or throws at runtime, and the catch block only logs the error. Confirm the import exists.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts#deleteScheduledSMSReminder"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dropping the `reminder.scheduled` guard changes which reminders get deleted",
+      "description": "The old code only cancelled reminders where `reminder.scheduled && reminder.referenceId` held. The new code calls `deleteScheduledEmailReminder`/`deleteScheduledSMSReminder` for every reminder. For reminders with no `referenceId`, the email helper now hard-deletes the row. For reminders with a `referenceId`, it sets `cancelled: true` and leaves the row. Same pattern in `bookings.tsx` and `workflows.tsx`. This is intentional-looking but a behavior change worth confirming.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:484-493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Outer condition in WorkflowStepContainer no longer covers sender-ID steps",
+      "description": "The wrapper condition changed from `(isPhoneNumberNeeded || isSenderIdNeeded)` to `isPhoneNumberNeeded`. The `isSenderIdNeeded` variable is now unused in this branch. If any sender-ID-specific markup lived inside the removed wrapper outside the phone block, it is no longer rendered. The diff does not show the full JSX, so this is unverified.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`PrismaPromise` and `Prisma` imports appear unused after the `deleteMany` removal",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-12",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`deleteScheduledSMSReminder` calls `prisma` without an import visible in the diff",
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts#deleteScheduledSMSReminder",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dropping the `reminder.scheduled` guard changes which reminders get deleted",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:484-493",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Outer condition in WorkflowStepContainer no longer covers sender-ID steps",
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "diff": "d0130224f54c3d53c3255d8006c6141da09e3f62...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:38.063798",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 27759,
+  "diff_chars_injected": 27759,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14246,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12273,
+  "completion_tokens": 5419,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.512396708130836,
+  "cost_usd": 0.00647911,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

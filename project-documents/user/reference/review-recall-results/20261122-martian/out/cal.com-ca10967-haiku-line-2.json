@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Organization slug spread condition is inverted, so the slug is now stored only when team billing is enabled",
+      "description": "The original line was `...(!IS_TEAM_BILLING_ENABLED && { slug })`, which includes `slug` when billing is disabled. The replacement `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` reverses that, so `slug` is dropped in the non-billing case and written only when billing is on. The `requestedSlug` line on the next changed line keeps the original sense, so the two fields now diverge.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Non-calendar `credentialId` is replaced with `undefined` in the video/other-app branch",
+      "description": "The original expression was `credentialId: isCalendarType ? evt.destinationCalendar?.credentialId : result.credentialId`, so non-calendar results keep `result.credentialId`. The new expression is `isCalendarType ? result.credentialId : undefined`. Non-calendar results (video and other apps) now lose their `credentialId`, which breaks later lookups of those references. The calendar branch was the only part that should have changed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:170"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Google `updateEvent` fallback calendar lookup compares against the falsy `externalCalendarId` and can never match",
+      "description": "In the `: ` branch of `externalCalendarId ? externalCalendarId : ...`, `externalCalendarId` is already known to be falsy. The new `find((cal) => cal.externalId === externalCalendarId)` therefore compares each `externalId` against a falsy value and returns `undefined` for any real calendar. The previous code returned `event.destinationCalendar?.externalId`. The fallback calendar is now always `undefined`, so updates go to the wrong calendar or fail. The lookup should use the destination's own identity, not `externalCalendarId`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:256"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Google `deleteEvent` fallback has the same never-matching `find` on the falsy `externalCalendarId`",
+      "description": "The `calendarId` ternary repeats the defect from `updateEvent`. When `externalCalendarId` is falsy, `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)` cannot select a real calendar, so `calendarId` is `undefined` and the delete targets nothing useful. The original used `event.destinationCalendar?.externalId`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:317"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unguarded `.integration` access on a possibly undefined first destination calendar throws a TypeError",
+      "description": "`const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` yields `undefined` when the array is empty or null. The next line reads `mainHostDestinationCalendar.integration` with no optional chaining. Any booking with a Google Meet location and no destination calendar will throw here, where the original used `evt.destinationCalendar?.integration`. The access should be `mainHostDestinationCalendar?.integration`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:119"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Organization slug spread condition is inverted, so the slug is now stored only when team billing is enabled",
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Non-calendar `credentialId` is replaced with `undefined` in the video/other-app branch",
+      "location": "packages/core/EventManager.ts:170",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google `updateEvent` fallback calendar lookup compares against the falsy `externalCalendarId` and can never match",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:256",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google `deleteEvent` fallback has the same never-matching `find` on the falsy `externalCalendarId`",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:317",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unguarded `.integration` access on a possibly undefined first destination calendar throws a TypeError",
+      "location": "packages/core/EventManager.ts:119",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+    "diff": "57d246df47d552209a38d3fcba638b19a91fb909...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:37:07.108026",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 50324,
+  "diff_chars_injected": 50324,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 23042,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 21069,
+  "completion_tokens": 6547,
+  "reasoning_tokens": null,
+  "duration_seconds": 27.688515666872263,
+  "cost_usd": 0.00967891,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

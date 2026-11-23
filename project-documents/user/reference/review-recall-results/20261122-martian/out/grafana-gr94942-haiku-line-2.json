@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "enableSqlExpressions returns false on every path, so SQL expressions can never be enabled",
+      "description": "The new helper computes `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`. When the flag is on, `enabled` is false and the function returns false. When the flag is off, `enabled` is true, the `if enabled` branch returns false, and the function still returns false. The final `return false` makes the feature-flag result irrelevant. The `QueryTypeSQL` case in `ReadQuery` then always returns `\"sqlExpressions is not implemented\"`, even with the flag enabled. The intended result is `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, with the negation and the dead branch removed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go#enableSqlExpressions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "DB methods are stubs that always return errors, so TablesList and SQLCommand cannot succeed",
+      "description": "`TablesList`, `RunCommands`, and `QueryFramesInto` all return `errors.New(\"not implemented\")`. `TablesList` in `pkg/expr/sql/parser.go` now calls `NewInMemoryDB()` and `RunCommands`, so it always fails. `SQLCommand.Execute` in `pkg/expr/sql_command.go` now calls `QueryFramesInto`, which also always fails. The go-duck dependency was removed in the same change, so SQL expressions have no working backend after this diff. This should be intentional and documented if it is a staged removal.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:1-26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "sql_command.go references the sql package without an import in the hunk",
+      "description": "The hunk changes `duck.NewInMemoryDB()` to `sql.NewInMemoryDB()` and removes the go-duck import, but it does not add an import for `github.com/grafana/grafana/pkg/expr/sql`. The file may already import that package elsewhere, but the diff alone does not show it. I could not verify this without reading the file.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/expr/sql_command.go#Execute"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "enableSqlExpressions returns false on every path, so SQL expressions can never be enabled",
+      "location": "pkg/expr/reader.go#enableSqlExpressions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "DB methods are stubs that always return errors, so TablesList and SQLCommand cannot succeed",
+      "location": "pkg/expr/sql/db.go:1-26",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "sql_command.go references the sql package without an import in the hunk",
+      "location": "pkg/expr/sql_command.go#Execute",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:34:33.685974",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 16217,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 14244,
+  "completion_tokens": 1941,
+  "reasoning_tokens": null,
+  "duration_seconds": 9.679845500271767,
+  "cost_usd": 0.00533151,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

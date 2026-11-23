@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Working-hours \"end\" is computed from the slot start instead of the slot end",
+      "description": "The new working-hours check computes `const end = slotStartTime.hour() * 60 + slotStartTime.minute();`. This is identical to `start`, so `end > workingHour.endTime` tests the slot start, not the slot end. The condition should use `slotEndTime`. As written, a slot that starts inside working hours but ends after them is treated as available.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:141"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Zero-length override check compares dayjs object references with `===`",
+      "description": "`if (dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\"))` compares two freshly created dayjs objects by reference, so it is always false and the branch never runs. Equality should use `.isSame(...)` or compare `valueOf()` values. The intended behavior for zero-length overrides is not reached.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:114"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Working-hours \"end\" is computed from the slot start instead of the slot end",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:141",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zero-length override check compares dayjs object references with `===`",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:114",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "diff": "4b23bcf8914b88da2d69aa44331baa835529f278...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:12.009283",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9104,
+  "diff_chars_injected": 9104,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 7046,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 5073,
+  "completion_tokens": 2833,
+  "reasoning_tokens": null,
+  "duration_seconds": 13.278528917115182,
+  "cost_usd": 0.00302511,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

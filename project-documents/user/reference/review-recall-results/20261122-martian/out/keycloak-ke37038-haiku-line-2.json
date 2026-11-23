@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "UsersResource.searchForUser drops the per-user view filter, so search results are no longer checked against the caller's permissions",
+      "description": "The old code ended with `session.users().searchForUserStream(realm, attributes, firstResult, maxResults).filter(usersEvaluator::canView)`. The new code passes `session.users().searchForUserStream(...)` straight to `toRepresentation` with no `.filter(usersEvaluator::canView)`. The group-id filter that replaces it only applies when `getGroupIdsWithViewPermission()` is non-empty. A caller with per-user VIEW permissions and no group-based permissions gets an empty id set, so no GROUPS attribute is set, and the search can return realm users the caller has no permission to view. BruteForceUsersResource has no such filter in its original code, so the regression is limited to UsersResource.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java#searchForUser"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "testManageGroup sends the wrong representation when checking that topGroup cannot be updated",
+      "description": "The test is meant to show that myadmin cannot update topGroup. It calls `realmAdminClient.realm(...).groups().group(topGroup.getId()).update(myGroup)`, so the body carries myGroup's id while the path targets topGroup. The expected ForbiddenException may come from the id mismatch or from some other check, not from the permission check the test is meant to exercise. The body should be `topGroup`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java#testManageGroup"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removed `java.util.Arrays` import may break compilation if the file still uses Arrays",
+      "description": "The diff removes `import java.util.Arrays;` from UserResourceTypeEvaluationTest. This review cannot read the rest of that file, so it cannot confirm that Arrays is unused there. If any `Arrays.` call remains, the test will fail to compile.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "UsersResource.searchForUser drops the per-user view filter, so search results are no longer checked against the caller's permissions",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java#searchForUser",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "testManageGroup sends the wrong representation when checking that topGroup cannot be updated",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java#testManageGroup",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Removed `java.util.Arrays` import may break compilation if the file still uses Arrays",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "diff": "adbf7e325f79be3b8e5cfa54483c962fd3f5683d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:15.802889",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 66033,
+  "diff_chars_injected": 66033,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 30964,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 28991,
+  "completion_tokens": 8094,
+  "reasoning_tokens": null,
+  "duration_seconds": 33.200664250180125,
+  "cost_usd": 0.01283051,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

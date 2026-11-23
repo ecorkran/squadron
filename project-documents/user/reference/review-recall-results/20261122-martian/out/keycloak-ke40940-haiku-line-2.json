@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reader thread never stops if a group delete throws",
+      "description": "`deletedAll.set(true)` runs only after the delete loop completes normally. If `managedRealm.admin().groups().group(groupUuid).remove()` throws, the flag is never set. The reader thread at line 140 (`while (!deletedAll.get())`) then loops forever with no sleep, consuming a CPU core for the rest of the JVM's life. The set should be in a `finally` block.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Replacement field `modelSupplier` is not visible in the diff",
+      "description": "`getSubGroupsCount()` now calls `modelSupplier.get()` directly instead of `getGroupModel()`. I could not confirm from the diff that `modelSupplier` is a field on this class, or that it returns the same model as `getGroupModel()` (for example, if `getGroupModel()` does extra work). The null-guard return is consistent with the `Long` return type.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:274"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removed private helper may still be referenced in GroupUtils",
+      "description": "`groupMatchesSearchOrIsPathElement` was deleted. Any remaining call in this file would fail to compile. The diff hunk does not show the rest of the file, so I could not confirm there are no callers. If `StringUtil` was used only by this method, its import may now be unused.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reader thread never stops if a group delete throws",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Replacement field `modelSupplier` is not visible in the diff",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:274",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Removed private helper may still be referenced in GroupUtils",
+      "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "diff": "7fdb3b9b6b815577e65cb19ce2f2646e9a688e7a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:10.301662",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 5626,
+  "diff_chars_injected": 5626,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 5485,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 3512,
+  "completion_tokens": 4665,
+  "reasoning_tokens": null,
+  "duration_seconds": 21.51865491690114,
+  "cost_usd": 0.0034728100000000002,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

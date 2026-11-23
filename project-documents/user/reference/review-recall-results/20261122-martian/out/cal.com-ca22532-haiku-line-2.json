@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sed -i ''` uses BSD-only syntax and fails on GNU/Linux",
+      "description": "The in-place edit `sed -i '' -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"` passes an empty backup suffix, which is required by macOS/BSD sed. GNU sed reads `''` as the script and then fails on the expression. The script only works on Darwin, and nothing in the diff documents that.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ENV_FILE` is resolved relative to the current directory, not the script",
+      "description": "`ENV_FILE=\"../.env\"` is a relative path, so it resolves against wherever the script is invoked. Run from the repo root, it writes `GOOGLE_WEBHOOK_URL` to a `.env` outside the repository. Run from `scripts/`, it writes to the repo-root `.env`. The path should be derived from the script's own location, or the working directory should be documented.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:5"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sed -i ''` uses BSD-only syntax and fails on GNU/Linux",
+      "location": "scripts/test-gcal-webhooks.sh:68",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`ENV_FILE` is resolved relative to the current directory, not the script",
+      "location": "scripts/test-gcal-webhooks.sh:5",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "diff": "74608dcfae2592562c1b07b0b24a783d6f80659a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:11.609702",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23017,
+  "diff_chars_injected": 23017,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 13211,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 11238,
+  "completion_tokens": 4455,
+  "reasoning_tokens": null,
+  "duration_seconds": 19.332511541899294,
+  "cost_usd": 0.00568511,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

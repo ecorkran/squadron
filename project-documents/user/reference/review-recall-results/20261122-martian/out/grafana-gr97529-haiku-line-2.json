@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`err :=` in NewResourceServer may not compile if `err` is already declared",
+      "description": "The new block `err := s.Init(ctx)` only compiles if `err` is not already declared in the enclosing scope of `NewResourceServer`. The diff does not show the earlier lines of that function, so this could not be confirmed. If `err` is already in scope, use `err = s.Init(ctx)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go#NewResourceServer"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`s.log` and `s.search.TotalDocs()` are used without visible confirmation",
+      "description": "The diff adds `s.log.Info(..., \"total_docs\", s.search.TotalDocs())` in `init` and switches `logger.Warn` to `s.log.Warn`. I could not confirm from the diff that `searchSupport` has a `log` field, that `search` has a `TotalDocs` method, or that `s.search` is non-nil at that point in `init`. Each should be checked against the type definitions.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go#init"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`err :=` in NewResourceServer may not compile if `err` is already declared",
+      "location": "pkg/storage/unified/resource/server.go#NewResourceServer",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`s.log` and `s.search.TotalDocs()` are used without visible confirmation",
+      "location": "pkg/storage/unified/resource/search.go#init",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "diff": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:33:43.119972",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9480,
+  "diff_chars_injected": 9480,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 7831,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 5858,
+  "completion_tokens": 2306,
+  "reasoning_tokens": null,
+  "duration_seconds": 11.30409116577357,
+  "cost_usd": 0.0029967100000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

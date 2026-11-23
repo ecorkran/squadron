@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The `deleteMany` OR's second branch has no method or date filter, so it deletes non-SMS and future-scheduled reminders",
+      "description": "The new `OR` clause adds `{ retryCount: { gt: 1 } }` as a standalone branch. Only the first branch restricts `method: WorkflowMethods.SMS` and `scheduledDate <= now`. The second branch matches every `WorkflowReminder` with `retryCount > 1`, regardless of `method` (email, WhatsApp, and so on) and regardless of `scheduledDate` (including reminders scheduled in the future that are still valid). The original query was scoped to past-due SMS reminders, so this change widens a destructive delete well beyond its intent. The retry condition needs to be nested inside the SMS and past-date conditions, for example as an `AND` of all three.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:31-43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `retryCount` update in the `catch` block can throw and escape the per-reminder loop",
+      "description": "The new `prisma.workflowReminder.update` call sits inside the `catch` block, outside any `try`. If the update fails (for example, because the reminder was deleted mid-run or the database is unavailable), the exception propagates out of the `for` loop and aborts processing for all remaining reminders. The `console.log` that follows is never reached. Wrapping the update in its own `try`/`catch`, or moving it so a failure cannot abort the loop, would prevent this.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The retry threshold is `gt: 1`, so reminders are deleted at `retryCount` 2, not after a single retry",
+      "description": "A reminder is incremented once per failed attempt. Deletion happens when `retryCount > 1`, so the effective number of attempts before deletion depends on how many runs occur before the check. Confirm that `gt: 1` matches the intended retry limit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:39-41"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `deleteMany` OR's second branch has no method or date filter, so it deletes non-SMS and future-scheduled reminders",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:31-43",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The `retryCount` update in the `catch` block can throw and escape the per-reminder loop",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The retry threshold is `gt: 1`, so reminders are deleted at `retryCount` 2, not after a single retry",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:39-41",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "diff": "b521f3a8ec35ec1e90b28075046b369b6eff5554...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T20:36:22.650621",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 2947,
+  "diff_chars_injected": 2947,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 4335,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 2362,
+  "completion_tokens": 2382,
+  "reasoning_tokens": null,
+  "duration_seconds": 12.78304204205051,
+  "cost_usd": 0.00198381,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}
