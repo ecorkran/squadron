@@ -259,7 +259,7 @@ keep_categories:
 
 - `line-pass.rules.md` is the measured file, `review-recall-results/20261122-martian/rules-line-pass.md`, copied byte for byte. A test compares the two files, so an edit to the shipped one is a deliberate act that also changes its identity.
 - The name is not an alias in `models.toml`.
-- The wheel must carry the `.md` file; a test loads the recipe from the installed package data directory.
+- The wheel must carry the `.md` file. A test loads the recipe from the shipped data directory; a one-time `uv build` and `unzip -l` check confirms the wheel carries the file (Hatch packages all of `src/squadron`; no test builds the wheel).
 - `tests/benchmark/recall/test_recipe.py`: the `SHIPPED` set gains the third recipe and `test_shipped_recipes_are_the_two_with_no_opus_high_comb` is renamed to drop "the two", in the commit that adds the file. `tests/pipeline/test_classification.py`, `test_recipe_no_longer_shipped_is_refused_at_the_pre_run_check`, pins the string `Known recipes: haiku-sol-luna, haiku-solr-luna.`; it gains `haiku-line-pass` in the same commit.
 - A project file `project-documents/user/recipes/haiku-line-pass.yaml` replaces the shipped recipe for that project, P6's default included. This is 434's behavior, with its existing WARNING naming both files; nothing is built for it here.
 

@@ -303,3 +303,18 @@ The `-haiku-line-1.json` and `-haiku-xhigh-1.json` files exist for many PRs. Sev
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 12
 - Finding-shaped matches — surviving validation: 12
+
+## Resolution
+
+- **Task 9 says "a line pass that raises" without naming the exception type** — Applied. Task 9's test and Task 22's failed-line-pass tests now raise `ProviderError`; Task 22 notes other exceptions propagate (434 D5).
+- **Task 21 places the existing `haiku-solr-luna` / `haiku-sol-luna` tests in the wrong file** — Applied by removal. The line is dropped; Task 25's full `uv run pytest -q` covers those tests where they live.
+- **Packaging of the rules file is checked once by hand, not by a test** — Applied. Task 17 records the one-time wheel check as the chosen mitigation; design D9's Technical Requirements line now says the same.
+- **The `P56` and `P456` comments point to a P6 note whose content is about to change** — Applied. Task 20 rewords their comment to say they keep `haiku-xhigh` (#390); their value is unchanged.
+- **A test name becomes wrong after Task 20** — Applied. Task 20 renames it to `test_review_template_default_model`.
+- **The pre-run check test is placed in the wrong test module** — Applied. Task 12 moves it to `tests/pipeline/test_classification.py`, beside `test_review_model_recipe_passes_the_pre_run_check`.
+- **`review/rules.py` still hard-codes the rules separator in one place** — Applied. Task 8 replaces the literal with `RULES_SEPARATOR`.
+- **Task 23 does not say where in the README the new default goes** — Applied. Task 23 names the recipe paragraph after the pipeline example.
+- **Task count is proportionate, with two obvious merges** — Rejected. The finding says neither merge is needed; Tasks 21–22 already share one commit, as do 18–19.
+- **The D6 escaping defeats the parser's finding patterns** — Pass; no change.
+- **`pipeline.review-model` feeds only code reviews in the four pipelines** — Pass; no change.
+- **Task 18's fixture selection is feasible from the stored outputs** — Pass; no change.

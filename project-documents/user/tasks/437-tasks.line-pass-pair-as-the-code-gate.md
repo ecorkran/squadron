@@ -125,6 +125,7 @@ revision_number: 3
 
 ### Task 8: `reviewer_call_options` (D2, D3)
 - [ ] New `recipes/reviewer_options.py` with `reviewer_call_options(call_options, options) -> dict`: returns a copy. For `options is None`, unchanged. Otherwise sets `no_tools` to `not options.tools`, and `rules_content` to the step's `call_options["rules_content"]` + `RULES_SEPARATOR` + `options.rules_content` when the step has rules, or `options.rules_content` alone when it has none; when the reviewer has no rules file, `rules_content` stays the step's
+- [ ] `review/rules.py`: replace the literal `"\n\n---\n\n"` in the template-rules join with `RULES_SEPARATOR` (same value)
 - [ ] Tests in `tests/recipes/test_reviewer_options.py`, each run against both entry points' options dict shapes (the CLI's, which carries `no_tools`, and the action's, which does not; copy the shapes from `cli/commands/review_recipe.py` and `pipeline/actions/review_recipe.py`):
   - [ ] No options: returned dict equals the input, and the input is not mutated
   - [ ] `tools: false`: `no_tools is True`; `tools: true`: `no_tools is False`
@@ -141,7 +142,7 @@ revision_number: 3
 - [ ] Tests in `tests/recipes/test_recipe_runner.py` with the scripted review call:
   - [ ] The recorded calls show: the `tools: false` reviewer got `no_tools=True` and the step rules + separator + file; the other reviewer got the step's `no_tools` and `rules_content` unchanged
   - [ ] Kept and `not_gating` partition the reviewer's CONCERN/FAIL findings per `keep_categories`
-  - [ ] A line pass that raises: one WARNING logged naming the reviewer, its outcome is a harness failure, the recipe is incomplete
+  - [ ] A line pass that raises `ProviderError`: one WARNING logged naming the reviewer, its outcome is a harness failure, the recipe is incomplete
   - [ ] A recipe with no options and no filter behaves as before (existing tests pass unchanged)
 
 **Commit**: `feat: run recipe reviewers with their own options and the category filter`
@@ -171,7 +172,8 @@ revision_number: 3
 - [ ] Tests:
   - [ ] `tests/metrology/test_recipe_review_models.py`: a stored record JSON with no `keep_categories` field loads with `None`
   - [ ] `tests/recipes/test_recipe_review.py`: a record built from a recipe with a filter carries its list, one without carries `None`. `split_by_category` over the record's review stages whose outcome is OK, with `keep_categories`, reproduces the runner's gating set for the same scripted outputs, including a reviewer whose UNKNOWN-verdict stage carries findings the runner did not use
-  - [ ] `tests/recipes/test_model_ref.py`: each refusal on `slice`, `tasks`, `arch` and a `code` review with `files` and no diff, the message naming the recipe and template; a `code` review with a diff passes; the pre-run check passes a `code` step with `files` and no diff (it is refused when the step runs, D7)
+  - [ ] `tests/recipes/test_model_ref.py`: each refusal on `slice`, `tasks`, `arch` and a `code` review with `files` and no diff, the message naming the recipe and template; a `code` review with a diff passes
+  - [ ] `tests/pipeline/test_classification.py`, beside `test_review_model_recipe_passes_the_pre_run_check`: the pre-run check passes a `code` step with `files` and no diff and a recipe with `keep_categories` (it is refused when the step runs, D7)
 
 **Commit**: `feat: record the category filter and refuse it on reviews without a diff`
 
@@ -215,7 +217,7 @@ revision_number: 3
 - [ ] New tests in `tests/benchmark/recall/test_recipe.py`:
   - [ ] The shipped rules file's bytes equal `MARTIAN/rules-line-pass.md`
   - [ ] The recipe loads from the shipped data directory (`shipped_recipes_dir()`), with `rules_content` set, `haiku` options `tools: false`, and the five categories
-- [ ] One-time check, not a unit test (a checkout's pytest run reads `src/squadron/data`, so only this checks packaging): `uv build --wheel --out-dir <temp dir>` and `unzip -l` on the wheel lists `squadron/data/recipes/line-pass.rules.md`. Record the result as a note under this item
+- [ ] One-time check, not a unit test (a checkout's pytest run reads `src/squadron/data`, so only this checks packaging): `uv build --wheel --out-dir <temp dir>` and `unzip -l` on the wheel lists `squadron/data/recipes/line-pass.rules.md`. Record the result as a note under this item. This one-time check is the chosen mitigation: Hatch packages all of `src/squadron`, and no test builds the wheel
 - [ ] Task 2's pins pass unchanged
 
 **Commit**: `feat: ship the haiku-line-pass recipe and line-pass rules file`
@@ -237,10 +239,10 @@ revision_number: 3
 ### Task 20: Pipeline defaults (D10)
 - [ ] `review-model: haiku-line-pass` in `data/pipelines/P6.yaml`, `implement.yaml`, `implement-plan.yaml`; `model: haiku-line-pass` in `review.yaml`. Confirm in each that the parameter feeds only `template: code` reviews
 - [ ] Replace the whole existing comment block above `review-model` in `P6.yaml` (its figures and recipe list included) with one that says what the recipe is, that `review-model: haiku-xhigh` gives the old gate, and points to `MARTIAN/RESULTS.md`; no numbers
-- [ ] `P56.yaml` and `P456.yaml` unchanged; the `code` template's `model` unchanged
+- [ ] `P56.yaml` and `P456.yaml` keep `review-model: haiku-xhigh`; only their comment `# review-model: see the note in P6.yaml.` changes, to say they keep `haiku-xhigh` because their `review-model` also reviews documents (#390). The `code` template's `model` unchanged
 - [ ] Pinned tests updated:
   - [ ] `tests/pipeline/test_builtin_pipelines.py` `test_implement_plan_params_and_shape`: `review-model` is `haiku-line-pass`
-  - [ ] `tests/review/test_review_template_defaults.py`: no assertion changes. The test reads the templates, not the pipelines, and the `code` template's model stays `haiku-xhigh`, so it passes as it is. Reword the module docstring and the `PIPELINE_REVIEW_MODEL` comment, which say the templates agree with every pipeline's reviewer: the `code` template keeps `haiku-xhigh` (its model is part of the template hash) while four pipelines now review code with `haiku-line-pass`
+  - [ ] `tests/review/test_review_template_defaults.py`: no assertion changes. The test reads the templates, not the pipelines, and the `code` template's model stays `haiku-xhigh`, so it passes as it is. Rename `test_standalone_review_default_matches_the_pipeline` to `test_review_template_default_model`, and reword the module docstring and the `PIPELINE_REVIEW_MODEL` comment, which say the templates agree with every pipeline's reviewer: the `code` template keeps `haiku-xhigh` (its model is part of the template hash) while four pipelines now review code with `haiku-line-pass`
   - [ ] `tests/pipeline/test_loader.py` `test_review_pipeline_defaults_to_the_p6_code_reviewer`: no change. It compares `review.yaml`'s `model` with P6's `review-model`; both become `haiku-line-pass`, so the assertion and its docstring stay true
   - [ ] New parametrized test in `tests/pipeline/test_builtin_pipelines.py` pinning each shipped pipeline's code reviewer: `review-model` is `haiku-line-pass` in `P6`, `implement` and `implement-plan`; `model` is `haiku-line-pass` in `review`; `review-model` is `haiku-xhigh` in `P56` and `P456` (#390)
 - [ ] New test in `tests/pipeline/test_classification.py`, beside `test_review_model_recipe_passes_the_pre_run_check`: the pre-run check passes for each of the four pipelines with `review-model` (or `model`) resolved to `haiku-line-pass` as a recipe
@@ -253,7 +255,6 @@ revision_number: 3
   - [ ] The scripted `haiku` call recorded `no_tools=True` and the step rules + `RULES_SEPARATOR` + `line-pass.rules.md`'s content
   - [ ] Review ingest of the saved file records no not-gating finding
 - [ ] In the same file: `haiku-line-pass` on `sq review slice` and `sq review tasks` exits 1 naming the recipe and template; the scripted call is never invoked
-- [ ] The existing `haiku-solr-luna` and `haiku-sol-luna` tests pass unchanged
 
 ### Task 22: Action path, reviser and a failed line pass
 - [ ] In `tests/pipeline/actions/test_review_recipe.py`, the scripted outputs of Task 21 through `run_recipe_part`:
@@ -261,6 +262,7 @@ revision_number: 3
   - [ ] The scripted `haiku` call recorded `no_tools=True` and the step rules + `RULES_SEPARATOR` + the rules file content
 - [ ] In `tests/pipeline/actions/test_dispatch.py`: the reviser's findings block (`_findings_block`) for that review action's result holds no not-gating finding title
 - [ ] Failed line pass, in `tests/pipeline/actions/test_review_recipe.py`, one test each:
+  - [ ] The line pass raises `ProviderError` in both (other exceptions propagate, 434 D5)
   - [ ] With a gating finding from `haiku-xhigh`: WARNING logged, `harness_failure` in the stage table and the record, `recipeComplete: false`, verdict FAIL
   - [ ] With only not-gating findings from `haiku-xhigh`: verdict UNKNOWN, the review fails, and the saved file's `## Findings` section holds the "No gating findings; 1 not gating" line
 
@@ -271,7 +273,7 @@ revision_number: 3
 - [ ] Same section, the shipped-recipes paragraph: add `haiku-line-pass` (needs neither `OPENROUTER_API_KEY` nor Codex credits; two reviewers, no comb), and correct "Each runs two reviewers and one `luna-r` comb" to cover it
 - [ ] Same section, the refusal list: add `keep_categories` and a `tools: false` reviewer on a review with no diff
 - [ ] `docs/PIPELINES.md` `implement-plan` section: the sentence "`review-model` defaults to `haiku-xhigh`, matching `P6`" says `haiku-line-pass`. The plan-batch parameter table's `review-model` row (`slices-plan`, `tasks-plan`) stays `haiku-xhigh` (design Technical Requirements)
-- [ ] `README.md` names the new default code gate
+- [ ] `README.md`: the recipe paragraph after the pipeline example (the one naming `haiku-sol-luna`) names `haiku-line-pass` as the new default code gate of the four pipelines
 - [ ] `CHANGELOG.md` `[Unreleased]`: one short user-facing bullet (detail belongs in DEVLOG)
   - [ ] `grep -n "haiku-xhigh\|haiku-sol-luna\|luna-r\|refused before any model call" docs/PIPELINES.md README.md`: every hit is correct after this slice
 
