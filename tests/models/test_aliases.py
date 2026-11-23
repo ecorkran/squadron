@@ -320,6 +320,7 @@ FIXED_EFFORT_BUILTINS = {
     "sonnet-high": "high",
     "opus-high": "high",
     "fable-medium": "medium",
+    "neon-medium": "medium",
 }
 
 
