@@ -353,3 +353,30 @@ Verified: the CLI options dict (cli/commands/review_recipe.py:80–84) carries `
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 22
 - Finding-shaped matches — surviving validation: 22
+
+## Resolution
+
+Task file revised 20261123 after this review. No further review was run.
+
+- **Task 10's empty-Findings rule does not keep the table out of the parser** — Applied: table cells escape `|`, `[` and `#`, so no cell holds finding-shaped text and the Findings span is kept (Task 10, which also adds this to design D6). The parser guard is unchanged.
+- **Task 5 misdescribes `recipe_hash`** — Applied: Task 5 builds the canonical dict explicitly instead of `model_dump`.
+- **Task 2's pin test iterates the shipped directory** — Applied: the 13 files are named.
+- **The degraded branch overrides the new rule** — Applied: Task 11 puts the branch before `fallback_used` and `degraded`; Tasks 11 and 22 assert the saved section for UNKNOWN.
+- **"Matches no stored entry" needs a named skip** — Applied: `_pair_variants` (Task 15).
+- **Task 9's scripted call cannot record `no_tools` or `rules_content`** — Applied: `CallRecord` gains both (Task 9).
+- **Task 15 leaves the pinned JSON schema open** — Applied: three named `RowJson` fields and the `EXPECTED_ROW` update (Task 16).
+- **Task 3's unknown-category refusal cannot name the value** — Applied: explicit validator check; the test asserts the value.
+- **Task 3 is too large** — Applied: split into Task 3 (fields, category refusals) and Task 4 (rules file read).
+- **Task 10 bundles separable work** — Applied: split into Task 10 (table, field, docstring) and Task 11 (persistence, parser test).
+- **No test runs the pipeline action path** — Applied: Task 22, `tests/pipeline/actions/test_review_recipe.py`.
+- **Task 22 names a row that does not exist** — Applied: Task 23 names the `implement-plan` sentence and keeps the plan-batch row.
+- **Task 13 does not name the refusal type** — Applied: `RecallRefusal` (Task 14).
+- **Task 16 must thread the categories** — Applied: through `chain_counts`; the record-without-field case shows 0 (Task 17).
+- **Two places compute the rules hash** — Applied: `rules_sha256` (Task 4), used by Tasks 5 and 6.
+- **Task 12 names no arch test** — Applied: `arch` added (Task 13).
+- **Task 1 requires a clean tree** — Applied: Task 1 commits the task file first if it is listed.
+- **The P6 comment rewrite must remove the existing figures** — Applied: Task 21 replaces the whole block.
+- **Four tasks name no test file** — Applied: files named in Tasks 12, 16, 18, 21.
+- **Task 23's Draft text is a paragraph** — Applied: Task 24 deletes the sentence from the paragraph.
+- **Task 24's grep check is not mechanical** — Applied: Task 25 greps for membership tests on `keep_categories`. Entry 18 (437) is at line 236 of `user/architecture/420-slices.model-benchmark.md`; no change.
+- **Code claims that check out** (pass) — No change.
