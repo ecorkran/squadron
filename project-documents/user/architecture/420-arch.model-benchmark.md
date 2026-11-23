@@ -7,7 +7,7 @@ project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [140, 300, 320, 400]
 dateCreated: 20261104
-dateUpdated: 20261118
+dateUpdated: 20261123
 status: not_started
 ---
 
@@ -43,6 +43,10 @@ Slice 434 lets production reviews use 430's recipes: the pipeline review step an
 - **Cost rule.** A production recipe review is not a measured run. It prints no bound of its own. In a pipeline it is bounded as any review action is, by `pipeline.max_cost_usd` (947); a standalone `sq review` is uncapped, as it is for a single model. The rule that a measured run prints its bound and stops at its own cap still applies to every benchmark command.
 - **Records.** Each recipe review writes one coarse record to the metrology store as a by-product, which 430's report, 431 and 433 read. "Measure, never gate" holds: nothing reads a benchmark result to choose a recipe.
 - **Serial stages.** "Several in parallel" in the Overview describes a recipe's shape. In 430 and 434 its stages run one after another ([#372](https://github.com/ecorkran/squadron/issues/372)), so recorded durations are serial.
+
+## Amendment (20261123)
+
+The PM added slice 437 to the plan from a run of squadron's reviewers on a public code-review benchmark (`user/reference/review-recall-results/20261122-martian/RESULTS.md`). Results from a public benchmark may inform which review configuration ships: 437's recipe, its rules file and its test fixtures come from that run. The non-goal below still holds for this component's own case sets: cases for `sq benchmark` come from project history. The 20261122 comparison is two runs a side with no paired intervals, so it is weaker evidence than the comparison rule in the Overview asks for; 437's design says so.
 
 ## Design Goals
 
