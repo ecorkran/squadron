@@ -1,0 +1,68 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Three I/O paths have no stated bound, and one claim contradicts D7",
+   "description": "The failure-mode table is thorough for `thread.run`, but hang handling is missing or inconsistent elsewhere:\n- **Logout:** `sq auth logout` starts the runtime and calls `AsyncCodex.logout()`, a new I/O path. No D7 key covers it (`codex.account_timeout_s` is scoped at line 109 to status and post-login confirmation) and no table row gives its hang or error behaviour.\n- **Turn startup:** line 82 says the startup hang \"is already bounded by `codex.turn_timeout_s`\". Lines 107 and 125 scope that timeout to \"one `thread.run`\", which leaves `AsyncCodex.__aenter__`/`initialize` and `thread_start` outside it.\n- **Login startup:** `codex.login_timeout_s` bounds `handle.wait()` only (line 108). Runtime start plus the `login_chatgpt()` / `login_chatgpt_device_code()` call that produces the handle is unbounded.\n\nFix: state which timeout wraps each of these (widening the existing scopes is enough, no new keys) and add the logout row.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`sq auth status` behaviour is undefined when the extra is absent but `~/.codex/auth.json` exists",
+   "description": "Status calls `account()` whenever the strategy is `InteractiveLogin` and valid. `OAuthFileStrategy` always implements the Protocol, and validity is file presence. A default-install user who has used the Codex CLI therefore reaches `account_summary()` with `openai_codex` not importable.\n\nThe design does not say what happens. The nearest row (line 126) covers \"timeout or SDK error\" with a WARNING, which would fire on every `sq auth status` for a user who never asked for Codex.\n\nThis leaves two stated requirements unmet: \"Users who do not want Codex install nothing extra\" (line 26) and clean operation without the extra. The Integration Requirements (line 205) name only `sq doctor` and `sq model list`, and the test list (line 199) has no status-without-extra case.\n\nFix: define the outcome (for example, skip account details and show the `missing_extra_hint()` text with no WARNING) and add the test.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:86"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Login timeout has no clear owner, and `--timeout` duplicates the config key",
+   "description": "`InteractiveLogin.login` takes a required `timeout: float`, while the default lives in the Codex-specific key `codex.login_timeout_s` (line 108). The design never says who reads the key:\n- **If the generic CLI reads it** to fill the argument, `cli/commands/auth.py` gains Codex-specific knowledge, the coupling D3 exists to prevent.\n- **If the strategy reads it**, the Protocol parameter cannot be a required float.\n\n`account_summary()` and `logout()` take no timeout, so the strategy already owns its other bounds. Fix: make the strategy own the default, with the parameter as `float | None` or removed.\n\nScope to cut: `sq auth login --timeout` (lines 108, 149). The plan entry does not ask for it, and the config key already makes the value adjustable.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Usage handling diverges from the slice 931 contract it consumes",
+   "description": "- **Absent usage is logged at DEBUG.** Line 134 contradicts the table's own header (line 118: every row is WARNING or above with a test). It also departs from 931, where \"backend reported no token usage\" is one WARNING per `handle_message` and no count goes missing \"without saying so\".\n- **Failure-path telemetry is unaddressed.** 931 states that any `ProviderError` leaving `handle_message` carries a `RunTelemetry` snapshot in `telemetry`, which the provider-failure artifact reads. D8 and the failed, interrupted, timeout and transport-closed rows raise `ProviderError` without saying whether `TurnResult.usage` or the turn count is attached. A failed Codex turn would then render usage as not reported even when the SDK supplied it.\n- **`turns` is unspecified.** Line 55 says the agent stamps `metadata[\"turns\"]`, but D6 never says what value a Codex `handle_message` records.\n\nFix: align the absent-usage row with 931 (or remove it from the WARNING-header table and justify it), and state the `telemetry` and `turns` behaviour.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Line 76 says `get_provider` raises the install hint; D9 needs it to return the provider",
+   "description": "\"`get_provider(\"openai-oauth\")` can raise the install hint\" conflicts with lines 80, 122 and 184, where the raise happens at `create_agent`. It also conflicts with D9, where `sq model list` and `sq doctor` must obtain the provider instance to call `missing_extra_hint()`. Reword so an implementer does not put the raise in the registry lookup.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Version upper bound is stated two ways and left as a Project Manager wait",
+   "description": "D1 (line 97) writes `>=0.159.3,<1`; Special Considerations says the cap \"is not decided here\". A design step waiting on Project Manager confirmation is not valid under the project rules, so state one value. D1's bound, combined with the real-types drift test at line 200, is a sufficient decision.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`OPENAI_API_KEY` fallback work is outside the plan entry and its ordering is unclear",
+   "description": "The silent-fallback argument justifies handling it in this slice. Three loose ends remain:\n- **Ordering:** step 0 runs \"before porting anything\", but the check is only meaningful against the `openai_codex` runtime that ships. Say which runtime it uses.\n- **Lighter option:** line 42 already sends API-key users to the `openai` profile. Removing the fallback outright meets that position with no experiment and no two-branch task, at the cost of dropping an env-key path that may currently work for some users.\n- **Kept-fallback case:** `account_summary()` is described only for a `ChatgptAccount` root (line 54). Its result for a key-only account is undefined.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Interactive login re-binds the generically named `OAuthFileStrategy` to Codex",
+   "description": "Slice 128 renamed the strategy because \"auth type describes mechanism, not product\". Implementing `InteractiveLogin` on it via `login_chatgpt` and `codex.*` keys means any future profile with `auth_type = \"oauth\"` inherits a ChatGPT login. This is acceptable while Codex is the only user and the class lives under `providers/codex/`. Add the caveat to lines 88-89 next to the existing note about a second adopter.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`sq model list` now loads every alias's provider",
+   "description": "D9 resolves each alias through `ensure_provider_loaded` + `get_provider`, turning a data listing into one that imports every referenced provider package. The design does not say what the row shows if a profile's provider fails to load. One sentence would do (for example, render the row without a marker and log a WARNING) so one bad user profile cannot break the listing.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  }
+ ]
+}

@@ -1,0 +1,340 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`skills uninstall --commands-dir` \"must match the receipt destination\" cannot hold for Claude receipts",
+      "description": "The contract says `--commands-dir` on uninstall is a check against the receipt's destination, exiting 1 with nothing removed on a mismatch. The slice's own reading of the receipt is wrong for Claude packs.\n- For Claude packs, `_install_prefix` records `destination = commands_dir/<prefix>` (`installer.py:83,91`). `_install_dispatch` records `commands_dir/sq` (`installer.py:103`). Neither is the root the flag names.\n- The existing uninstall tests pass `--commands-dir <root>`: `test_cli_skills.py:107-194` (round trip, unrelated file, idempotent). Those receipts hold `<root>/analysis`, so a strict comparison exits 1 and all three tests fail.\n- Today `skills uninstall` ignores `--commands-dir` entirely; it only uses `receipt.destination` (`skills.py:95,110`). Making it a hard check breaks existing scripts too.\n- Line 184 and criterion 6 (line 226) promise that no-flag and existing behavior is unchanged. This contradicts both.\n\nDrop the check for `skills uninstall`, or compare against the install root (receipt destination, or its parent for Claude). State which, and which existing tests change.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agents uninstall can remove `~/.agents/skills` itself; the receipt `surface` for agents installs is never specified",
+      "description": "The data flow says `remove_receipt_files` never removes the destination. It also says \"for a Claude prefix pack the now-empty prefix directory is still removed, as today.\" That rmdir lives in `skills.py:120-122`. It fires on `receipt.surface == PREFIX` and removes `destination` when it is empty.\n- An agents receipt's destination is the shared root (data flow, line 97).\n- If the agents receipt carries `surface=PREFIX`, which `_write_install_receipt` derives from `entry.prefix` (`installer.py:50`), uninstalling the last skill would `rmdir ~/.agents/skills`. That violates criterion 2 (line 222).\n- Walkthrough step 5 (line 269) hides this by leaving `mine.txt` in the directory.\n\nSpecify the surface for agents receipts (`None`) and gate the prefix-dir removal on the Claude target. Add a test where the root empties.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Receipt-name refactor breaks existing `test_targets.py` tests and is under-specified at `install_pack`",
+      "description": "Line 184 says existing tests pass \"without edits other than the moved fixture paths\". That is false.\n- `tests/skills/test_targets.py:58` reads `receipt_base`, which D5 renames to `receipt_suffix`.\n- `test_targets.py:62-74` calls `receipt_name(target, local=)`, which becomes `receipt_name(base, target, *, local)`.\n- There are 14+ existing `install_pack(\"mypack\", entry, commands_dir[, receipts_dir])` calls (`test_installer.py`). The new `target` parameter must default to Claude.\n\nTwo gaps remain in the install path:\n- The component table gives `install_pack(..., target)` no `local`, but the receipt name needs the scope (D5).\n- `write_receipt` names the file from `receipt.pack_name` (`receipts.py:39`). For an agents receipt, `pack_name` must therefore carry `analysis-agents[-local]`, as `install_for_target` does. `InstallResult.pack_name` is also printed to the user as the pack name (`skills.py:77`).\n\nSay where the suffixed name lives, add `local` to the signature, and list the test edits.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The D4 move breaks the agents-tree bijection tests and silently drops coverage of the moved skills",
+      "description": "The Migration Plan calls the consumers \"fixtures\". In `tests/cli/test_install_commands.py:478-580`, `_agents_root()` returns the single directory `commands/agents` and drives five structural tests.\n- `test_every_claude_command_has_an_agents_twin` (line 512) iterates the CLAUDE `bundle_subdirs`, including `analysis`. It expects `commands/agents/analysis-understand/SKILL.md`, which no longer exists after the move, so it fails.\n- The name, description, `openai.yaml` and no-substitution tests (lines 532-580) iterate `commands/agents` only. After the move, `analysis-*` is no longer covered by any of them.\n\nState that `_agents_root` becomes the set of AGENTS `bundle_subdirs`, and that the bijection is checked across all of them.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agents install status via `p-*` glob gives false \"Installed\" and ignores the receipt-as-authority principle",
+      "description": "For a prefix pack, `installed_path` on the agents target is \"first `root/p-*/SKILL.md`\". `~/.agents/skills` is shared with every other skill source.\n- Any unrelated `analysis-foo` skill makes the `analysis` pack read as installed in `skills list` and in doctor.\n- Short prefixes match even more.\n- The design's own D3 rationale (line 123) and Patterns (line 176, \"receipts remain the only authority\") argue against this.\n- The existing `test_agents_check_ignores_third_party_skills` (`test_doctor_checks.py:138`) was written for exactly this false OK.\n\nFor agents, base status on the receipt, or on the receipt's recorded files.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's \"pack ships no Codex content\" needs source resolution that doctor does not do, and the hint rule contradicts itself",
+      "description": "D8 has doctor report `WARN \u2014 pack ships no Codex content`, with no install hint. Doctor cannot know that without resolving the pack source, and `installed_path` (lines 104-109) only checks install state.\n- `check_skill_packs` is documented as pure, reading only the manifest and filesystem (`doctor_checks.py:432-435`).\n- For `github:` sources, resolving means `git clone` (`resolver.py:61`) on every `sq doctor` run.\n- For relative sources it means path resolution against the config dir.\n- The design gives no behavior for an unresolvable source or a github pack. The \"no hint because it would fail\" rule cannot be applied to a pack whose content is unknown.\n- `commands_dir` is an existing parameter (`doctor_checks.py:429`). Its meaning across two targets is not stated, and the agents root is not parameterized.\n- Walkthrough step 7 (line 279) only exercises a local source.\n\nProportionality: per-target doctor rows go beyond the plan's Part A (`install`/`uninstall`, line 454) and bring in this I/O path. Either defer them, or restrict the \"no Codex content\" state to local and bundled sources. Use \"not installed\" for the rest, and name what the hint says.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New receipt-name collisions across packs and across projects are excluded only for squadron's own names",
+      "description": "D5 builds the receipt name as `pack + suffix + (\"-local\")`. Pack names are free-form manifest keys, so `-agents` and `-local` are ambiguous.\n- Pack `foo` installed with `--ide codex` and pack `foo-agents` installed for Claude both write `foo-agents.toml`.\n- Pack `foo` installed with `--local` and pack `foo-local` both write `foo-local.toml`.\n\nClaude `--local` for skills is new in this slice, so this is not the pre-existing collision that line 52 excludes. That exclusion covers only \"squadron's own receipt names or skill names\".\n\nLocal receipts are also one file per scope under `~/.config`, not per project. Installing the same pack `--local` in two projects overwrites the first record, and `skills uninstall --local` run from project A then deletes project B's files, because the receipt holds an absolute destination. `install-commands` accepts the same limit. A new skills surface should either reject colliding names at install, or document the limit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The rule's contents are left to implementation, and the probe table omits commands that reach providers or the network",
+      "description": "D9 and criterion 8 depend on D10's subcommand list. D10's table leaves `review`, `run`, `metrology`, `skills install`, the daemon commands and `auth login` as \"confirm by probe\" or \"probe\". Probing at implementation time is reasonable, but the rule grants unsandboxed execution (line 153), so the candidate set has to be complete.\n- The table is not exhaustive against `cli/app.py:47-70`. It omits `sq summary` and the hidden `_summary-instructions`, `_summary-run` and `_dispatch-run`. `commands/agents/sq-summary/SKILL.md:29-70` invokes `sq _summary-instructions`.\n- It also omits `doctor`, `setup`, `config`, `pools`, `events` and `serve`.\n- D12 adds the sandbox hint to only `sq-review`, `sq-run` and `sq-pr`. If any other probed command lands in the rule, its skill has no hint.\n\nEither complete the enumeration, or state the rule that decides membership and who owns the omitted commands.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure and sequencing states of the agents install are not enumerated",
+      "description": "\"Nothing written\" holds only for validation failures (lines 94-95). The write is `write_skill_dirs` (copytree), followed by the receipt.\n- If copytree fails partway (permissions, disk full), partial skill directories exist and no receipt does. `skills uninstall` then says \"not installed\", and `list` and doctor report \"Installed\" from the glob.\n- A kill between the write and the receipt leaves the same state.\n- A receipt-write failure only logs a WARNING (`installer.py:57-66`). For nested skill directories, that means uninstall can never remove them.\n- On reinstall after a pack drops a skill, the new receipt lists only the current files. The old skill directory is orphaned permanently. `install_for_target` handles this by diffing the previous receipt, and `install_pack` has no such step. With multi-file skill directories this is more likely than on the Claude path.\n\nState how each state recovers, or that it is accepted.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:85-98"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: the `PACK_LAYOUTS` module and the bundled-pack move carry more mechanism than the two-target slice needs",
+      "description": "The slice plan assigns effort 2/5 for Part A plus docs, and the design raises it to 3/5. Three pieces can be cut or reduced.\n- A new `pack_layouts.py` with a `PackLayout` dataclass and an exhaustiveness assertion is justified by \"a new target is a new entry\" (D6). The slice excludes every other target (`copilot`, `cursor`, line 51). Two functions next to `install_pack`, plus `installed_path` in `targets.py`, deliver the same behavior.\n- D4's move of the bundled skills forces edits to `bundle_subdirs`, `bundled_skill_names`, the fixtures and the bijection tests (see the bijection finding). The aim is \"no bundled special case\", but the install path is unchanged either way. Weigh the cost against a filter at resolve time before committing to it.\n- Per-target doctor rows (see the doctor finding).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:72-79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification walkthrough is macOS-only, and the `model list` fix touches six lines",
+      "description": "- `sed -i ''` is BSD-only, so step 4 fails on GNU sed.\n- The Overview and criterion 9 describe the `sq model list` fix as \"one line each\" (line 24). In fact `commands/sq/review.md:60,112,158` and `commands/agents/sq-review/SKILL.md:82,134,180` each contain three occurrences, six edits in total.\n- The `sq models list` command does exist (`app.py:55`).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:265"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with the slice plan entry and with slice 925",
+      "description": "The design delivers both plan parts (#125 and #127). It answers the plan's two open questions: a pack-format declaration instead of refusing `$ARGUMENTS` (D2), and no doctor check for the rule (D11, with a reason).\n- Dependency direction is correct (CLI to `skills` to `targets`).\n- `DELIVERIES`, `write_skill_dirs`, `normalize_target` and `_command_targets_to_check` exist as described.\n- The bundled-pack resolution claim holds: `_resolve_bundled(\"analysis\")` returns `commands/analysis`.\n- The Claude glob claim holds: `write_flat_markdown` and `_install_prefix` glob `*.md` at the top level, so a new `analysis/agents` subdirectory is invisible to them.\n- Wheel packaging force-includes the whole `commands` directory (`pyproject.toml:68-69`).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:13-52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`skills uninstall --commands-dir` \"must match the receipt destination\" cannot hold for Claude receipts",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Agents uninstall can remove `~/.agents/skills` itself; the receipt `surface` for agents installs is never specified",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Receipt-name refactor breaks existing `test_targets.py` tests and is under-specified at `install_pack`",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:184",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The D4 move breaks the agents-tree bijection tests and silently drops coverage of the moved skills",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Agents install status via `p-*` glob gives false \"Installed\" and ignores the receipt-as-authority principle",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Doctor's \"pack ships no Codex content\" needs source resolution that doctor does not do, and the hint rule contradicts itself",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "New receipt-name collisions across packs and across projects are excluded only for squadron's own names",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The rule's contents are left to implementation, and the probe table omits commands that reach providers or the network",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure and sequencing states of the agents install are not enumerated",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:85-98",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: the `PACK_LAYOUTS` module and the bundled-pack move carry more mechanism than the two-target slice needs",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:72-79",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Verification walkthrough is macOS-only, and the `model list` fix touches six lines",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:265",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Alignment with the slice plan entry and with slice 925",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:13-52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-22T21:36:00.029067",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+      "chars": 24788,
+      "sha256": "9f9384c6449c442f866a1ebd4faaa617714f42d4732dca27d0da29f173f7af02",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+      "chars": 117309,
+      "sha256": "f4952b3f13ecfa019757f893671127c949bffa9006f40639f0911f92220075c6",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/cli/commands/skills.py",
+    "src/squadron/skills/targets.py",
+    "src/squadron/skills/installer.py",
+    "src/squadron/skills/receipts.py",
+    "src/squadron/cli/commands/install.py",
+    "src/squadron/skills/resolver.py",
+    "src/squadron/skills/models.py",
+    "src/squadron/cli/commands/doctor_checks.py",
+    "src/squadron/skills/manifest.py",
+    "tests/cli/test_doctor_checks.py",
+    "tests/skills/test_cli_skills.py",
+    "tests/skills/test_installer.py",
+    "tests/skills/test_targets.py",
+    "tests/cli/test_install_commands.py",
+    "README.md"
+  ],
+  "searches": [
+    "grep def check_skill_packs|_command_targets_to_check in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src",
+    "list_files commands/**/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design",
+    "grep commands/agents|commands/analysis|\"agents\"|bundled_skill_names|receipt_base|receipt_name|_default_commands_dir|check_skill_packs|bundle_subdirs in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design",
+    "grep skill|Skill in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests",
+    "list_files tests/**/test_skills*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design",
+    "grep packs\\. in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/data/skills.toml",
+    "grep skills_app|commands-dir|commands_dir|install_pack|read_receipt in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests",
+    "grep def test_|commands-dir|install_pack\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests/skills/test_cli_skills.py",
+    "grep install_pack\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design",
+    "grep Skipping receipt entry|outside the install destination in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests",
+    "grep commands.*analysis|rglob|glob\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/metrology/audit.py",
+    "grep model list|models list in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/commands",
+    "grep sq model list|sq models list in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design",
+    "grep add_typer|app\\.command|add_command in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/cli/app.py",
+    "grep default.rules|prefix_rule|Codex in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/README.md",
+    "grep Codex|codex in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/docs/QUICKSTART.md",
+    "grep ^### |^## |Codex|sandbox|ModuleNotFound|rules in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/commands/agents/sq-pr/SKILL.md",
+    "grep skills install|--ide|install-commands in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/cli/commands/setup_install.py",
+    "grep SECTION_SKILLS|check_skill_packs|section == in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron",
+    "grep install_for_target|doctor_checks|_default_commands_dir in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/cli/commands/doctor_checks.py",
+    "grep commands|analysis in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests/metrology/test_audit_skill_sync.py",
+    "grep force-include|commands in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/pyproject.toml",
+    "grep sq _summary|sq _dispatch|sq analysis|sq pr |sq metrology in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/commands/agents"
+  ],
+  "sections_in_document": 26,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 39,
+  "prompt_tokens": 1447362,
+  "cached_tokens": 1326245,
+  "cache_write_tokens": 121089,
+  "completion_tokens": 27239,
+  "reasoning_tokens": null,
+  "duration_seconds": 202.79478391632438,
+  "cost_usd": 0.8950782,
+  "cost_basis": "provider"
+}

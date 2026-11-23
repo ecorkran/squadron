@@ -1,0 +1,460 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`generateContext` cannot gain a required trailing parameter",
+      "description": "`generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)` has three optional parameters at the end. Task 11 (line 220) adds \"a required `adoptionStateWrites` parameter\" without saying where it goes. Task 13 (line 248) calls it as `generateContext(..., 'persist')`, which means last position. A required parameter after optional ones is a TypeScript error (TS1016), so the obvious reading of the plan does not compile. Task 11 should name the position, for example second (`generateContext(projectId, adoptionStateWrites, overrides?, \u2026)`), or use an options object. It should also update both call sites at `contextTools.ts:200` and `:264` and Task 13's call to match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The guide fixture claims about `test-project` are wrong; Task 12's expected outputs cannot be asserted",
+      "description": "That prompt file has only these sections: `Context Initialization`, `Context Initialization Monorepo`, `Tool Usage`, `implementation`, `design`, `review`, `Task Breakdown (Phase 5)`. It has **no `context_profiles` block, no Concept prompt and no Architecture prompt**.\n- Task 9T (line 194) says to add \"a `brownfield-adoption: [...]` profile line\". There is no block to add a line to. `ContextProfileParser.parseProfiles` (`ContextProfileParser.ts:131-150`) needs a fenced block holding `context_profiles:\\n`, and `parseProfilesYaml` (`:50`) only reads indented keys. The fixture needs a whole fenced YAML block.\n- Task 12 expects \"concept prompt\" (cases 1, 2, 5, 7, 9) and \"the Phase 2 prompt\" (case 10). With this fixture, `getPromptForInstruction` finds no match and `SectionBuilder.buildInstructionSection` falls back to the custom-instruction statement (`SectionBuilder.ts:109-115`). Nothing then tells the concept prompt apart from a missing prompt.\n- Fix: the brownfield fixture also needs `##### Concept` and `##### Architecture` sections with marker text, plus a fenced `context_profiles` block. Task 9T's \"profile but no prompt\" variant also needs a defined source: a second fixture, or a step that edits the copied file.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parity test compares builds from two directories, but the history fact includes the absolute path",
+      "description": "Task 13 (line 248) builds \"from identical copies\" and asserts identical prompt strings. When the temp fixture is not a git repo, `readHistory` returns `unknown` with gitExec's message, which is `git rev-list \u2026 failed in ${cwd}: \u2026`. That includes each copy's absolute path, so the two prompts always differ. CI matches are also absolute paths (`ciDetection.ts:27`) if the fixture has CI. Fix: make the fixture a committed git repo so history is `known`, keep CI out of it, or build both paths from one directory and reset `adoption.state` to `''` between the builds.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:96-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The history `reason` brings in gitExec's network/DNS hint and command text",
+      "description": "Task 5 (line 118) uses the error message as `reason` and notes that gitExec's timeout message \"already reads 'timed out after 5s'\". But `/timed out after \\d+s/` is one of the `NETWORK_ERROR_PATTERNS` (`gitExec.ts:26`). So `withNetworkErrorHint` adds a second line: \"This looks like a network/DNS problem reaching the remote. \u2026\" plus the guide offline remediation. For a local `rev-list`, that text is wrong. It would appear inside the Adoption Facts history bullet and also break the one-line bullet. Task 5T's mocked error (line 128) doesn't go through this code, so it would not catch the problem. Task 5 should reduce the message to a short reason, such as the first line without the `git \u2026 failed in <cwd>:` prefix, or map a timeout to the design's \"git timed out after 5s\". Task 5T should test with a message shaped like gitExec's.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:45-53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkboxes",
+      "description": "Lines 78, 105, 131, 148, 178, 202, 225, 251, 257 and 269 are `- [ ] **Task NC: Commit** \u2014 \u2026`. Commit markers must be plain `**Commit**:` lines, never checkboxes. Their placement is fine: each one follows a tested task pair, and Task 11C follows the full `pnpm -r test`. Only the format needs to change.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests don't cover every outcome",
+      "description": "The Technical Requirements (slice line 336) require `renderAdoptionFacts` tests for \"every outcome\". Task 8T (line 174) covers brownfield, adoption-in-progress and `NOT_EVALUATED`, but not `greenfield`, `already-planned` or `adoption-closed`. Task 8 (line 168) requires an exhaustive `never` switch, so those branches exist and are currently untested. Add one `it.each` case per remaining kind that checks the outcome bullet.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Name the module `resolvePromptFilePath` is imported from, to avoid a cycle",
+      "description": "Task 9 step 4 (line 187) calls `resolvePromptFilePath` without naming its module. `CoreServiceFactory.ts` re-exports it, and after Task 11 that file imports `createAdoptionResolver`. Importing it from the factory would create a cycle: `CoreServiceFactory \u2192 adoptionResolver \u2192 CoreServiceFactory`. The factory's own comment says resolvers should import from `services/promptFilePath.js`. The task should say so.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:11-14"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`readAdoptionState` also reads the user-level config, so tests need isolation",
+      "description": "`ConfigManager.get` falls back to the user config file. Tasks 2T, 9T, 12 and 13 should set `CONTEXT_FORGE_DATA_DIR` to a temp directory, as `CoreServiceFactory.test.ts:79-80` does. Otherwise a developer's own `adoption.state` (for example after `cf config set --global`) changes results such as \"No `.context-forge.toml` \u2192 `''`\".",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/core/src/config/ConfigManager.ts:159-169"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 1 may not exercise the planned check",
+      "description": "Task 15 (line 262) builds `/tmp/before.md` \"there\" in a temporary worktree of `main`. `cfl build` picks the project from the current directory, so running it inside an unregistered worktree may fail or pick up different worktree fields. Run the main-branch CLI (`node <worktree>/packages/cli/dist/index.js build`) from the repo root instead. Also, the resolver returns early unless the instruction is the concept phase. A second before/after diff with `--phase 0` would actually test \"planned project unchanged\".",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/build.ts:44-45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Partial or differently cased instructions can select the brownfield prompt without facts",
+      "description": "`getPromptForInstruction` lowercases the instruction and matches it as a substring. So `--it brownfield` or `--it Brownfield-Adoption` matches the brownfield prompt. Task 9 step 1 compares `instruction === BROWNFIELD_ADOPTION_INSTRUCTION` exactly, so such a build gets the prompt with no Adoption Facts, which D8 calls \"impossible by construction\". The guide prompt stops when the facts section is missing, so this fails safe. A case-insensitive comparison in step 1 would narrow the gap.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/services/SystemPromptParser.ts:186-212"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A failure after the step 5 write keeps the state but never shows the notice",
+      "description": "If step 6 throws a raw filesystem error from `presentPaths` or `recognizeCi`, or the process is killed after `writeAdoptionState`, the state stays `in_progress` and the build returns the error stub. Later builds resume normally, and `cf config set adoption.state` can still change the state, so this can be recovered. But the state-set notice is never shown. This follows the design's step order, so it is informational only.",
+      "file_ref": null,
+      "category": "state-handling",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:113-118"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test, and the reason given is accurate",
+      "description": "The tests/load rule exists only in `rules/python.md`, and the repo has no `tests/load/`. D2 explicitly says \"Tests assert the caps, not timings\". The bounding cap tests are Task 3T's early exit and `MAX_WALK_ENTRIES`. The Context Summary's reasoning (line 38) holds.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/ai-project-guide/project-guides/rules/python.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The skip-pattern precedent is not in the 260 detection tests",
+      "description": "Context Summary line 39 says to skip permission tests \"as the 260 detection tests do\". `packages/core/tests/detection/*` has no `skipIf`. The pattern is at `setupCiOffer.test.ts:70` and `guideTreeDiff.test.ts:101-102`. Point the tasks there.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/setupCiOffer.test.ts:70"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Choice of file for the Task 12 integration fixtures",
+      "description": "`pipeline-integration.test.ts` is at `packages/core/tests/`, not under `tests/services/`. Thirteen fixture cases plus helpers would also push `CoreServiceFactory.test.ts` (now 147 lines) well past the ~300-line guideline. A dedicated file next to these would keep both readable.",
+      "file_ref": null,
+      "category": "maintainability",
+      "raw_category": null,
+      "location": "packages/core/tests/pipeline-integration.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`context_build`'s error result for `AdoptionError` relies on existing generic handling",
+      "description": "The success criterion \"`context_build` returns it as an error\" holds because any thrown error becomes `errorResult`. No task tests it directly. Task 10T and Task 12 case 12 check the rejection one layer down. That is enough, given the catch already exists.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:210-213"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria trace to tasks",
+      "description": "Every Functional Requirement maps to a case in Task 12 and to resolver tests in 9T. Every unit-test item in the Technical Requirements maps to 3T, 5T, 4T, 6T, 7T, 8T or 9T, apart from the renderer gap above. Parity is Task 13, callers are Task 11, README is Task 14, and the walkthrough is Task 15. No task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and existing callers",
+      "description": "Contracts (Task 2) come before every file that throws `AdoptionError`, and `BROWNFIELD_MIN_SOURCE_LINES` (Task 3) comes before `decideOutcome` (Task 7). `import type` prevents the `adoptionOutcome`/`sourceVolume` runtime cycle. Task 10's optional parameter leaves the build green until Task 11 changes the signature. The `grep` in Task 11 finds every test caller (`build.integration.test.ts`, `pipeline-integration.test.ts`, `CoreServiceFactory.test.ts`). The existing callers use non-concept instructions (`implementation`, `design`, Phase 4\u20136), so the resolver returns early for them and their output does not change.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:26-48"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`generateContext` cannot gain a required trailing parameter",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "The guide fixture claims about `test-project` are wrong; Task 12's expected outputs cannot be asserted",
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "The parity test compares builds from two directories, but the history fact includes the absolute path",
+      "location": "packages/core/src/guides/gitExec.ts:96-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The history `reason` brings in gitExec's network/DNS hint and command text",
+      "location": "packages/core/src/guides/gitExec.ts:45-53",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkboxes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Renderer tests don't cover every outcome",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Name the module `resolvePromptFilePath` is imported from, to avoid a cycle",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:11-14",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "`readAdoptionState` also reads the user-level config, so tests need isolation",
+      "location": "packages/core/src/config/ConfigManager.ts:159-169",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 1 may not exercise the planned check",
+      "location": "packages/cli/src/commands/build.ts:44-45",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Partial or differently cased instructions can select the brownfield prompt without facts",
+      "location": "packages/core/src/services/SystemPromptParser.ts:186-212",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "state-handling",
+      "raw_category": null,
+      "summary": "A failure after the step 5 write keeps the state but never shows the notice",
+      "location": "packages/core/src/services/ContextIntegrator.ts:113-118",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load test, and the reason given is accurate",
+      "location": "project-documents/ai-project-guide/project-guides/rules/python.md",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The skip-pattern precedent is not in the 260 detection tests",
+      "location": "packages/core/tests/introspection/setupCiOffer.test.ts:70",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "maintainability",
+      "raw_category": null,
+      "summary": "Choice of file for the Task 12 integration fixtures",
+      "location": "packages/core/tests/pipeline-integration.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "`context_build`'s error result for `AdoptionError` relies on existing generic handling",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:210-213",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria trace to tasks",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and existing callers",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:26-48",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-22T22:03:26.075010",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 72,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "chars": 30105,
+      "sha256": "b55688a9f1052ec43c75cb450baf3e2486e318f6c20622a3e6be5f3a578a04a7",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+      "chars": 38107,
+      "sha256": "3ba57648169d4518ebce13a383d3ae8ab00dd784934406cfff445eaab217ea5e",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/core/src/services/ContextIntegrator.ts",
+    "packages/core/src/services/permissivenessResolver.ts",
+    "packages/core/src/config/ConfigKeys.ts",
+    "packages/core/src/config/ConfigManager.ts",
+    "packages/core/src/detection/index.ts",
+    "packages/core/src/detection/pathPresent.ts",
+    "packages/core/src/node.ts",
+    "packages/core/src/config/index.ts",
+    "packages/core/src/schema/projectSchema.ts",
+    "packages/core/src/services/SystemPromptParser.ts",
+    "packages/core/src/services/ContextProfileParser.ts",
+    "packages/core/src/services/promptFilePath.ts",
+    "packages/core/src/services/ContextTemplateEngine.ts",
+    "packages/core/src/introspection/ArtifactIntrospector.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/mcp-server/tests/integration/mcpIntegration.test.ts",
+    "packages/mcp-server/tests/configTools.test.ts",
+    "packages/core/tests/services/CoreServiceFactory.test.ts"
+  ],
+  "searches": [
+    "list_files packages/core/src/{detection,config,schema,adoption,introspection}/**/*.ts in .",
+    "grep createContextPipeline\\( in packages",
+    "grep order|permissiveness|instruction in packages/core/src/services/ContextTemplateEngine.ts",
+    "grep import|async (get|set)\\(|enum|throw new in packages/core/src/config/ConfigManager.ts",
+    "list_files packages/cli/src/commands/config*.ts in .",
+    "grep scope|'set'|\\.set\\(|user|project in packages/cli/src/commands/config.ts",
+    "grep export in packages/core/src/detection/ciDetection.ts",
+    "grep PHASE|projectSchema|detection in packages/core/src/index.ts",
+    "grep PHASE_STRINGS|ARCHITECTURE_PHASE|export function resolvePhaseValue|concept in packages/core/src/schema/projectSchema.ts",
+    "grep getPromptForInstruction|instructionMap|INSTRUCTION|constructor|toLowerCase|replace\\( in packages/core/src/services/SystemPromptParser.ts",
+    "grep parseProfiles|getProfileForInstruction|_default|context_profiles in packages/core/src/services/ContextProfileParser.ts",
+    "list_files packages/core/tests/fixtures/**/*.system.md in .",
+    "grep PROMPT_FILE_RELATIVE_PATH = in packages/core/src/services/constants.ts",
+    "grep ^#####|context_profiles|^\\s+[a-z_-]+: \\[ in packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+    "grep buildInstructionSection in packages/core/src/services",
+    "grep export (async )?function gitExec|timeoutMs|timed out|cwd in packages/core/src/guides/gitExec.ts",
+    "grep resolveInitiativePlanPath in packages/core/src/introspection/ArtifactIntrospector.ts",
+    "grep generateContext\\( in packages/mcp-server",
+    "grep projectPath|dateProject|new Date in packages/core/src/services/SectionBuilder.ts",
+    "list_files packages/mcp-server/tests/**/*.test.ts in .",
+    "grep createContextPipeline|generateContext|template_preview|context_build in packages/mcp-server/tests",
+    "grep createContextPipeline in packages",
+    "grep Phase 0|Concept'|instruction: 'concept' in packages",
+    "list_files packages/core/tests/{config,services}/{ConfigKeys,ConfigManager,ContextIntegrator,ContextTemplateEngine}*.test.ts in .",
+    "grep workflow\\.permissiveness in README.md",
+    "grep describe\\('workflow.permissiveness|permissiveness in packages/core/tests/config",
+    "grep CONFIG_KEYS\\)\\.length|toHaveLength\\(\\d+\\)|keys\\.length\\)\\.toBe in packages",
+    "grep Object\\.keys\\(CONFIG_KEYS\\)|configKeyCount|toHaveLength\\(1[0-9]\\) in packages",
+    "grep instruction|developmentPhase in packages/core/tests/helpers/testData.ts",
+    "grep CONTEXT_FORGE_DATA_DIR|export function getUserConfigPath in packages/core/src/config/configPaths.ts",
+    "grep instruction|FIXTURE_ROOT =|fixtureProjectPath = in packages",
+    "grep createContextPipeline\\)|toHaveBeenCalledWith\\('/ in packages/cli/tests",
+    "grep export function handleError in packages/cli/src/utils/errors.ts",
+    "grep promptsCache|static in packages/core/src/services/SystemPromptParser.ts",
+    "grep tests/load in project-documents/ai-project-guide",
+    "list_files **/tests/load/** in .",
+    "grep createContextPipeline\\(|new ContextIntegrator\\( in .",
+    "grep createContextPipeline\\( in docs",
+    "grep new ContextIntegrator\\( in packages/core/tests/services/ContextIntegrator.test.ts",
+    "grep function withNetworkErrorHint in packages/core/src/guides/gitExec.ts",
+    "grep MIN_GUIDE_VERSION\\s*= in packages/core/src",
+    "grep \"version\" in project-documents/ai-project-guide/package.json",
+    "grep brownfield-adoption in project-documents/ai-project-guide/project-guides",
+    "grep instruction|developmentPhase in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/.context-forge.toml",
+    "grep skipIf in packages/core/tests/detection",
+    "grep skipIf|getuid|chmod in packages/core/tests",
+    "list_files packages/core/tests/**/{ciDetection,buildManifest,pathPresent}*.test.ts in .",
+    "grep EACCES|ELOOP|ENOTDIR|getuid in packages/core/tests/detection"
+  ],
+  "sections_in_document": 7,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 73,
+  "prompt_tokens": 4218544,
+  "cached_tokens": 4095159,
+  "cache_write_tokens": 123293,
+  "completion_tokens": 39488,
+  "reasoning_tokens": null,
+  "duration_seconds": 396.8671972909942,
+  "cost_usd": 2.5985878000000007,
+  "cost_basis": "provider"
+}

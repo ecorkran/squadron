@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Selector task leaves stale, contradictory text in the skill, and 7.4 fixes only one sentence",
+   "description": "Task 1.1 adds `concept` as a recognized argument and Task 1.2 commits it. The same file still says four things that become false:\n- Line 389 says the comprehension flow is \"the only one this skill implements.\"\n- Lines 392-393 say \"Any argument other than the comprehension default is **unrecognized**.\" That sentence also holds the \"slices 363 and 364\" text.\n- Lines 628-629 say \"Concept generation is slice 363 \u2026 neither is written here.\"\n- Lines 291 and 307-309 (shared Gap markers section) say \"This flow does not use `[INFERRED]`\" and \"Governance \u2026 belongs to 363\". Once a second flow exists, \"this flow\" in a shared section is ambiguous.\n\nTask 7.4 fixes only the 393 sentence, and it does so five tasks after the commit at 1.2. That commit therefore leaves the skill contradicting itself. Task 1.1 also doesn't say where the selector goes. The argument handling currently sits inside the comprehension section, after Preflight, and preflight is meant to run for both flows.\n\nFix: fold 7.4 into 1.1. Have 1.1 also list lines 389, 628-629 and the shared \"this flow\" wording at 291 as edits. Tell 1.1 where the selector sits relative to Preflight.",
+   "location": "commands/analysis/understand.md:389-393"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No task authors the runtime order of the concept flow, so the re-run and augment paths are underspecified",
+   "description": "The sequencing rules are scattered across 5.1 (interview after extraction, before drafting), 5.2 (confirmation after drafting, before write) and 6.1 (contract checks \"before any write\"). No task states the end-to-end step order, and several points are left open:\n- The existing-document check in 6.2 has no position relative to the interview. If it runs after the questions, the PM answers two questions and is then told \"stop\", which breaks the low-cost interview premise.\n- Task 8.3 needs the contract check to run even when an 8.1 document exists. The order of \"existing document \u2192 report/stop\" against \"contract check\" is never fixed.\n- Augment (6.2, 8.4) appends \"new answers\", which implies the two questions are asked again. Neither 6.2 nor 8.4 says whether they are, or whether the confirmation recurs. That bears on Success Criterion 2.\n\nFix: add an explicit ordered procedure to 5.1 or 6.2: preconditions, existing-document check, extraction, interview, draft, confirmation, contract check, write. State augment's interaction behavior in it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:187-254"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8.4's byte-identity check can't work as written, and its live interaction isn't flagged",
+   "description": "8.4 verifies that \"populated sections stay byte-identical (`git diff`)\". The 8.1 document is untracked until the 8.6 commit, so `git diff` shows nothing and proves nothing. The task needs an `add` or commit after 8.1, or a copy to diff against.\n\nAugment also needs fresh engagement answers, and the confirmation may recur. The PM interaction notice (lines 48-53) says only 8.1 needs the PM live, so 8.4 runs without the required framing.\n\nFix: snapshot or commit the 8.1 output before 8.4. Extend the PM notice to cover 8.4, and 8.2 if it prompts.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scratch-copy walkthroughs 8.2 and 8.3 are under-specified and likely to hit the wrong path",
+   "description": "- If the \"scratch copy of the tree\" in 8.2 is made after 8.1, it already holds `000-concept.squadron.md`. The run would then hit the re-run stop instead of the decline path.\n- In 8.3, \"point the check at\" a scratch guide has no mechanism. Task 6.1 authors a fixed path, and nothing lets the flow be redirected.\n- A scratch tree may not resolve the cf project name (precondition 3), which would stop the run for an unrelated reason.\n\nFix: make the scratch tree copy (a) delete the 8.1 output and (b) edit the guide heading inside the copy, rather than redirecting the check. Confirm the registration resolves there.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers sit at non-working points, and the walkthrough doesn't end at a tested point",
+   "description": "There are seven commits (after 1.2, 2.2, 3.4, 4.2, 5.3, 6.3 and 7.4) before the flow can run at all. The commit at 1.2 makes `concept` a recognized argument that routes to an empty shell. Later commits add sub-sections of a flow that cannot yet execute. No test of the flow exists until Task 8.\n\nFix: keep a commit after 7.x, when the flow is complete (and 1.1 once the stale text is fixed). Drop the intermediate ones, or make them clearly WIP.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99,125,164,185,221,254,296"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task count and verification tasks are heavy for a markdown-only slice rated 3/5",
+   "description": "- 1.2, 4.2 and 5.3 are pure re-read or diff of text just authored against the design. Fold them into the authoring tasks' success criteria.\n- The same checks recur in 0.2, 2.2, 3.4 and 6.3: guide readable, `grep -c \u2026 = 1`, `project.name` is `squadron-ai`, signals present. The Task 8 walkthrough then repeats most of them. Do them once in 0.2.\n- 2.1 precondition 2 and 6.1 check 1 state the same \"guide tree absent \u2192 name `cf init`/`/cf:onboard`\" stop. Define it once and cross-reference it, so the wording can't drift.\n\nThat would remove about five tasks without losing coverage.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99,181-185,215-221"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Success Criteria 4, 8 (refill path) and 12 have no verifying step",
+   "description": "- **SC4** (dropped topics appear nowhere in the document): 4.1 authors the rule, but no step in 8.1 or 8.2 checks the written document, for example with a grep for why-now, audience and methodology content.\n- **SC8** (mechanical refillability): 8.4 runs augment against a document with every section populated, so the \"fill only empty or exactly-`[GAP]` sections\" half is never exercised. Running augment on the 8.2 declined-path document would exercise it.\n- **SC12** (a concept a PM would edit rather than discard): 8.1's success line lists only mechanical checks. It includes no PM judgement.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-330"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Precondition 3's resolution mechanism is unstated, and `model:` on a `concept` docType is unverified until the end",
+   "description": "- Task 2.1 requires \"the cf project registration\" as the name source but never says how the skill resolves it. Only 2.2 mentions `cf get` (Name field). `understand.md` has no `cf get` today. A junior author can't write the check without a mechanism.\n- Task 7.2's frontmatter puts `model:` on `docType: concept`. The skill's only evidence of gate acceptance is for `analysis` (`understand.md:380-381`, verified against `942-analysis\u2026`). If the gate rejects `model:` on `concept`, the first sign is 8.1, after all authoring is done.\n\nFix: have 2.1 state the resolution command. Have 7.2 run `cf validate frontmatter` on a stub `concept` document that carries `model:`.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:110-113,275-277"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "DEVLOG target is ambiguous, and 8.6's changed-file expectations conflict with later tasks",
+   "description": "Two DEVLOGs exist: `DEVLOG.md` at the root (latest entry 20260822) and `project-documents/DEVLOG.md` (where the slice 362 entries live). Tasks 8.6 and 9.2 say only \"the DEVLOG\".\n\n8.6 asserts the diff against `main` contains only the skill, the generated concept, the slice documents and the DEVLOG. At that point:\n- the DEVLOG isn't written yet (it comes in 9.2);\n- 9.1 will also edit `360-slices.document-intelligence.md`, which isn't a \"slice 363 document\";\n- an uncommitted concept file is invisible to `git diff --name-only`.\n\nFix: name the DEVLOG path, and either move the scope check after 9.2 or correct the expected set.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-347,364-368"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Verified anchors check out except the concept guide, which isn't in this worktree",
+   "description": "These match the repo:\n- `understand.md` is 669 lines.\n- `.understand-anything/` holds the graph, `meta.json` and the other files the task file names.\n- `README.md`, `.github/workflows/ci.yml` and `tests/` exist.\n- `pyproject.toml` has `[tool.ruff]` (line 70) and `[tool.pytest.ini_options]` (line 80).\n- `user/project-guides/` holds only `001-initiative-plan.squadron.md`.\n- The `.gitignore` entry at line 184 means the preflight hygiene write will be a no-op.\n- `tests/skills/` has no test that pins `understand.md` content.\n\nI could not confirm the concept-guide anchor or the `squadron-ai` project name in this worktree. `project-documents/ai-project-guide/` has no concept guide here, and I didn't read the graph's `project.name`. Task 0.2 would stop on a tree like this one.\n\nDesign line citations are accurate except 7.1's \"lines 278\u2013280\", where the blockquote is at lines 277\u2013279.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:36-46"
+  }
+ ]
+}

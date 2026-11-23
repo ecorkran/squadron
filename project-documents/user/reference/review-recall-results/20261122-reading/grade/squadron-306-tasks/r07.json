@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Relocated modules import back into `pipeline/`, creating the cycle F002 exists to prevent",
+   "description": "T3 (task lines 109\u2013113) keeps `verification.py`'s import of `RoundDiff` from `pipeline.actions.findings_addressed.screens` and calls it \"the pipeline\u2192review direction\". It is the opposite: a module under `review/addressed/` importing a `pipeline/actions/` internal, which slice lines 141\u2013146 forbid.\n\n- **T5 adds a second such edge.** `judge_residue_core(..., diff, ...)` takes a `RoundDiff`, so `review/addressed/judge.py` needs the same import (`judge.py:21` today). T5 does not mention it.\n- **T1 adds a third.** `models.py:14` imports `squadron.pipeline.models.ActionResult` at runtime, and T1 moves it \"verbatim\". Nothing under `src/squadron/review/` imports `squadron.pipeline` today.\n\nThis is a real circular import, not only a layering issue. If `squadron.review.addressed.verification` is the first import in a process:\n1. `verification.py` starts and imports `...findings_addressed.screens`.\n2. That runs `findings_addressed/__init__.py`, which imports `policy` (line 46).\n3. `policy.py:26` does `from ...verification import derive_addressed_verdict, verify_outcomes` against the partially initialised module and raises `ImportError`.\n\nThe same happens through `review/addressed/judge.py` and the wrapper's `judge_residue_core` import once T7 populates `review/addressed/__init__.py`.\n\nT2, T4, T6 and T8 will not catch this. Every 305 test imports `squadron.pipeline.actions.findings_addressed` first, and that order resolves. The failure appears in file 2, where `review/resolution.py` and `sq review resolve` import `review.addressed` first.\n\nFix:\n- Move the `RoundDiff` dataclass into `review/addressed/` and have `screens.py` import it from there.\n- Put the `ActionResult` import under `TYPE_CHECKING`, or leave `read_findings` in the pipeline package.\n- Add a fresh-interpreter check to T8: `uv run python -c \"import squadron.review.addressed\"`.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T6's \"pass unchanged, no test rewritten\" check cannot be satisfied after T5",
+   "description": "Both judge test files patch the transport by module path: `_JUDGE_TRANSPORT = \"squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile\"` (`test_findings_addressed_judge.py:32`, `test_findings_addressed_e2e.py:27`). After T5 the call lives in `review/addressed/judge.py`.\n\n- If the wrapper drops the import, `patch` raises `AttributeError`.\n- If the wrapper keeps an unused import, ruff flags it and the patch does nothing, so the real transport runs.\n\nEither way the eight tests using `_JUDGE_TRANSPORT` fail (judge lines 176, 197, 209, 224, 242; e2e lines 190, 253, 297). T6 (task lines 144\u2013151) then tells the implementer that a rewritten test means \"the extraction changed behavior \u2014 stop and reconcile with the design\". That stop fires on a correct extraction.\n\nThe T1 grep pattern also cannot find these strings, so no task surfaces them. The plan must name the patch-target update as the one permitted edit, or have the wrapper pass the transport into the core so the existing target stays valid.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Part D guards `save_review_file`, but `sq review code` writes through `save_review_result`",
+   "description": "T12 adds the archive step only to `save_review_file`. The CLI calls `save_review_result` (`cli/commands/review.py:451, 523, 610, 746`), which does its own `path.write_text` at `persistence.py:300` and `:303`. The pipeline action uses the same function whenever slice info is available (`pipeline/actions/review.py:255`). `save_review_file` is reached only from the no-slice-info fallback (`review.py:272`).\n\nAfter T12/T13:\n- Re-running `sq review code <N>` still overwrites silently. Slice criteria at lines 364\u2013365 and 372\u2013374 are unmet, and walkthrough step 7 fails at file 2's T40.\n- T13 passes anyway, because it exercises `save_review_file` directly.\n\nExtending the guard to `save_review_result` needs work no task covers:\n- It returns `Path`, not `Path | None`, and the CLI prints `Saved review to {path}` unconditionally. The abort path needs a contract and caller handling.\n- It takes `reviews_dir`, not `cwd`, so the archive location must derive from that.\n- `testsave_review_result_overwrites_existing` (`tests/cli/test_review_save.py:117`) pins the current overwrite behaviour and will now also produce `tmp_path/archive/`.",
+   "location": "src/squadron/review/persistence.py:298-312"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T5 misdescribes the split point of `judge_residue` and omits the wrapper's fail-closed branches",
+   "description": "T5 describes the core as \"the body of today's `judge_residue` from `_resolve_model` onward (template load, \u2026)\". In the code the template load (lines 106\u2013113) comes before `_resolve_model` (line 116), which needs `template.model` as its fallback. The wrapper therefore cannot \"resolve model/profile, then call the core\" without loading the template itself.\n\nT5 also does not say where three existing behaviours go:\n- The empty-residue early return (103\u2013104), pinned by `test_empty_residue_produces_zero_transport_calls`.\n- The template-missing `failed=True` return (108\u2013113).\n- The `ModelResolutionError` `failed=True` return (117\u2013119).\n\nT5 claims `JudgeLegResult` is \"used only by this logic\". `policy.py:13` imports it from the pipeline `judge` module and constructs it at `policy.py:58`. T5 does not list that importer.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:103-119"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T3's \"same grep pattern as T1\" finds none of the parsing/verification importers",
+   "description": "The pattern `findings_addressed.models\\|findings_addressed import` does not match `findings_addressed.parsing import` or `findings_addressed.verification import`. After T1's edits, no source file contains `findings_addressed.models` any more. The rerun therefore misses `__init__.py:40,57`, `judge.py:16` and `policy.py:26`. The break shows up as an import error, but the stated procedure returns the wrong list. T3 needs its own pattern or an explicit importer list.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/policy.py:26"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T1's expected-importer list is wrong for the tests, and the test-edit policy contradicts itself",
+   "description": "T1 (task lines 87\u201391) expects \"the four `tests/pipeline/test_findings_addressed*.py` files\" to import the models.\n- `test_findings_addressed_e2e.py` imports nothing from the package; it only holds the patch string.\n- The other three import from the package root (`test_findings_addressed.py:18`, `_evidence.py:16`, `_judge.py:16`), not from `.models`.\n- `tests/metrology/test_capture_discovery.py:100` matches the grep but imports only `GateEvidence` and `save_gate_evidence`, which stay.\n\nThe package root keeps re-exporting until T7, so no test needs editing at T1 or T3. Yet T1 and T3 instruct test edits while T2 and T4 are titled \"passes unchanged\". T7 then removes the re-exports with no shim, which does force edits, against slice lines 377\u2013378.\n\nThe plan should state once which edits are allowed (import lines and the patch target) and do them in a single task.",
+   "location": "tests/pipeline/test_findings_addressed_e2e.py:27"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "T10 does not say which `cwd` git runs in, or separate the two pipeline call sites",
+   "description": "T10 writes `run_git([\"rev-parse\", \"HEAD\"], cwd=...)` for `save_review_result`. That function has no `cwd` parameter, and `run_git` requires one (`git_utils.py:19`). The reviewed repo can differ from the process directory: `review code` resolves `review_cwd` from `--cwd` (`cli/commands/review.py:687\u2013690`). A stamp from the wrong repository is a wrong diff base for file 2's T19.\n\nThe pipeline action has two persistence branches:\n- `review.py:255` goes through `save_review_result` and would inherit the stamp from T10's first bullet.\n- `review.py:265` calls `format_review_markdown` directly.\n\nT10's second bullet says only \"same resolution\" for the whole file. That invites either a double resolution or a missed branch. The task should name line 265 as the site that needs its own resolution, and say how `save_review_result` gets its directory.",
+   "location": "src/squadron/review/persistence.py:257-267"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "T11 tests one persistence path where the success criterion requires both",
+   "description": "Slice lines 349\u2013350 require the stamp \"from both the CLI and the pipeline persistence paths\". T11 (task lines 219\u2013222) tests \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\". The fallback branch at `review.py:265` is a separate call site that a `save_review_result` test never reaches. T11 needs one assertion per path.",
+   "location": "src/squadron/pipeline/actions/review.py:265-271"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "T14 is sequenced after Part D's commit, against the design's explicit ordering",
+   "description": "Slice lines 381\u2013383 require the cf scanning check \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme\". T13 carries the commit marker for Part D, and T14 follows it.\n\n- The file patches this with prose: T12 \"must not be marked done\" until T14. That leaves T13 checked and committed while T12 stays open.\n- If the recursive case applies, T14 changes T12/T13 code with no commit marker after it.\n- The guide path T14 says to consult first, `ai-project-guide/tool-guides/context-forge/`, was not found by glob in this worktree. It may live outside the checkout; the task should give a path that resolves.\n\nRenumber T14 ahead of T12.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The archive is a single slot: a second re-review destroys the content the first one preserved",
+   "description": "T12 copies to `archive/{original filename}`.\n1. Run 1 archives the hand-edited file.\n2. Run 2 archives run 1's generated output over it, and the hand-written content is gone with no error.\n\nA review step inside a loop reaches the second overwrite on its second iteration. The name follows Decision 7 (\"with its original name\"), so the design drives it, but slice line 365 (\"nothing is silently destroyed\") holds for only one overwrite. T13 has no double-overwrite test. T12 should refuse to replace an existing archive entry or give each copy a unique suffix, and T13 should cover the sequence.",
+   "location": "src/squadron/review/persistence.py:220-254"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Part 0 is more granular than a mechanical move needs",
+   "description": "T1 and T3 are the same operation (verbatim move plus import updates), and T2 and T4 run the same command. Merging T1+T3 and T2+T4 removes two tasks and one commit without losing a tested checkpoint. T7's `__all__` changes could fold into the same tasks.",
+   "location": "unverified"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Commit markers are sub-bullets, not `**Commit**:` plain lines",
+   "description": "Markers appear as `- Commit: \u2026` bullets inside T2, T4, T6, T8, T11 and T13. None are checkboxes, and each sits after a verification or test task. Placement is sound apart from the T13/T14 ordering above; only the form differs from the convention.",
+   "location": "unverified"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Context Summary says \"Two failure-closed rules\" but names one",
+   "description": "Task lines 55\u201358 announce two rules covered in this file and describe only the F003 archive abort.",
+   "location": "unverified"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The S/cell_size plumbing describes components that do not exist, and the real path is unspecified",
+   "description": "The design uses a `BenchConfig`, a `QuadrantsFusedBackend.setup()`, `build_spatial_hash(cell_size=cell_size)`, \"the bench harness passes `cell_size` at setup; it reads from config\", and a kernel signature `fused_force_integrate_kernel(cell_size, grid_w, grid_h, S, ...)`. None of this matches the code.\n- **No `BenchConfig`.** The input is the frozen `Workload` dataclass (`src/migratory/bench/workload.py:99-112`). Its `from_dict` rejects any missing required field (\"missing fields raise rather than defaulting silently\", lines 11-12, 130-136). A \"default S=1\" therefore needs a deliberate schema decision, and the design makes none.\n- **`cell_size` is computed, not passed.** `GpuAgentState.setup` derives it as `max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` (`quadrants_fused_state.py:150`, constant at line 54, which is 1.0).\n- **`build_spatial_hash` takes `(state)` only.** It does not compute `grid_w` or `grid_h`. `GpuAgentState.setup` does (lines 151-153), so line 80's \"`build_spatial_hash` (lines 411\u2013462) \u2026 computes grid_w and grid_h\" is wrong.\n- **The runner class is `QuadrantsFusedTickRunner`.** It is constructed with no arguments (`runner.py:141-142`), and `setup(workload)` takes only a `Workload`. There is no path for S to reach it.\n- **The kernel signature is `(n, dt, cell_size, grid_w, grid_h, lead_active)`** (`quadrants_fused_kernels.py:188-195`). There are two call sites to update, `run_fused_tick` (`quadrants_fused_kernels.py:400-407`) and `tick_once` (`quadrants_fused_backend.py:116-123`), and the design names neither.\n\nThe design must name where S lives (a workload YAML field with an explicit optional-field exception, a CLI flag, or a backend constructor argument). It must also state that `GpuAgentState` gets an `S` attribute, `cell_size` becomes `max_query_radius / S`, and both call sites change.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-100"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Verification walkthrough cannot run as written",
+   "description": "- **Script and flags don't exist.** `scripts/bench.py` does not exist. The harness is `python -m migratory.bench` (`cli.py`), and its only flags are `--workload`, `--backend`, `--workload-dir`, `--results-dir` and `--list-*`. `--config`, `--N`, `--ticks`, `--subdivision-factor` and `--parity-check` do not exist, and the design lists no CLI work.\n- **Workload name and N override.** The `--config mid-flock-50k` form should be `--workload mid-flock-50k`. Step 2's \"N=10000\" and Step 5's \"N=5000\" can't be set on the command line, because N lives in the workload YAML.\n- **Identical commands for different configurations.** In Step 3 the \"Baseline (S=1, counter-gating)\" and \"Early exit only (S=1, break enabled)\" commands are byte-identical (lines 162-163 and 166-167). So are \"S=3, counter-gating\" and \"Both\" (170-171 and 174-175). Intervention 1 replaces counter-gating outright (lines 36-46), so counter-gating no longer exists after implementation. The four-way ablation needs either a toggle that is not designed, or the baseline taken from the pre-change commit.\n- **Parity runs on a workload nothing defines.** Step 5's `--parity-check numpy` is not an existing mechanism. The existing parity test (`tests/bench/test_quadrants_fused_parity.py`) hard-codes `mid-flock.yaml` and has no S parameter.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:141-191"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Option A puts the cap logic outside the seam it claims to preserve, and describes the seam wrongly",
+   "description": "- **Cap logic is duplicated.** `if k_found >= max_neighbors and max_neighbors > 0: break` re-implements \"have we collected enough?\" in the kernel body. `get_neighbors_first_k` exists to hold exactly that decision (`quadrants_fused_kernels.py:156-184`). The plan entry asks for the opposite: \"replace counter-gating in `get_neighbors_first_k`\" and \"use the seam\" (`140-slices\u2026:50`).\n- **The seam test only passes by wording.** `test_get_neighbors_first_k_is_only_inclusion_function` (`test_quadrants_fused_kernels.py:217-250`) enforces that selection-of-k logic is confined to the seam. It greps for `k_found < k_max` / `k_found < max_neighbors`, so the new `>=` text slips past it. That is a loophole in the check, not conformance with the isolation rule.\n- **\"Unreachable\" is wrong.** Line 99 says the seam is \"now unreachable after break\" and line 33 says \"unreachable when the break fires\". The seam is still called for every in-radius candidate. After the break it can only ever return 1, so its cap branch is dead logic.\n- **A7 is not preserved.** A distance-ranked replacement would have to delete the break as well as the seam body, so \"A7 seam preserved\" (line 112) does not hold.\n\nRecommended fix: add the \"done\" predicate as a second `qd.func` (for example `neighbors_done(k_found, k_max)`) next to the seam. Have the kernel call it for the break, and extend the isolation test to cover it.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Candidate-count arithmetic for S=3 is wrong, so \"multiplicative composition\" and the S=3 gate default are unsupported",
+   "description": "- **Candidate counts are misstated.** The design says \"With S=3 alone: candidates loaded drops to ~5000. With both: candidates loaded ~555\". The scan is 49 cells \u00d7 ~555 \u2248 27,000 candidates, which slice 148's own note states (`148-notes.rediagnosis.md:108-111`). That is about 1.65\u00d7 fewer than 45,000, not ~9\u00d7.\n- **S adds little once early exit is in.** Once the break exists, the work is set by how many candidates it takes to find 32 in-radius agents. At this density a 50\u00d750 cell block has roughly a 35% in-radius fraction, and a 7\u00d77 block of 16.7 cells has roughly 58%. The break scans about 90 candidates at S=1 and about 55 at S=3. The two interventions are not independent multipliers.\n- **S=3 costs extra per agent.** It adds a 49-iteration cell loop, each with two `_cell_start` loads, and the break only exits the innermost loop. The remaining cell iterations still run after the cap is hit (the up-to-8 extra cell visits at S=1 are minor, but the up-to-48 at S=3 are not).\n- **The gate configuration is not justified by evidence.** Line 128 fixes S=3 for the gate runs. The plan assigns S to this slice, so the slice must keep it. But S should not be the default gate setting until the break-only S=1 result is measured. A5's spill check should also be taken on the S=1 break-only kernel.\n- **The validation block is oversized (lines 69-78).** The S>8 rationale (\"auxiliary arrays past practical GPU memory\") is wrong. At S=8 and a 756\u00b2 world the grid is about 15k cells, and `MAX_CELLS_SANITY_CAP=4_000_000` already guards cell count (`quadrants_fused_state.py:55,154-160`). `isinstance(S, int)` also accepts `True`. A single `S >= 1` check at the config boundary is enough.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "First-k selection under S>1 is spatially biased, and the parity checks cannot detect it",
+   "description": "- **Early exit alone changes nothing.** At fixed S, break accepts exactly the same first-k set as counter-gating. S=1 with break is behaviorally identical to slice 145, which line 67 asserts but never reasons through.\n- **S>1 changes which neighbors are chosen.** Scan order starts at `drow=-S, dcol=-S`. With a dense flock, where thousands of agents sit inside the radius, the first 32 accepted neighbors come from the outermost row of cells, near the radius boundary. At S=1 the first row spans the whole upper third of the neighborhood.\n- **Behavior shifts.** Cohesion, alignment and separation sample a one-sided, far-edge set. Line 56's \"correct neighborhood is preserved\" covers only the geometric radius, not the selection.\n- **The tests can't see it.** The 20% parity gate against numpy (A4) is loose. Nothing compares S=3 with S=1 beyond a one-line manual check in Step 1.\n\nSpecify an automated S=3 vs S=1 statistical test, or randomize or rotate the scan start, or state the bias as an accepted limitation.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The warp-divergence analysis rests on a premise the kernel does not satisfy",
+   "description": "- **Lanes are not spatially adjacent.** The kernel parallelizes `for i in range(n)` over agent index (`quadrants_fused_kernels.py:233`), not over `_sorted_agent_ids`. Initial positions and profile assignment are random per agent (`numpy_backend.py:203-212`, `rng.shuffle`), so \"agents with similar spatial index\" in a warp are not neighbors.\n- **Warp time is the slowest lane.** It equals the maximum iterations-to-cap over its 32 lanes. A lane in a sparse or edge region that never reaches 32 neighbors still scans every candidate, which is the pre-change cost.\n- **The argument works against its own claim.** \"Divergence overhead is proportional to spread \u2026 small at high density\" is asserted, not measured. The ~44,968 figure (line 27) assumes the 99.9%-waste cell. Divergence can erase much of the gain, and the 5\u00d7 gate (A2) may be missed for that reason.\n\nThe design should state this as the risk it is. It should also consider launching the kernel over `sorted_agent_ids` order (so lanes are cell-adjacent) as a named fallback rather than leaving divergence to chance.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Gate workload and baseline don't match the numbers the gates are built on",
+   "description": "- **The workload file is not the measured one.** `bench/workloads/mid-flock-50k.yaml` has `n: 100000`, `world_size: [1536, 1536]`, and cluster centers at (120,120) and (280,280). The 38 TPS baseline and p99\u22485137 occupancy came from N=50k in a 756\u00d7756 world with cluster_radius=80 (`145-notes.fused-tick-measurements.md:39`, `148-notes.envelope-measurement.md:68-94`).\n- **A2 and A3 would be measured against the wrong thing.** \"mid-flock-50k, S=3\" is not the N=50k, 756\u00b2 configuration the 5\u00d7 and 100 TPS gates assume.\n- **The occupancy figure is a time-zero value.** The envelope measurement was taken at setup. The design uses it as the steady-state operating point.\n- **The baseline is unreconciled with slice 148.** Plan entry 148 is marked complete. Its notes require removing the tiled kernel and backend before merge, and the design neither confirms what `quadrants-fused` is on main nor states that its baseline is the untiled 145 kernel.\n\nDefine or fix the gate workload, and pin down the baseline binary.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:17-19,116-128"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Register-spill check (A5) names tools the CUDA host lacks",
+   "description": "A5 and Step 4 prescribe `nvcc --ptxas-info` or `TI_PRINT_KERNEL_STATS=1`, and the latter is unverified. Slice 148 found `ptxas`, `cuobjdump` and `nvcc` not installed on the CUDA host (`148-notes.envelope-measurement.md:26-27`). It checked for spill by counting `.local` declarations in the cached PTX under `~/.cache/quadrants/qdcache/ptx_cache_sm_86/`. Specify that same method, and note that it cannot see ptxas-level spill.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124,180-182"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No test changes are specified for the new behavior",
+   "description": "The design adds an S parameter, a validator and a changed scan loop, but lists no new or changed tests. Specifically:\n- **S validation** has no test, and the design doesn't say where the validator lives.\n- **The `range(-S, S+1)` loop** has no test that S=3 finds the same neighbors as S=1 (the radius-coverage argument at line 56).\n- **The parity test** (`test_quadrants_fused_parity.py`) has no S parameterization.\n- **The isolation test** (`test_quadrants_fused_kernels.py:217`) isn't updated for the new cap check (see the Option A finding).\n\nExisting tests are safe at S=1: `test_quadrants_fused.py:140` expects `n_cells=16` at 200/50, which the default preserves.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Mac verification claims a \"CPU fallback\" the fused backend does not have",
+   "description": "`_select_arch` raises on any platform other than Linux or Darwin and returns CUDA or Metal only (`quadrants_fused_backend.py:46-62`, docstring \"no CPU fallback\"). A1 and A4 run on Mac only through Metal. A non-CUDA Linux box cannot run them.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:126"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "A3 is subsumed by A2, and the S default for slice 146 is not stated",
+   "description": "- **A3 follows from A2.** A 5\u00d7 cut of 25 ms of force time leaves about 5 ms, plus about 0.4 ms of build and download. That is about 150+ TPS, so A3 (\u2265100) is implied by A2. Tier 2's 60 TPS NFR is correctly restated at line 116.\n- **The S default for 146 is unstated.** The interface to slice 146 (lines 110-111) says the external API is unchanged, but state default S=1 means a production engine wired in 146 gets the slow configuration unless 146 sets S. The design should state who owns that default.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-122"
+  }
+ ]
+}

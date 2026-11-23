@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Index allocation contradicts itself and the \"no convention change\" claim",
+   "description": "Lines 249-252 say generated documents draw from the reserved 940-949 range. Lines 254-258 then \"sanction\" overflow into \"remaining slots in the 900 band\" with no ceiling or collision rule. Resolved Design Decisions (l.332-333) repeats only \"940-949 \u2026 no new convention\". It omits the overflow that the Output Conventions section says is needed. Ten slots with three used (940-942 exist in `project-documents/user/analysis/`) means the range is exhausted after seven runs, so overflow is the normal case. The overflow rule also contradicts line 244, which says there is no change to `file-naming-conventions.md`. Anything in 950+ may already be reserved for another purpose, and the doc doesn't say which slots are free. The doc should either define a specific range and a \"next free index\" procedure, or admit that the naming convention must change.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-run indexing is wrong for the client overview",
+   "description": "The 940-series rationale is that each run is \"an independent sample rather than a revision.\" That fits audits. The overview is a derived living view of the plan whose Status field changes as work proceeds. Giving each regeneration a new index leaves several `overview` files with conflicting statuses and nothing marking which is current. Capability 2 also records no provenance, such as source plan commit or generation date. Capability 1 records provenance, but a stakeholder document is the one most likely to go stale unnoticed. The doc should specify regenerate-in-place, or supersession via `status: deprecated`, plus a source-version stamp.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:204-210, 249-252"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Capability 2's \"tested path\" (no concept) has no source mapping",
+   "description": "Lines 197-200 call the no-concept case the common, tested path. But the field table sources Problem, Audience and Approach solely from the concept's Problem & Motivation, Target Users and Solution Approach sections. The doc only says it falls back to \"initiative plan plus interview\" and doesn't map that onto the fields. An interview also introduces claims that are not \"an input artifact\", which contradicts the rule \"Every claim traces to an input artifact\" (l.234). The doc needs to say, per field, what happens when there is no concept: the interview source, an explicit \"unknown\" marker, or omission. It must also say how interview-derived content is labelled in a document that is supposed to be derived only.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:196-226"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Derived, never invent\" is undermined by the translation rules and has no check",
+   "description": "The \"features become outcomes\" rule (l.231-233) and the Benefits field (\"Derived from initiative descriptions\", l.222) require the skill to assert outcomes the source never states. The example \"converges without human babysitting\" is a new claim, and in a document handed to clients. The doc says unsupported benefits are flagged for the PM, but it gives no way to tell a translation from an invention. It also has no review step for the artifact (the PM confirmation is only on initiative candidates in Capability 1). Nothing is said about stripping internal-only material, such as cost, internal names or security-sensitive detail, which is a different risk from stripping slice indices. Specify a per-claim trace format, such as an appendix or comments mapping each claim to a source section, or soften the \"never invented\" goal to match what is actually promised.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:51-52, 222, 234-235"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Audience-variant handling is stated two ways",
+   "description": "Translation rules say \"Emphasis is a generation parameter.\" Resolved Design Decisions says one neutral document with no variants, and that a parameter is added \"only if real use demonstrates the need.\" Either the parameter exists or it doesn't. The first statement should be removed or reworded.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239 vs 328-330"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Capability 1 is called prescriptive, but nothing supplies the prescriptions",
+   "description": "The doc positions Capability 1 as prescriptive (\"what should we do about this codebase?\"), distinct from the plugin's descriptive skills. But the interview covers motivation, users, constraints and methodology, and never asks what the PM wants changed or built. Initiative candidates are \"derived from layer boundaries and complexity clustering\" (l.154-155). Layers describe where code is. An initiative is a unit of change, so the derivation from structure alone is exactly the \"magic happens\" step. It also conflicts with \"never fabricate intent\", since an initiative implies intent. The analysis document (layers, hotspots, entry points, dependency observations) is also descriptive, which weakens the \"no functional overlap\" claim at lines 120-121. The doc needs to define the clustering algorithm and its inputs, add a goals question to the interview, or demote candidates to explicitly labelled \"observations.\"",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:117-121, 138-156, 158-169"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Staleness check by commit hash is unsound for a tracked graph",
+   "description": "The doc tracks `meta.json` and the graph in git, and compares `gitCommitHash` to `HEAD`. A graph that was committed necessarily records a hash at least one commit behind HEAD, because the commit that adds it comes after it. So there is permanent drift of at least one. The check also breaks on rebase or squash, where the hash no longer exists. It breaks on shallow clones, where the commit distance can't be computed. And it fails for a teammate who consumes the committed graph. Commit count also measures staleness badly: the doc's own \"typo commit\" argument shows distance isn't the relevant quantity. Comparing files changed since that hash against `analyzedFiles`, or against the nodes' `filePath` values, is the meaningful measure and should be specified.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-135, 186-188"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Reading the graph is under-specified and likely infeasible as described",
+   "description": "\"Grep for the needed section before reading\" is not workable for a JSON document. If it is minified or single-line, a grep returns the entire file. If it is pretty-printed, grep can't extract a nested array without context counting. The doc names no extraction mechanism (`jq`, `python -I`, a squadron helper). It also sets no bound on the number of file-level nodes read. Step 3 pulls `summary`, `filePath` and `complexity` for every file-level node, which on a large repo is easily tens of thousands of tokens. The skill needs a defined reduction strategy, for example aggregate by layer and take the top N by complexity, plus the tool used to do it. Without one, the \"read discipline\" is a hope rather than a design.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110, 138-139"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Precondition on plugin installation conflicts with the \"graph is an input\" principle",
+   "description": "The principle says the graph is data and the plugin isn't a dependency. Step 1 nevertheless requires verifying the plugin is installed, and the doc names no mechanism for that. Probing Claude Code's plugin registry means depending on a private, unversioned file format. The graph is committed to the repo precisely so it is shared project knowledge, so a colleague without the plugin should be able to consume it. The check that matters is graph presence plus a schema/version sanity check. The doc also never says how squadron detects a graph from an incompatible upstream version, even though it pins v2.8.1 (l.41, 71) and relies on an upstream contract (l.79-105) that it doesn't own.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:56-58, 127-129, 186-188"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Behaviour on existing files and re-runs is unspecified",
+   "description": "The doc doesn't say what happens if `000-concept.{project}.md` already exists. It says the User-Provided Concept section is \"sacred \u2026 never rewritten\", yet the skill writes it from interview answers. A re-run, or a pre-existing human-authored concept, would collide with that rule. The interview responses are also Q&A fragments going into a section meant for the author's free-form concept. There is no write-conflict policy for the concept, for the analysis index, or for `.gitignore` when the file is absent, or when the repo is a monorepo with `.understand-anything` below the root. Describe the behaviour for each of these cases.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-152, 130-135"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "\"No installer change\" claim is only verified for pack skill (a)",
+   "description": "The `analysis` pack is registered in `src/squadron/data/skills.toml`, and the dispatcher currently lists only `tech-debt-audit` (`commands/sq/analysis.md:7`). So the \"three edits\" claim for (a) checks out. For (b), the doc asserts no CLI change but never says how a new `commands/sq/overview.md` reaches `~/.claude/commands/sq` (see `cli/commands/doctor_checks.py:148`). It lists [100] as a dependency for \"any command surface\" without saying what is needed from it. Confirm how first-party commands are installed, and either drop the [100] dependency or state what it provides. The `understand` skill name, which matches the upstream `/understand`, could also make bare-name resolution ambiguous when a model invokes it through the Skill tool. The dispatcher namespacing argument covers only slash-command typing.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:273-289, 305-308"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Frontmatter validation ownership is misattributed",
+   "description": "The doc refers to \"the frontmatter gate\" validating the `docType` and `status` enums. In the repo (`src/squadron/documents/schema.py:7-10`), validation is owned by Context Forge (`cf validate frontmatter`), and squadron only emits values that must stay accepted by cf. The practical consequence is that generated documents should import `DocType.ANALYSIS` and `DocumentStatus` from `documents/schema.py` rather than hard-code strings in markdown skills. The doc also says nothing about whether the skills self-validate before writing. The \"new docType needs a gate change\" argument is weaker than stated, since squadron already emits non-spec types (`review-resolution`, `devlog`). It still holds for the pre-commit hook.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:243-247, 260-261"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Prior-art reuse is left as an open question without a decision",
+   "description": "The `[INFERRED]` convention directly serves the \"never fabricate intent\" goal, which is a load-bearing design goal. Deferring the decision on it to slice design means the provenance-marking mechanism for both capabilities is left open. The doc's own design needs some such mechanism now. Decide it here.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:263-269, 341-342"
+  }
+ ]
+}

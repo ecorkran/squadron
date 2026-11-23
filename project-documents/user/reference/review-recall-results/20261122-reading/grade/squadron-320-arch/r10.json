@@ -1,0 +1,110 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Document describes work the codebase has already built",
+   "description": "The frontmatter says `status: not_started`. Anticipated Slices calls the data layer the keystone. Technical Considerations leaves the store open (line 87) and the judge-config granularity open (line 79), and calls project identity \"a new requirement\" (line 87). The primary checkout already decides these:\n- Store: `metrology/store.py:1-7` writes one JSON file per record under `~/.config/squadron/metrology/`, with no database.\n- Project identity: `metrology/identity.py:3-6` introduces it and fails explicitly when it is missing.\n- Judge config: `metrology/graduation.py:5-7` matches on `JudgeConfigId`, including `template_content_hash`.\n- Evidence floor, graduation registry, residual sampling, and blind capture: `calibration.py`, `store.py:236`, `graduation.py:112`, `capture.py:1`.\n\nThis worktree has no `metrology/` package (a glob returned nothing), so this branch predates that code. Before slice planning uses this document, either update the branch and record the decided items as decisions, or mark the document as a pre-implementation snapshot that does not drive slicing.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#current-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Non-Goals are contradicted by existing code",
+   "description": "Non-Goals rules out curated datasets and telemetry beyond the two oracles. The code contains:\n- `metrology/benchmark_models.py` (slice 421): content-addressed cases of kind `fix` or `slice`, graded by `suite`, `lint`, or `typecheck` commands. This is a curated case set and a third oracle, and the document never names it.\n- `metrology/snapshot/` (complexity, duplication, coverage, lint, and type checks for Python and TypeScript, judging by module names) and `quality_report/`, which measure code beyond the two oracles.\n\nEither record these as deliberate carve-outs or correct the Non-Goals.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#non-goals"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Calibration feeds a second threshold source that the gate does not read",
+   "description": "Design Goal 4 (line 36) and Scope (line 24) say calibration feeds 300's repo-owned template and step threshold config. The code writes graduation decisions to the user-level store as `graduated_config` records (`store.py:236-265`). A search of `src/squadron/pipeline/` finds no reader of those records. Either the gate will read two threshold sources, one of them machine-local, so the same repo can gate differently on a laptop and in CI, or the feedback is unwired. The document must name one authoritative location for graduated thresholds and say how the gate reads it.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Calibration grain does not map to config grain",
+   "description": "Calibration is computed per artifact level (Design Goal 1, line 30). Threshold config is keyed by template and step override (Design Goal 4). The document never says where artifact level is recorded on a judge result, and never maps levels to templates or steps. Without that mapping, a graduation for \"tasks-vs-slice\" cannot say which step it changes, and two templates at the same level cannot be told apart.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Human label type is undefined, so threshold calibration can be circular",
+   "description": "Envisioned State says the operator's \"verdict is recorded against the judge's result.\" The judge emits a 0\u2013100 score and a verdict derived from thresholds (300-arch). The document does not say whether the human records a PASS/CONCERNS/FAIL label, a score, or agree/disagree. If the label is a threshold-derived verdict, agreement changes whenever thresholds change, so it cannot be used to choose a threshold. The label must be independent of the threshold. Each sample should also persist the raw score and the threshold snapshot used, so thresholds can be swept offline.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Evidence floor is specified as a count, not a bound",
+   "description": "The document requires a \"minimum-evidence floor\" but defines neither the statistic nor the rule. A count floor permits bad graduations. Ten of ten agreements gives a one-sided 95% Clopper\u2013Pearson lower bound of about 0.74; twenty of twenty gives about 0.86. The code has the same flaw: `calibration.py:57` graduates on `n >= floor and match_rate >= graduate_rate`, a point estimate against a threshold. That violates the document's own principle (line 52) that an overstated calibration report is worse than none. Require graduation on a lower confidence bound, and state the floor as both a bound and a minimum n.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Dispersion cannot show the bias Design Goal 2 promises",
+   "description": "Design Goal 2 says dispersion shows that \"X overreaches, Y rubber-stamps.\" Dispersion measures disagreement, not correctness. Judges that share a model family or template can agree and both be wrong, and an always-PASS judge has zero dispersion against another always-PASS judge. Overreach and rubber-stamping are bias against the human, so only per-model judge-vs-human agreement can show them. That requires the human to label the same artifacts each model scored, and the document does not budget for it. The document also mixes two quantities under \"dispersion\": run-to-run variance within one configuration (line 81) and disagreement between configurations. These need separate series keyed by configuration, or repeated runs will read as inter-model bias.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Multi-sample judging is described as both existing and future work",
+   "description": "Technical Considerations (line 81) says \"the execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\" Current State (line 62) and Related Work (line 109) call multi-sample \"300 Future Work 1.\" 300-slices (line 118) lists \"(1) Multi-Sample Judging\" unchecked and \"deferred so the core judging path lands first.\" `fan_out` exists in `src/squadron/pipeline/`, but 300's multi-sample option is not built. Dispersion from repeated runs therefore depends on unbuilt work. Say so, and name that dependency.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"Read-side only\" conflicts with populating the judge's `criteria` map",
+   "description": "The principle at line 46 says 320 does not modify \"the result models' write semantics,\" then says 320 \"populates or reads\" the reserved `criteria` map. 300-arch (line 59) defines `criteria` as per-criterion sub-scores, parsed from judge output (line 83). If 320 writes it, either metrology is computing judge sub-scores, which changes the judging path, or it is inserting human per-criterion labels into the judge's record, which mixes human judgment into provenance that 300 built. Human labels belong in the sample record.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Pre-emption delta cannot show an effect at the sample sizes proposed",
+   "description": "Design Goal 5 aims to \"prove the metrology can detect an intervention's effect.\" The document sets the baseline at \"a handful of projects\" (line 52) and calls the before/after observational (line 85). It defines no noise floor for audit counts and no minimum detectable effect, and the audit's run-to-run variance is unmeasured. The code's variance series defaults to n=3 and labels its stddev coarse (`floor_stat.py:15-18`). At that size, a handful of projects cannot separate a modest prompt effect from noise. Choose one of two fixes. The first is a per-project enablement flag on the pre-emption fragment, which gives a control group at little cost. The second is a required minimum detectable effect in every report, so a null result is reported as \"not detectable\" rather than \"no effect.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Audit normalization and invocation are unspecified",
+   "description": "Normalization: findings are to be normalized to (category, location, severity), but the document does not say how. A deterministic parser over prose fails silently when the skill's format drifts, which the repo's parsing rules forbid. An LLM normalizer is a second unmeasured oracle. The forked skill should emit a structured output block that is validated with explicit errors.\n\nInvocation: 340-arch (line 60) installs the audit as a markdown command under `~/.claude/commands/analysis/`, so it is not a callable squadron action. The document does not say how a cross-project harness runs it non-interactively. The natural design is a 140 pipeline with `each` over projects, the existing per-run spend tracking (`pipeline/run_spend.py`), and checkpoint/resume. The document should choose that or name an alternative.\n\nSecrets: an audit of a repo can quote hardcoded credentials in its evidence. Persisting findings with their excerpts to a cross-project store would spread them. Store category, location, and severity only.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Two oracles are forced into one reporting layer; defer the code-quality track",
+   "description": "The document says the two oracles \"share one metrology shape... so the reporting layer is built once\" (line 69). The judge side is paired-label agreement with chance correction, per artifact level. The audit side is per-project counts over time, with its own variance and no human label. They can share a store. The code does share one store with typed records, but keeps separate reports (`report.py`, `audit_report.py`). Slices 4\u20135 do not depend on calibration, and they have the weakest measurement: unmeasured audit variance and no control. Defer them to their own initiative until slices 1\u20133 show a measured judge-agreement loop. That is the largest cut available, and it matches the project rule to always resist adding complexity.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#anticipated-slices"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "No failure semantics",
+   "description": "The document has no failure-mode section. Unspecified cases:\n- A project's audit run fails or hits its spend cap mid-baseline. The report must name the missing projects and state n. It must not drop them silently.\n- A second human label on the same judge result: is it a new sample or an overwrite?\n- A judge result is re-run after sampling: does the label attach to the old result, and is the new score compared against it?\n- Budget exhaustion. The code has a per-project budget (`capture.py`, `store.py:654`), and the document says nothing about one.\n- Concurrent writes from parallel pipelines to the shared store.\n\nEach failure needs an observable signal under the review rules. `report_models.py:54` already has an excluded-counts type. The document should require that pattern.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Dependencies omit 340, and the skill name is wrong",
+   "description": "The frontmatter lists `dependencies: [100, 140, 300]`, omitting 340, which slices 4\u20135 need (Related Work, line 111). 340 is complete, so this is a declaration gap, not a blocker. The document calls the skill `tech-debt-audit` throughout. 340-arch (lines 20, 43, 62) calls it `tech-debt-analyze` and exposes it as `/analysis:tech-debt` (line 34). The harness will bind to that command name, so the document should use the name 340 ships.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Overview says scores are advisory in the same paragraph that says the engine gates on them",
+   "description": "Paragraph 1 says \"the engine gates on it\" and then \"Its scores are treated as advisory.\" 300-arch's \"Bubble up the hard calls\" principle says judges gate where ground truth is strong and are advisory where it is weak. Use that wording, because the calibration question depends on it.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#overview"
+  }
+ ]
+}

@@ -1,0 +1,522 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "\"File-level\" is defined by a property every function node carries, so the definition and drift check fail on this graph",
+      "description": "Correction 2 defines file-level as \"carries a `filePath`\". All 476 function nodes carry a non-null `filePath`, and function nodes also carry `complexity` (55 of them are `complex`). The verified row at line 99 (\"nodes carrying filePath + complexity \u2014 all file, config, pipeline \u2014 238\") is therefore false. Consequences:\n- (a) Read literally, the heading admits all function and class nodes (687 per the design's own count), which the design says must stay excluded.\n- (b) The cross-check at lines 139-141 tests \"resolves to a node carrying `filePath`\". Every node passes that test, so only the parenthetical type check could catch drift, and the design does not make it the operative rule.\n- (c) The exclusion selector at lines 154-161 is fail-open. Any future code-level type carries `filePath` and enters the file-level set silently. The architecture requires contract drift to fail loudly (360-arch.document-intelligence.md:130-136).\n\nFix: define file-level by the nine-type set in 360-arch:107-109, report any type outside that set as drift, and make the type check the cross-check.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 requires resolving function- and class-level endpoints, which contradicts criterion 9 and the read rule",
+      "description": "Lines 217-220 say function- and class-level edge endpoints are \"resolved to their owning file's layer rather than dropped\", with no mechanism. The obvious source is those nodes' records, but criterion 9 (lines 332-333) says no function- or class-level node is read, and the architecture says the same (360-arch:109-110). The architecture's `contains` edge type (360-arch:96) would give file-to-function ownership from `edges[]` with no node reads, but the design does not mention it. Either name that mapping and its no-owner case (reported as drift), or drop function-level resolution and report the excluded-edge count as a gap.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:217-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The entry-point count and its population are wrong, and the fallback text would mislead",
+      "description": "Line 202 says \"27 nodes carry it in this graph\" under a section that reads file-level nodes. Measured: 27 `file`-type nodes carry `entry-point`, and `config:pyproject.toml` also carries it. Under the design's own file-level definition the population is 28. Separately, 24 function or class nodes carry the tag, which the section cannot read and does not mention. The fallback at line 176 (\"no node carries the entry-point tag \u2014 re-run /understand\") would be false for a graph whose only entry-point tags sit on function nodes. Fix: state the count from the section's actual population, add an explicit scope note that function- and class-level tags are outside the read scope, and reword the fallback to \"no file-level node carries the tag\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The baseline is not on this branch, the 361 text is misquoted, and Correction 1 is classified without support",
+      "description": "The design edits \"the existing `commands/analysis/understand.md`\" (line 22). It is absent: `commands/analysis/` holds only `tech-debt-audit.md`. The sample it relies on is also absent: `user/analysis/` has 940-942 and no 943 (so \"943 exists, expect 944\", lines 368-369, and \"leave 943 in place\", lines 466-469, cannot be checked). No `.understand-anything/` exists here, and 361 is `not_started` with \"No graph exists in this repo yet\" (`project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md:8`). The design should state that 362 starts only after 361 merges and name the state it builds on.\n\nLine 147 says 361's text \"collapsed\" to `select(.type == \"file\")`. The 361 slice spec reads `select(.type == \"file\" or ...)` (`project-documents/user/slices/361-slice.graph-contract-and-provenance.md:108`). Lines 115-117 say the graph \"matches what the architecture documented\" for Correction 1. The architecture says only that every file is in exactly one layer (360-arch:98) and is silent on `nodeIds` composition. Correction 1 is therefore a design judgment, not a verified match, and should say so.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough steps 5 and 6 cannot run as written",
+      "description": "Step 5 copies only the graph and meta into `$S/real/.understand-anything/`, which is not a git repository, then `cd`s into `.understand-anything/`. The skill resolves `$PROJECT_ROOT` with `git rev-parse --show-toplevel`, falling back to `pwd` (361 slice:104-105). It would look for `.understand-anything/.understand-anything/knowledge-graph.json`, find nothing, and print the run-`/understand` message instead of a gap marker. The variant files (`kg-empty-tour.json`, `kg-no-entrypoints.json`, and step 6's `meta-wrong.json`, lines 413-416) are never moved to the names the skill reads, and `$S` is never defined. The 361 pattern it cites copies the whole repo (361 slice:312). Fix: copy the repository, `mv` each variant over the copy's file before its run, and define `S=$(mktemp -d)`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:397-404"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The closing-observation exception is not mechanically testable and breaks the no-unsourced-claims rule",
+      "description": "Lines 245-250 allow one sentence per section that \"reads a pattern out of the data\", tested by whether it is \"derivable from the table directly above\". The example at line 246 (\"complexity concentrates in the seams where squadron meets an external SDK\") is not derivable from any named field. It requires judging node names as SDK boundaries. That is the unsourced claim the fallback rule (lines 186-189) and criterion 3 (lines 319-321) exclude. Fix: drop the device, or replace it with a fixed template that quotes field values (for example, \"N of M file-level nodes are `complex`; the top tier sits in layer X\").",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `.understandignore` and `config.json` rules are contradictory and leave cases undefined",
+      "description": "Lines 234-235 say \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\". The parenthetical contradicts the rule: the file has 17 active patterns (`.venv/`, `*.md`, `project-documents/`, `/tests/`, and others), so it is not all-comments, and lines 232-233 already require listing them. Undefined cases:\n- (a) An absent `.understandignore` is either \"unreadable\", which gets a gap (line 180), or \"defaults only\" (line 235). The design does not choose.\n- (b) A `config.json` that is not valid JSON has no rule.\n- (c) \"Report the settings that are present\" (line 229) does not say how keys are rendered or whether unknown keys appear.\n- (d) No path is given for `.understandignore`. The architecture places it under `.understand-anything/` (360-arch:81-89).\n\nFix: state the absent, all-comments, and active cases, and the malformed-file gap, explicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Non-empty input that yields an empty result has no defined rendering",
+      "description": "The fallback column covers absent or empty input, not input that produces nothing. Cases: a layer whose `nodeIds` is empty (section 2, line 175); no `complex` file-level node (section 4, line 177); zero inter-layer `imports`/`depends_on` connections after self-references are removed (section 6, line 179); and \"ties by `weight`\" (line 179) with no definition of whether weight is per edge or summed per layer pair. Lines 186-189 say every section resolves to sourced content or a gap marker, so each case needs a stated rendering, such as an explicit \"none observed\" line, not a silent empty table.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:175-189"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 363's Initial Technical Direction depends on graph `config` nodes that the mapping never supplies",
+      "description": "The architecture's interview table says Initial Technical Direction draws on `project.languages`, `project.frameworks`, and `config` nodes, and Development Approach on test/CI `config` nodes (360-arch:220-221). Lines 299-301 say the design's identity section feeds Initial Technical Direction. But no mapping row (lines 174-180) and no Interfaces Required row (lines 80-88) covers graph `config` nodes. Slice 363 would have to extract them outside the mapping it reuses. Fix: add a `config`-node row to the mapping, or state that 363 owns that extraction and amend the plan.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The metrology audit reads the same `*-analysis.*.md` namespace and is not accounted for",
+      "description": "`_AUDIT_FILE_GLOBS` matches `project-documents/user/analysis/*-analysis.*.md`, and `find_audit_file` (lines 259-283) returns the newest match written since the run started. A `944-analysis.codebase-comprehension.md` matches. The untracked-artifact pattern (lines 70-75) also treats any `NNN-analysis.<topic>.md` as the audit's own output, so a comprehension document would be exempted from the dirty-tree check. If an audit run writes no file while a comprehension run finishes in the same window, the audit can read the comprehension document as its findings. Integration Points (lines 295-311) and the check at line 431 (`tests/skills/` only) do not mention this caller. Fix: name it in Integration Points, make the comprehension output distinguishable or exclude it in `find_audit_file`, and run the metrology tests as part of the check.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "src/squadron/metrology/audit.py:56-59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An interrupted run leaves a partial document that looks complete",
+      "description": "The design writes one document per run and does not say how a killed run ends. A process killed mid-write leaves a partial `944-analysis\u2026md` that already carries `docType: analysis` and the provenance block. The next run takes 945, so the partial file stays in `user/analysis/`, where the metrology glob and a human reader will treat it as a complete sample. The architecture requires each run to be an independent sample (360-arch:347-350). Fix: write to a temporary name and rename on completion, and say how an operator identifies and removes a stray temporary file.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope exceeds the architecture and duplicates 361 in several places",
+      "description": "- (a) Section 1, project identity, is not in the architecture's comprehension output list (360-arch:162-163: layers, hotspots, entry points, dependency observations). Its only named consumer, slice 363, reads `project.languages` and `frameworks` through the mapping (360-arch:220). The mapping row alone serves 363, so the section can be cut from the document.\n- (b) \"Read discipline, unchanged\" (lines 282-293) restates 361's discipline (361 slice:104-113). One sentence plus the `.understandignore` exception would do.\n- (c) Verified-facts rows that no decision uses can go: `tour[].languageLesson` (line 106) and the `config.json` contents row (line 107).\n- (d) `edges[].direction` (line 86) and \"section grouping\" for `nodes[].tags` (line 83) appear in Interfaces Required with no mapping row that uses them.\n\nCoverage (section 7) is in scope, since 361's tasks forwarded it to 362 (`project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md:72-76`).",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:195-198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice plan's tour-importance signal is deferred without being recorded",
+      "description": "The slice plan assigns 362 the job of defining `tour[]` ordering \"as the signal for which components matter most\" (`project-documents/user/architecture/360-slices.document-intelligence.md:85-91`). The design maps `tour[]` only to reading order (row 5, line 178). Its Interfaces say 363 uses tour for Solution Approach (lines 300-301). The importance signal is therefore deferred to 363 without the plan being amended. Fix: define how tour order yields an importance signal in 362 (for example, the layer of the earliest tour step), or record the deferral in both documents.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The reference prompt's template is misdescribed",
+      "description": "Lines 266-267 describe a \"ten-part structure (identity, architecture, build/test/deploy, code quality, security, performance, operations, and so on)\". The document has eight numbered analysis sections: IDENTITY & STACK, ARCHITECTURE, BUILD TEST & DEPLOY, CODE QUALITY & DEFECTS, ISSUE TRACKER & PROJECT HEALTH, AI AGENT INTEGRATION, RISKS & RECOMMENDATIONS, and DEEP-DIVE PLAN. It has no security, performance, or operations section (`project-documents/user/reference/analyze-codebase-prompt.md:49-161`). The decision not to adopt the template still holds, but the stated rationale describes a document that does not exist. Fix: list the eight sections.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:266-267"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Unchanged, as the architecture requires\" misattributes a requirement",
+      "description": "Line 258 says \"retain the document unchanged\", and lines 277-278 say \"unchanged, as the architecture requires\". The architecture requires the document to be retained, not superseded or absorbed (360-arch:369-375), and says nothing about it being unchanged. Lines 279-280 then add a cross-reference line, which criterion 7 accepts. Fix: say \"retained, not superseded; one cross-reference line added\".",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:258"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Installed copies of the pack lag the corrections until reinstall",
+      "description": "The only pack check is `uv run pytest tests/skills/`. Install copies the file at install time (`src/squadron/skills/installer.py:80-87`). A user who ran `sq skills install analysis` after 361 keeps the uncorrected selector until they reinstall, and nothing in the walkthrough reinstalls or flags the stale copy. Fix: add a reinstall step, or state that the installed copy lags until `sq skills install analysis` is re-run.",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:429-431"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The read discipline swaps the architecture's grep wording for jq without saying so",
+      "description": "The architecture says \"Grep for the needed section before reading\" (360-arch:107), and the slice plan says the same (`360-slices.document-intelligence.md:89-91`). The design's read-discipline section never mentions grep and realizes the rule as jq selections, which 361 chose (361 slice:111-113). That is a reasonable decision, but the design should record that it departs from the architecture's wording.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`languageNotes` coverage uses a different denominator from the rest of the design",
+      "description": "Line 105 reports 81/201 \"on file nodes\". 201 is the `type == file` count, while the design's file-level set is 238 and section 4 applies the annotation to that set. Measured: 81 `file`-type nodes carry `languageNotes`, which reproduces the 40% figure only for that subset. State one denominator.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:105"
+    },
+    {
+      "severity": "PASS",
+      "title": "Measured graph facts reproduce",
+      "description": "Reproduced on the commit-1bfbca1 copy: Packaged Declarative Content = 34 `nodeIds` (file 1, config 13, pipeline 20); Project Configuration = 6 (config 4, file 2); `analyzedFiles` = 238; 201 `file` and 476 `function` nodes; `config.json` = `{\"outputLanguage\":\"en\"}`; 17 active `.understandignore` lines; 27 `file` nodes tagged `entry-point`; 81 `file` nodes with `languageNotes`; 9 `languageLesson` values; 43 `complex` file-level nodes (119 total minus 55 function and 21 class). No function or class ID appears in any `layers[].nodeIds` array. The pipeline and template spot-check counts (20 and 7) also match the repo's YAML files.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:96-109"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer and boundary alignment holds",
+      "description": "The nine file-level types in Correction 2's stated set match the architecture (360-arch:107-109). \"Every file is assigned to exactly one layer\" (360-arch:98) matches the measured layer composition. The dependency direction is correct: 362 depends on 361, and 363 and 364 consume 362's mapping, consistent with the slice plan's entries for those slices.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:67-88"
+    },
+    {
+      "severity": "PASS",
+      "title": "No existing installer or test breaks from the new file",
+      "description": "The installer globs `*.md` (`src/squadron/skills/installer.py:87`). Existing tests assert membership of `tech-debt-audit.md`, not an exact file set (`tests/skills/test_installer.py:121-122`, `tests/skills/test_cli_skills.py:124`). The \"no installer change\" claim holds, and the design correctly excludes `src/squadron/`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:64-65"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"File-level\" is defined by a property every function node carries, so the definition and drift check fail on this graph",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-145",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Section 6 requires resolving function- and class-level endpoints, which contradicts criterion 9 and the read rule",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:217-220",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The entry-point count and its population are wrong, and the fallback text would mislead",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:202",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The baseline is not on this branch, the 361 text is misquoted, and Correction 1 is classified without support",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:22",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough steps 5 and 6 cannot run as written",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:397-404",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The closing-observation exception is not mechanically testable and breaks the no-unsourced-claims rule",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The `.understandignore` and `config.json` rules are contradictory and leave cases undefined",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Non-empty input that yields an empty result has no defined rendering",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:175-189",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Slice 363's Initial Technical Direction depends on graph `config` nodes that the mapping never supplies",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The metrology audit reads the same `*-analysis.*.md` namespace and is not accounted for",
+      "location": "src/squadron/metrology/audit.py:56-59",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "An interrupted run leaves a partial document that looks complete",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope exceeds the architecture and duplicates 361 in several places",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:195-198",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The slice plan's tour-importance signal is deferred without being recorded",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The reference prompt's template is misdescribed",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:266-267",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "\"Unchanged, as the architecture requires\" misattributes a requirement",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:258",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "Installed copies of the pack lag the corrections until reinstall",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:429-431",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "The read discipline swaps the architecture's grep wording for jq without saying so",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`languageNotes` coverage uses a different denominator from the rest of the design",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Measured graph facts reproduce",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:96-109",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layer and boundary alignment holds",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:67-88",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "No existing installer or test breaks from the new file",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:64-65",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-22T22:54:13.814030",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 60,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "chars": 27038,
+      "sha256": "a04a766ac25e2954187d3066b73d97a0a9460664f7c10c440da655638e4134ad",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/360-slices.document-intelligence.md",
+      "chars": 18007,
+      "sha256": "5f6dd200b484c2d5d60eb12d238b65a41d16afaa9999aaeaac6c65f16f4d8680",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "project-documents/user/slices/361-slice.graph-contract-and-provenance.md",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "src/squadron/metrology/audit.py"
+  ],
+  "searches": [
+    "list_files project-documents/user/architecture/360-* in .",
+    "list_files commands/analysis/* in .",
+    "list_files project-documents/user/analysis/9[34]* in .",
+    "list_files project-documents/user/reference/analyze-codebase-prompt.md in .",
+    "list_files .understand-anything/** in .",
+    "list_files tests/skills/** in .",
+    "list_files project-documents/user/slices/36* in .",
+    "list_files project-documents/user/analysis/94* in .",
+    "list_files **/knowledge-graph.json in /Users/manta/.config/squadron",
+    "list_files *361* in /Users/manta/.config/squadron/reading-20261122/wt",
+    "list_files **/commands/analysis/understand.md in /Users/manta/.config/squadron",
+    "grep nodeIds|type == \"file\"|select\\(\\.type|INFERRED|analyzedFiles|config\\.json|understandignore|tour|edges|complexity|sort|jq empty|autoUpdate in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/commands/analysis/understand.md",
+    "grep config\\.json|understandignore|analyzedFiles|deferred|defer|362 in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/slices/361-slice.graph-contract-and-provenance.md",
+    "grep config\\.json|understandignore|analyzedFiles|defer in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/tasks",
+    "grep nodeIds|type == |type==|file-level|F0[0-9]+|status|\\[x\\]|\\[ \\] \\*\\*Phase|DONE|complete in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md",
+    "grep nodeIds|type == \"file\"|layers\\[\\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/commands/analysis/understand.md",
+    "grep 1bfbca1 in /Users/manta/.config/squadron/reading-20261122/wt",
+    "grep \"analyzedFiles\"|\"gitCommitHash\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything",
+    "grep \"name\": \"(Packaged Declarative Content|Project Configuration)\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep ^\\s*\"(type|outputLanguage|autoUpdate)\"|\"outputLanguage\"|\"autoUpdate\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/config.json",
+    "list_files .understand* in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07",
+    "grep \"type\": \"file\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"function\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"entry-point\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"languageNotes\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"layers\": \\[|\"tour\": \\[|\"edges\": \\[|\"nodes\": \\[ in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep ^\\s+\"(function|class): in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"file\",[^{}]*?\"entry-point\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"(function|class|config|pipeline)\",[^{}]*?\"entry-point\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"file\",[^{}]*?\"languageNotes\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"filePath\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"complexity\": \"(simple|moderate|complex)\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"complexity\": \"complex\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"function\",[^{}]*?\"filePath\": \" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"(function|class)\",[^{}]*?\"entry-point\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"file\",[^{}]*?\"complexity\": \"complex\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"function\",[^{}]*?\"languageNotes\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"(file|config|pipeline)\",[^{}]*?\"complexity\": \"(complex|moderate|simple)\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep ^\\s*[^#\\s] in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/.understandignore",
+    "grep \"type\": \"(config|pipeline)\",[^{}]*?\"(entry-point|languageNotes)\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"file\"(,)?$ in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep tech-debt-audit|understand\\.md|analysis pack|\"analysis\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/src",
+    "grep tech-debt-audit|understand|analysis|\\.md\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/tests/skills",
+    "grep mixes|type == \"file\"|type == \\\\\"file\\\\\"|intersect in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user",
+    "grep INFERRED|codebase-probe|Repomix|Phase|^#|^\\d+\\.|identity|architecture in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/reference/analyze-codebase-prompt.md",
+    "grep ^#{2,4}  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/reference/analyze-codebase-prompt.md",
+    "grep _install_prefix|glob\\(|\\*\\.md|def install_pack|install-commands|commands/sq|commands/analysis in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/src/squadron",
+    "grep analysis|understand|skills in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/commands/sq/analysis.md",
+    "list_files **/file-naming-conventions.md in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design",
+    "grep \"type\": \"function\",[^{}]*?\"complexity\": \"complex\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"type\": \"class\",[^{}]*?\"complexity\": \"complex\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "grep \"languageLesson\" in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.understand-anything/knowledge-graph.json",
+    "list_files src/squadron/data/pipelines/*.yaml in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design",
+    "list_files src/squadron/data/templates/*.yaml in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design"
+  ],
+  "sections_in_document": 21,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 21,
+    "in_fences": 0,
+    "in_section": 21,
+    "surviving": 21
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 61,
+  "prompt_tokens": 1601265,
+  "cached_tokens": 1455460,
+  "cache_write_tokens": 145771,
+  "completion_tokens": 136025,
+  "reasoning_tokens": null,
+  "duration_seconds": 597.1918883747421,
+  "cost_usd": 0.3886323,
+  "cost_basis": "provider"
+}

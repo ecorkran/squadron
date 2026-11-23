@@ -1,0 +1,361 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent weight comprehension is a per-agent Python loop, contradicting the slice's defining constraint",
+      "description": "The design builds weights with `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`. That is an O(n_active) Python loop with attribute lookups, and it runs inside every force's `__call__`.\n\nThis contradicts three claims:\n- \"No Python-level per-agent loops in any `BulkForce.__call__`\" (line 198).\n- \"O(1) Python overhead regardless of agent count\" (line 19, and the slice plan at 100-slices:37).\n- The Overview's claim that vectorization \"eliminates the Python loop overhead entirely\" (line 23).\n\nThe \"negligible at n=100\" hedge concedes the point. Five forces at about 100 iterations each is a visible share of the time budget this slice is meant to recover.\n\nThe cheap fix is to loop over profiles, not agents. Build `np.array([p.cohesion_weight for p in profiles])` once, then index with `state.profile_indices[eval_indices]`. Build that table once per tick, not \"if needed\" at higher n. The same defect applies to `tick.py:60-63`, where `max_speeds` is a comprehension over all agents. The slice touches that file and should fix it the same way.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor builder is itself a per-agent Python loop, and the \"constant overhead\" and \"within budget\" claims are unsupported",
+      "description": "Steps 2 and 3 of the data flow stay O(n) Python iterations: the query loop in `tick.py:48-52` and the new pad, mask and self-exclude pass. \"A single pass\" is a per-agent loop that does array filtering and copying. Its cost grows with neighbor count k, because it copies k entries per agent, and k approaches n once agents cluster.\n\nThe Overview (line 19) and the verification (line 215) claim \"constant Python overhead\" and ticks \"within the 50ms budget\". The doc has no measurement showing the force loops are the dominant cost, and no estimate of what the builder costs. Line 23 gives \"~10-15ms\" with no source.\n\nThe builder is mostly an unavoidable cost. A vectorized build is possible: concatenate the raw arrays, compute `counts` from lengths, build the mask from `np.arange(max) < counts[:,None]`, scatter with the mask, and remove self with a mask comparison against `eval_indices[:,None]`. The design should either specify that, or soften the claims to \"force-computation cost is constant Python overhead\".",
+      "file_ref": null,
+      "category": "scope-and-claims",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:90-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion is not testable as written; no benchmark or numeric target",
+      "description": "The only performance check is a manual 5-minute live run, compared against remembered \"~58-60ms\" behavior. The slice's stated purpose is the tick budget, yet the doc has:\n- no reproducible benchmark (n=100, `query_radius` 50, clustered state, N ticks of timed `tick()`);\n- no pass threshold;\n- no definition of what a \"tick overrun\" means beyond `TickMetrics.overrun_count` in `migratory_server/tick.py:25,84`, which the walkthrough does not use.\n\nThe doc should name a deterministic timing test or script, and say which counter to read. `python -m migratory_server --config default` is a valid command, since `__main__.py` has `--config` with default `default`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MomentumForce is mislabeled as neighbor-dependent",
+      "description": "Line 35 and line 190 list `MomentumForce` among the \"five neighbor-dependent forces\". Line 125 says it does not use neighbors, and line 201 confirms that. The functional criterion at line 190 (\"identical to the loop-based versions for the same input state and neighbor data\") is meaningless for it.\n\nThe doc should separate four neighbor forces from one per-agent force. Related existing-code facts:\n- `herding.py:34-42` is a loop over agents with a per-agent `np.linalg.norm`.\n- The `speed < 1e-10` gate must be preserved. The equivalent is `result = velocity * weight`, masked on speed.\n- `test_herding.py:62-110` passes arbitrary neighbor lists to `MomentumForce`. Those tests need an explicit decision on what to pass, since `neighbors` is now ignored. A natural choice is an empty `NeighborData`, which the builder should make easy to create.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35,190,125,201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing self-exclusion tests and the \"no loops\" source-inspection tests are not accounted for",
+      "description": "The design moves self-exclusion out of the forces into `build_neighbor_data`, and says \"All existing tests pass (updated for the new interface)\". The tests that would break are specific.\n\n- `tests/test_flocking.py:99,202,281` and `tests/test_herding.py:217` are `test_self_exclusion` tests. They hand the force a list containing self and expect the force to drop it. Once self-exclusion lives in the builder, the force no longer drops it. Each test must be rewritten to go through `build_neighbor_data`, or it will fail or silently test nothing. The design should say which module owns these assertions.\n- About 52 `neighbor_lists` occurrences across the flocking and herding tests construct jagged lists directly. Every one needs conversion. Because the tests include self, they should route through the builder with `eval_indices`. The design does not provide a test helper for this.\n- `test_herding.py:119-126` and `:252-260` assert `source.count(\"for \") <= 1` in `__call__`. A comprehension for weights counts as a `for `. These tests are weak. The design should replace them with a stronger no-loop assertion, or drop them. Its grep check (lines 222-225) searches only for `agent_idx`, `eval_indices` and `list_idx`, so it would miss `for pi in ...`.\n- The tests in `test_forces.py` and `test_repulsor.py` pass `[]` positionally to non-neighbor forces and still work unchanged. The design's \"update all callers\" overstates what the non-neighbor forces need.",
+      "file_ref": null,
+      "category": "test-impact",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:88,194,199,252"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Self-exclusion moves forces' safety guarantee into the builder, so `BulkForce` now has a hidden precondition",
+      "description": "The old `BulkForce` contract was safe with raw query output, because each force filtered self. The new contract is that the `NeighborData` must already be self-excluded. Any other producer of neighbor data (tests, the future 105 batch query, 103 or 104 forces) that forgets it will silently give an agent a self-contribution. In separation, that is a zero-distance divide.\n\nThe doc should state the invariant in the `NeighborData` docstring or `BulkForce` protocol. If it is not enforced, say so. It also needs to say that `indices` hold global state indices while rows are active-slot indexed. That mapping is implicit and matters for the `active_indices` subset case.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-88,194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Separation: masked entries and coincident agents can produce NaN/inf; edge-case equivalence is undefined",
+      "description": "Padded slots hold `-1`, which gathers `positions[-1]`, the last agent. That can coincide with the agent. A masked slot can then have `dist == 0` and compute `diff / dist\u00b2` as 0/0. If the mask is applied by multiplication, NaN propagates. The design must say it uses `np.where` or a pre-divide guard, not multiply-by-mask.\n\nThe old code also yields `inf` or `nan` for real neighbors at zero distance. Two agents at the same spawn point is a realistic state. The equivalence test in the strategy (`np.allclose`, line 258) fails on NaN without `equal_nan`. The doc should either specify the intended behavior for coincident agents or exclude it from the equivalence domain.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:123,231"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behaviors that must be preserved in LeadershipForce and Cohesion are not specified; the cohesion snippet is not runnable as shown",
+      "description": "Leadership is described only as \"weighted mean with leadership array\". The old code has a per-agent guard: if the neighbor leadership sum is below 1e-10, the force is zero (`herding.py:79-81`). That guard needs an explicit vectorized form. It also needs a guarded divide, since a masked division yields NaN.\n\nThe cohesion snippet references undefined names (`counts`, `self_positions`, `weights`). It computes rows only for the active slots. It never shows the scatter `result[eval_indices] = ...` into the full-population N\u00d72 array that `BulkForce` must return (`forces.py:31-34`). It also does not show how `eval_indices` is derived when `active_indices is None`. That repeats in every force, so a shared helper is warranted.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:107-121,249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty and degenerate shapes in `build_neighbor_data` are not specified",
+      "description": "`max_neighbors` is \"the maximum neighbor count across all active agents\". With an empty `active_indices`, `max()` of nothing raises `ValueError`. `tick.py` guards only `n == 0` (`tick.py:35`), not an empty active set. The success criteria list zero neighbors, single agent and subset, but not an empty subset, or `max_neighbors == 0` (shape `(n,0)`, which gather and sum handle, but it should be tested).\n\nThe doc should state that `max_neighbors` is at least 1, or that shape `(n,0)` is valid.\n\nQuery results are also assumed to hold `intp` indices. A `query_radius` returning a list or a different dtype goes unhandled. The \"`np.ndarray` of `intp`\" contract from `SpatialQuery` is enough here, but a one-line statement would help.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-84,172,193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Memory estimate and the tick-level padded cost are understated",
+      "description": "The \"~80KB\" figure covers only `indices` (100\u00d7100\u00d78). Gathered temporaries are (n, max_k, 2) float64 per force, plus `mask` and `counts`, allocated per tick and per force. The design says nothing about reuse, nor does it note that `max_neighbors` is set by the single most-clustered agent. One dense agent pads every row.\n\nBoth are fine at n=100. The doc should state the n bound it is claiming. It already says CSR may be needed above that, so a brief note on the n at which padded memory becomes a problem would make the GPU-ready claim honest. The `NeighborData.mask` field is also redundant with `counts` (`arange(max) < counts[:,None]`). Dropping it, or deriving it as a property, would remove a stored field that can drift out of sync with `counts`.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:146-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope: \"Provides to Other Slices\" and the GPU rationale are speculative; protocol docs and comments referencing `neighbor_lists` are not listed",
+      "description": "The Value section's \"Enables future GPU offload\" and the \"GPU-ready data layout\" provide-claim are not part of the slice plan entry (100-slices:37). They are not required deliverables, and nothing in the slice verifies them, so they should be labeled rationale rather than scope.\n\nThe slice also lists the files it touches incompletely. The real touch points are:\n- `engine/forces.py` (protocol and two forces).\n- `engine/repulsor.py:78` and its module docstring at line 20, which show the old signature.\n- `engine/tick.py`.\n- `migratory_server/force_builder.py`, which only types against `BulkForce` and needs no change.\n- `migratory_server/simulation.py`, which also needs no change.\n\nThe design names only \"flocking.py, herding.py\" in the grep check and never names `repulsor.py`. `WorldBoundsRepulsor` is described as accepting the new parameter, which is correct. The `repulsor.py` pseudo-code docstring will mislead future repulsor authors if left stale. It should be in the update list.\n\nThe slice plan entry's \"all existing implementations and callers update in the same slice\" is satisfied only if the doc enumerates them.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27,148,176-180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Type annotation drift: protocol parameter rename and runtime-checkable behavior",
+      "description": "The design renames the parameter `neighbor_lists` to `neighbors`. Calls are positional everywhere (`tick.py:57`, and the tests), so nothing breaks. But `Force` (the single-agent protocol) already uses `neighbors: NDArray` for a different thing, so the same name now has two types across the two protocols in `forces.py`.\n\n`isinstance(x, BulkForce)` for `runtime_checkable` protocols checks only method presence. The existing protocol tests (`test_flocking.py:49`, `test_forces.py:110`) therefore cannot detect that a force still uses the old signature. The \"protocol reflects the new type\" criterion (line 192) cannot be verified by them. The design should say how it will be checked, for example a static type check or an end-to-end test through `tick()`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Equivalence-test strategy retains the old loops as test code but does not define the shared fixtures or tolerance basis",
+      "description": "The criterion says \"numerically identical (within float64 tolerance)\". The test uses `atol=1e-12`. `np.mean` (pairwise summation) versus sum/count give slightly different results, and inverse-square sums over many neighbors can exceed `1e-12` absolute when forces are large. Use a relative tolerance as well, `rtol`.\n\nThe \"Integration\" test compares positions after N ticks \"between old and new implementations\". That requires the old implementations to run through `tick()` with `NeighborData`-free signatures, so the test needs its own `tick` or a shim. It is also chaotic dynamics under accumulated float differences. A single-step comparison is robust, and N-step comparison is not.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190,258-260"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Architectural alignment is good",
+      "description": "The dependency direction is correct: `engine/neighbors.py` is consumed by engine forces and `tick`, and the spatial layer stays padding-unaware. `BruteForceQuery.query_radius` returns `intp` arrays that include self (`brute_force.py:26-39`), which matches the design's self-exclusion premise. The `AgentState` fields it relies on (`positions`, `velocities`, `profile_indices`, `leadership`) exist as described (`state.py:31-35`). `BehavioralProfile` weight names (`cohesion_weight`, `momentum_weight`, and so on) match `simulation.py:30-39`. The slice plan lists effort 3 and risk Medium, and the design's size is proportionate.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:62-68,166-168"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Per-agent weight comprehension is a per-agent Python loop, contradicting the slice's defining constraint",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-and-claims",
+      "raw_category": null,
+      "summary": "Neighbor builder is itself a per-agent Python loop, and the \"constant overhead\" and \"within budget\" claims are unsupported",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:90-101",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Success criterion is not testable as written; no benchmark or numeric target",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "MomentumForce is mislabeled as neighbor-dependent",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35,190,125,201",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-impact",
+      "raw_category": null,
+      "summary": "Existing self-exclusion tests and the \"no loops\" source-inspection tests are not accounted for",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:88,194,199,252",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Self-exclusion moves forces' safety guarantee into the builder, so `BulkForce` now has a hidden precondition",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-88,194",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Separation: masked entries and coincident agents can produce NaN/inf; edge-case equivalence is undefined",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:123,231",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Behaviors that must be preserved in LeadershipForce and Cohesion are not specified; the cohesion snippet is not runnable as shown",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:107-121,249",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Empty and degenerate shapes in `build_neighbor_data` are not specified",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-84,172,193",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Memory estimate and the tick-level padded cost are understated",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:146-148",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope: \"Provides to Other Slices\" and the GPU rationale are speculative; protocol docs and comments referencing `neighbor_lists` are not listed",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27,148,176-180",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Type annotation drift: protocol parameter rename and runtime-checkable behavior",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Equivalence-test strategy retains the old loops as test code but does not define the shared fixtures or tolerance basis",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190,258-260",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architectural alignment is good",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:62-68,166-168",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-22T21:42:43.945445",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+      "chars": 15143,
+      "sha256": "c373e14f5e8b4b84caeff32c472caae2ff7d1a00a45f7bbab31b53963381a7bf",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/100-slices.behavior-engine.md",
+      "chars": 8054,
+      "sha256": "9282bdb49b1010e714d9fa3524a066131fa8ea60d54f4ebe0680661361218464",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory/engine/flocking.py",
+    "src/migratory/engine/herding.py",
+    "src/migratory/engine/forces.py",
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/repulsor.py",
+    "src/migratory_server/force_builder.py",
+    "src/migratory/spatial/brute_force.py",
+    "src/migratory/engine/__init__.py",
+    "src/migratory/engine/state.py",
+    "src/migratory_server/simulation.py",
+    "tests/test_flocking.py",
+    "tests/test_herding.py"
+  ],
+  "searches": [
+    "list_files **/*.py in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice",
+    "grep neighbor_lists|BulkForce in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice",
+    "grep neighbor_lists|BulkForce|neighbors|query_radius in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/src/migratory_server/simulation.py",
+    "grep neighbor_lists|neighbors=|\\[\\]\\s*\\*|np\\.array\\(\\[\\] in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests",
+    "grep neighbor_lists in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests",
+    "grep argparse|--config|add_argument|default in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/src/migratory_server/__main__.py",
+    "grep (Drift|Drag|Repulsor|Force)\\(.*\\)\\(|\\(state, \\[|\\[\\], profiles|, \\[\\],  in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests",
+    "grep neighbor_lists|BulkForce in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests",
+    "grep active|\\[\\] in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests/test_tick.py",
+    "grep getsource|for_count|def test_.*(self_exclusion|loop) in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/tests",
+    "grep tick budget|overrun|budget|perf_counter|monotonic in /Users/manta/.config/squadron/reading-20261122/wt/migratory-109-slice/src"
+  ],
+  "sections_in_document": 32,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 266688,
+  "cached_tokens": 223088,
+  "cache_write_tokens": 43584,
+  "completion_tokens": 12996,
+  "reasoning_tokens": null,
+  "duration_seconds": 98.70270641706884,
+  "cost_usd": 0.32772670000000004,
+  "cost_basis": "provider"
+}

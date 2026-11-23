@@ -1,0 +1,304 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Round-trip serialization has no task, and Task 1.2 breaks existing `config_to_yaml` tests",
+      "description": "The slice (lines 224-227) says `yaml.dump` serializes a `StrEnum` as a plain string automatically. The task file takes that on trust. It has no task that touches `config_to_yaml` (its Files-touched list at lines 30-40 doesn't mention it).\n- **Why it fails:** `config_to_yaml` calls `dataclasses.asdict`, which keeps the enum instance, and then `yaml.dump`. `load()` reads with `yaml.safe_load` (config.py:630). PyYAML's default dumper emits a Python-object tag for a `str` subclass, and `safe_load` rejects that tag. The shipped code needed a `_serialize_for_yaml` helper (config.py:657-669) to fix this.\n- **Existing tests:** once Task 1.2 adds an always-present enum field, every existing `config_to_yaml` call carries it. That breaks `TestConfigToYaml.test_roundtrip_*` (tests/test_config.py:773-813) and the `logging_sim` header (logging_sim.py:69, tests/test_logging_sim.py:444). That is a red suite at the Task 1.5 commit.\n- **Task 1.4:** the round-trip test (line 88) would fail with no task to fix it.\n\nAdd a task to convert `StrEnum` to `.value` in `config_to_yaml`. Put it before Task 1.4 and list it in Files touched.",
+      "file_ref": null,
+      "category": "missing-task",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:657-681"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.1 \"required keyword argument\" breaks about 20 call sites and has an ambiguous signature",
+      "description": "- **Signature:** the task doesn't say where `world_bounds` goes. The constructor already has `environment: Environment | None = None` as its last parameter. A required parameter after a defaulted one is a `SyntaxError` unless the signature is made keyword-only. The task gives no placement or `*`.\n- **Call sites:** `tests/test_simulation.py` constructs `SimulationManager` 20 times (lines 137-565) without `world_bounds`. All of them fail from Task 3.1 until Task 3.4. Task 3.4 buries that update as the second-to-last bullet of a test task.\n- **Shipped code:** it made the parameter optional and falls back to `entity_manager.world_bounds` (simulation.py:72-75). That avoids the churn and contradicts the task's success criterion \"requires `world_bounds`\".\n- **Commit point:** the suite is red between 3.1 and 3.4, and no marker covers that window.\n\nEither specify the optional-with-fallback form, or move the call-site updates into 3.1 and state the parameter placement.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:57-76"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.4 `test_reflect_policy_flips_velocities_at_edges` can't pass as specified",
+      "description": "The engine clamps velocity to the profile's `max_speed` before integrating (`integrate` \u2192 `_clamp_velocities`). The test starts an agent at `(99, 50)` with velocity `(10, 0)`, steps once, and asserts `vx < 0`.\n- **Why it fails:** the existing `test_simulation.py` fixtures use `max_speed=5.0` and `dt=0.05`. Velocity is clamped to 5, so the agent moves to about 99.25 and never crosses 100. Reflect never fires and `vx` stays positive.\n- **Other tests:** the 50-step tests (lines 228-230) say \"near the edges\" without a distance. The WRAP and REFLECT tests need agents to actually cross within the 50 steps. The OPEN test needs the same, or it can't assert drift.\n\nThe task should fix `dt`, `max_speed`, start positions and velocities so the crossing is guaranteed. For example, start within `max_speed*dt*50` of the edge, or use a large `dt` or `max_speed`.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "src/migratory/engine/tick.py:59-71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkbox tasks",
+      "description": "Commit markers must be plain `**Commit**:` lines, never checkboxes. Tasks 1.5, 2.4, 3.6, 4.3 and 5.5 are each a numbered task with `- [ ] **Commit:**` items, so they add five granular tasks. Fold each into a plain marker at the end of its section. The positions are mostly reasonable, but the 1.5 position isn't a working, tested point (see the first finding).",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 leaves the shipped `config/test.yaml` in a modified state if interrupted",
+      "description": "Steps 6-7 hand-edit the tracked `config/test.yaml` to `reflect`, then `open`. Only step 8, a manual edit, restores it. If the walkthrough is interrupted, `config/test.yaml` stays on `open` or `reflect`. The plan has no command that undoes this, and a later `git add` or a regression run would pick it up. Run steps 6-7 against temporary config copies passed via `--config`, or add `git checkout config/test.yaml` as an explicit final step.",
+      "file_ref": null,
+      "category": "state-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The task file's claims about existing code are stale or wrong",
+      "description": "- **Line numbers:** \"WorldBoundsConfig (line 25)\" (line 46 of the task file) is actually at config.py:46. \"`_validate_world_bounds` around line 156\" (line 69) is at config.py:180.\n- **`test_clients.py`:** Task 3.5 (line 241) names it as a probable `SimulationManager` constructor. It doesn't construct one. The real remaining callers are `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`, and the second isn't named.\n- **Test class:** `TestWorldBounds` (line 80) doesn't exist. The relevant tests sit in `TestRangeValidation`, after the \"or nearest equivalent\" hedge.\n- **Re-execution risk:** `bounds_enforcement.py` is labelled \"new file\", and `BoundsPolicy`, the policy field and the loader already exist. They now also have a `SOFT` variant and a `soft_bounds` field from slice 314. Executing Tasks 1.1, 1.2, 2.1 and 2.2 literally against current main would overwrite or conflict with that work. Mark the file as describing the pre-314 state, or reconcile it.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Round-trip test is weaker than success criterion 5",
+      "description": "SC5 requires that reloading the emitted YAML \"produces an equal `ServerConfig`\". The task's test only asserts that `policy` matches. Assert `cfg == cfg2`.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test and verification tasks are heavier than the success criteria need",
+      "description": "- **Task 2.3:** it lists about 20 tests. `test_reflect_clamps_top_edge` and `test_reflect_clamps_bottom_edge` are \"analogous for y\" with no values, which isn't enough for a junior implementer. The diagonal-corner test already covers y reflection. The parametrized \"dispatches and does not raise\" test adds nothing over the per-policy tests. Drop the top and bottom tests and the parametrized test, or spell out their values.\n- **Missing test:** Task 2.2's criterion that helpers \"do not touch the inactive tail\" has no test. No test passes arrays from a larger buffer and checks the tail.\n- **Full-suite runs:** `pytest` runs in 3.5, 5.1 and 5.2 step 2. Merge 3.5 and 5.1, and drop the duplicate walkthrough step.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-172"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3.2 and the Notes contradict each other on \"zero import-time overhead\"",
+      "description": "Task 3.2 asks to confirm \"zero import-time ... overhead\", but the same task adds a top-level import (line 195). Note line 329 (\"No import of `apply_bounds_policy` is avoided\") is garbled. Reword to \"no per-tick call or slicing on the OPEN path\".",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`np.mod` can return exactly `width` for tiny negative inputs",
+      "description": "For a position like `-1e-20`, `np.mod(-1e-20, 100.0)` returns `100.0` from float rounding. That violates the half-open `[0, width)` claim in task lines 134 and 229 and in SC7. The effect is negligible in practice. If the claim matters, add a test for tiny negative overshoot and a follow-up `positions[positions >= width] = 0`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory_server/bounds_enforcement.py:59-60"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and sequencing",
+      "description": "All 14 criteria map to tasks:\n- SC1-4 \u2192 Tasks 1.1-1.4.\n- SC5 \u2192 Task 1.4, subject to the serialization and assertion findings above.\n- SC6-9 \u2192 Tasks 2.1-2.3.\n- SC10-11 \u2192 Tasks 3.2 and 3.4.\n- SC12 \u2192 Tasks 4.1-4.2.\n- SC13 \u2192 Tasks 3.5 and 5.1.\n- SC14 \u2192 Task 5.2.\n\nThe enum \u2192 enforcement \u2192 wiring \u2192 config-defaults order has no circular dependencies. The startup log line in Task 3.3 is required by the slice walkthrough, so it isn't scope creep. No NFR load test is implied by the slice.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "missing-task",
+      "raw_category": null,
+      "summary": "Round-trip serialization has no task, and Task 1.2 breaks existing `config_to_yaml` tests",
+      "location": "src/migratory_server/config.py:657-681",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 3.1 \"required keyword argument\" breaks about 20 call sites and has an ambiguous signature",
+      "location": "src/migratory_server/simulation.py:57-76",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 3.4 `test_reflect_policy_flips_velocities_at_edges` can't pass as specified",
+      "location": "src/migratory/engine/tick.py:59-71",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkbox tasks",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "state-handling",
+      "raw_category": null,
+      "summary": "Task 5.2 leaves the shipped `config/test.yaml` in a modified state if interrupted",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The task file's claims about existing code are stale or wrong",
+      "location": "src/migratory_server/config.py:46",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Round-trip test is weaker than success criterion 5",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Test and verification tasks are heavier than the success criteria need",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-172",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 3.2 and the Notes contradict each other on \"zero import-time overhead\"",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`np.mod` can return exactly `width` for tiny negative inputs",
+      "location": "src/migratory_server/bounds_enforcement.py:59-60",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-22T21:45:07.513725",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "chars": 19874,
+      "sha256": "86396dd86d0b9fc858bb2c2f9cb2e1793a8c6fa7a499147b0e92ed2381028e9a",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+      "chars": 19499,
+      "sha256": "366a23da778aeae18fe666801a84c1de2074567e79b3c4a794f48a134b1d0109",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory_server/simulation.py",
+    "src/migratory_server/config.py",
+    "src/migratory_server/bounds_enforcement.py",
+    "src/migratory_server/server.py",
+    "tests/test_simulation.py",
+    "tests/test_force_builder.py",
+    "tests/test_repulsor_integration.py"
+  ],
+  "searches": [
+    "grep SimulationManager\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "list_files src/migratory_server/*.py in .",
+    "grep WorldBoundsConfig|world_bounds|BoundsPolicy in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep ^class Test|def valid_config_dict|def tmp_config_file|config_to_yaml|^def _write|@pytest.fixture in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests/test_config.py",
+    "grep config_to_yaml|asdict in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep max_speed|clip|def tick|integrate|forces in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/src/migratory/engine",
+    "grep world_bounds in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/src/migratory_server/entities.py",
+    "grep policy|world_bounds: in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/config",
+    "list_files tests/test_bounds*.py in .",
+    "grep policy|round|BoundsPolicy in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests/test_config.py",
+    "grep safe_load|yaml\\.load|_serialize_for_yaml in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/src/migratory_server/config.py",
+    "grep Unreleased|313|policy in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/CHANGELOG.md",
+    "grep ^def test|^    def test|^class  in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests/test_bounds_enforcement.py"
+  ],
+  "sections_in_document": 30,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 273857,
+  "cached_tokens": 229801,
+  "cache_write_tokens": 44042,
+  "completion_tokens": 12715,
+  "reasoning_tokens": null,
+  "duration_seconds": 89.78587750019506,
+  "cost_usd": 0.3282712,
+  "cost_basis": "provider"
+}

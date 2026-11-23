@@ -1,0 +1,131 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Wire baseline is misdescribed, and the compression and bandwidth math built on it is wrong",
+   "description": "Line 60 says the current wire is \"uncompressed JSON\" at \"24 bytes \u00d7 3,500 agents\" \u2248 84 KB. The code does not do this. `serialize_state_update` (`src/migratory_server/protocol.py:174-187`) emits a 9-byte header followed by raw float64 positions and velocities, so the size is 9 + 32\u00b7N bytes. The reader (`protocol.py:490-498`) parses `<f8` 2D arrays. The real sizes are about 112 KB/tick at 3,500, 320 KB at 10k, and 64 MB at 2M.\n\n- Line 88's \"~32\u00d7\" is wrong. float64 to int16 on positions is 4\u00d7. Velocities are half the payload (16 B/agent) and the scheme never touches them, so total compression is about 1.6\u00d7 (32 B \u2192 20 B per agent).\n- The \"binary WebSocket replaces JSON\" slice (line 101) is already done. The 300 doc specifies that framing (`300-arch.worldserver-foundation.md:131`).\n- The 300 doc's stretch target of 10k \u00d7 60 Hz \u00d7 20 clients (`300-arch:56`) is about 3.1 Gbps of egress on the current format. The doc calls this \"still viable.\"",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:60"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\"Quadrants operates behind the existing interfaces\" contradicts those interfaces and the full-GPU tick",
+   "description": "Line 30 says the substrate \"operates behind the existing `SpatialQuery` and `BulkForce` interfaces.\" Lines 108\u2013109 plan a full tick on GPU. The current contracts are host-array contracts:\n\n- `SpatialQuery.build(positions: NDArray[np.float64])` is \"called once per tick\" (`src/migratory/spatial/interface.py:18-20, 36`). Its outputs are NumPy `intp` CSR arrays.\n- `BulkForce.__call__(state, neighbors: CSRNeighborData, profiles: list[BehavioralProfile], active_indices)` returns a freshly allocated N\u00d72 float64 array (`src/migratory/engine/forces.py:29-51`).\n\nA GPU-resident tick cannot sit behind these without a host round-trip per call. At 2M agents with k=13, the CSR alone is 26M edges \u00d7 8 B \u2248 208 MB per tick if it crosses the boundary. The Python `profiles` list has to be flattened into typed arrays. The 100-arch doc requires the engine to be stateless and the caller to own the spatial index (`100-arch.behavior-engine.md:73`). An in-engine GPU hash and staggered caches (slice 119) both violate that. The 100-arch doc also requires heterogeneous neighbor types for aggregates to be designed into `SpatialQuery` now (`100-arch:100`), and a fixed-k GPU CSR doesn't allow for them. This is a breaking change to 100-arch's contracts, and the doc needs to name the new interfaces.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:30"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The GPU spatial hash repeats the design the journal rejected, and the 2M clustered scenario is its worst case",
+   "description": "Line 84 says the NumPy hash \"failed ... bookkeeping overhead killed it\" and that a GPU hash \"works\" because \"the sort and gather are single-kernel operations with no Python dispatch overhead.\" Entry 4 does attribute cost to per-call NumPy bookkeeping (`900-notes.performance-journal.md:903-922`), so that part of the citation holds. The rest does not:\n\n1. The journal's conclusion was revised. The Entry 4 addendum (lines 1003\u20131076) says the grid wins in the spread regime, loses when clustered, and \"a static backend choice ignores half the story.\" Entry 8 (lines 1534\u20131537) says the grid's 3\u00d73 cell scan \"emits all candidates in high-density cells,\" while cKDTree prunes to k regardless of density.\n2. The proposed GPU hash uses the same 3\u00d73 gather with no density adaptivity. Candidates per agent \u2248 9 \u00d7 cell occupancy. In the two-population collision that the 2M demo targets (line 74), occupancy scales with the blob. Illustratively, a cell holding 1,000 agents gives about 9,000 candidates per agent, or about 1.8\u00d710\u00b9\u2070 distance tests per tick at 2M.\n3. A parallel radix sort and a device-wide prefix sum are multi-pass, multi-launch algorithms, so \"single-kernel\" is wrong. Removing Python dispatch doesn't remove this bookkeeping. It moves it to the GPU.\n4. The interface is radius-bounded kNN (per-agent radii and k caps, `interface.py:112-118`). The doc never says how the hash bounds k.\n\nThe doc needs a density strategy and a clustered-state benchmark before this slice is written.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Delta compression has no closed-loop reference, no keyframe or resync rule, and conflicts with the server's drop policy",
+   "description": "Line 88 says \"the client reconstructs by accumulating deltas onto its last-known positions.\" It never says the server diffs against the quantized value the client holds. If the server diffs against its float64 state, each tick's rounding error (up to 0.5 LSB = 1/2048 unit) persists in the client, so error accumulates over a session. Fixing this requires per-client reconstruction state on the server.\n\nFurther gaps:\n- The server drops `STATE_UPDATE` messages under backpressure, with drop-oldest and graduated eviction (`src/migratory_server/clients.py:138-175`). The 300 NFR allows up to 5% drops (`300-arch:52`). A dropped delta leaves the client on a stale base with no detection.\n- Culling re-entry, reconnect, and large-delta events all need a full-state keyframe. The doc gives no large-delta threshold, and the threshold depends on max agent speed, which the doc does not state.\n- With decimated streaming (line 102), each 30 Hz delta spans two ticks, which doubles the required range. The doc does not say whether deltas are per stream frame or per tick.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:88"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The tick return contract, which the doc calls central, is deferred; the wire track's independence depends on it",
+   "description": "Line 80 lists three options and says the architecture \"should support all three behind an abstraction, with the choice made per-platform.\" The abstraction is not specified, so the server's type contract is not single-typed. That conflicts with line 32.\n\n- Option (a), `to_numpy()`, allocates a new array every tick. The 100-arch doc requires caller-provided buffers (`100-arch:88`). The \"nearly free on unified memory\" claim is unverified. `to_numpy` is a host readback that allocates and copies, about 64 MB per tick at 2M for float64 positions and velocities (~3.8 GB/s at 60 Hz). It generally waits on pending kernels, which serializes the GPU inside the single-worker sim executor (`src/migratory_server/server.py:416-417`).\n- Options (b) and (c) give the server a handle into GPU memory. The 300 doc says \"no v1 decision may preclude\" process separation (`300-arch:129`). A DLPack view is a live window onto state the next tick overwrites, which races with the server's serialization on another thread.\n- Lines 30 and 46 say the wire work is \"independent of the compute backend.\" But delta encoding and culling need CPU-side positions every streamed tick. Line 72 concedes the contract \"determines whether position data exits the GPU at all.\" These statements are incompatible.\n- Decimation (line 102) should happen before the copy. The doc does not say so, and option (a) as written copies every tick.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The Current State numbers don't reconcile, and the N-scaling claim is stronger than its evidence",
+   "description": "Line 50 puts the budget \"at N=3,500 ... 57 TPS\" and sources it to \"Entry 8, N=2492 synthetic bench.\" The journal has no 3,500 / 57 TPS measurement. Its Entry 8 table at N=2492 sums to 9.42 ms with a TPS ceiling of 106 (line 1507). 57 TPS implies 17.5 ms per tick. The journal's live figure at 2492 is about 59 TPS (line 1524). The N-scaling addendum gives 2500 \u2192 ~79 and 4500 \u2192 ~43 (lines 1609\u20131613). Points 2492 \u2192 59 and 2500 \u2192 79 are inconsistent, eight agents apart, so the 79 \u2192 43 curve rests on a shaky pair.\n\nThe journal also says \"consistent with\" O(n) and lists its explanations as \"Likely candidates,\" none measured (lines 1616\u20131630). Line 58 states them as \"shows\" and \"confirming.\" The roughly 8 ms gap between the table and live TPS is unexplained. Wire serialization, state copies, and asyncio overhead are not in the table.\n\nLine 40 says force computation \"became co-equal,\" but the table has spatial_query at 5.67 ms against force_total at 3.14 ms. Measure a per-phase profile on the live server at 3,500 before sequencing slices by it.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:50-58"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No tier has a performance target, and Tier 1 cannot reach the envelope on the doc's own numbers",
+   "description": "Only the final target, 2M at 60 TPS (line 18), is stated. The 10k, 50k, 250k, and 1M milestones have no TPS, latency, or client-count criteria, so none can be pass/fail. Scaling the synthetic 9.42 ms linearly to 10k gives about 38 ms per tick (~26 TPS). The spatial query alone is about 23 ms, over the 16.7 ms budget. Even with zero-cost forces (slice 118 targets 3.14 of 9.42 ms), the tick is about 25 ms (~40 TPS). Reaching 60 TPS at 10k needs about a 2.3\u00d7 whole-tick reduction, and the only levers are staggering (slice 119) and Numba, neither measured. The doc gives no split between them. The 300 doc's stretch target (`300-arch:56`) is the natural Tier 1 criterion and is not mentioned.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:66"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Staggered neighbor caching has no staleness bound or verification contract, and conflicts with the verifiability goal",
+   "description": "Line 86 accepts the behavior change from caching neighbor lists, refreshed on \"a configurable refresh period\" (line 98).\n\n- A fixed period has no staleness bound. Neighbor lists go stale fastest when agents move fastest, which is the collision scenario. A k-capped list both keeps departed agents and misses arrivals. The usual fix is a displacement-triggered rebuild (a Verlet skin): rebuild when the maximum displacement since the last build exceeds a threshold.\n- Design goal 1 (line 26) requires outputs \"verifiable against the current NumPy implementation.\" Trajectories diverge under staggering, as line 86 concedes. The doc defines no verification method: no tolerance, and no statement of what is compared (per-tick forces on identical CSR, or statistics over full runs).\n- `SpatialQuery.build()` is \"called once per tick\" (`interface.py:18-20`). Skipped ticks violate the protocol as written.\n- Line 42 writes \"O(n/k)\" with k as the stagger period, while k=13 is the neighbor count (lines 53\u201354, 97). The symbol is overloaded.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:86"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Numerics: Metal has no double precision, and GPU determinism depends on an unstated accumulation choice",
+   "description": "Design goal 2 makes Metal first-class, and slices 106\u2013108 port every force. The engine is float64 throughout (`NDArray[np.float64]` in `src/migratory/engine/forces.py`). The 100-arch doc (line 98) leaves internal precision undefined. The Metal Shading Language has no double type, so the Metal tier cannot reproduce the reference to tight tolerance. The doc needs a precision policy and a per-force tolerance, not a bare \"verifiable\" claim.\n\nLine 86 wants determinism within a stagger configuration. On GPU, that holds only if each agent accumulates over its own CSR segment (gather). An edge-parallel scatter with atomic adds, a natural choice for skewed degree distributions, makes results order-dependent. The doc does not choose.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:28"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "GPU primitives and Quadrants API claims are unverified or wrong, and the fallback only covers 10k",
+   "description": "Besides the \"single-kernel\" error (see the hash finding), lines 44 and 108 use `@ti.kernel` as the Quadrants decorator. I could not verify that the fork keeps the `ti` namespace in 0.7.2. The doc should cite the API it targets. The release facts on line 82 (0.7.2 on 2026-04-27, fork dated June 2025, Python 3.10\u20133.13) are also unverified here. The project pins Python 3.12 (`pyproject.toml:9`), which is inside that range.\n\nThe risk section names a Numba fallback only \"at 10k.\" If Quadrants fails on Metal or CUDA, there is no fallback for 50k and up. The mitigation covers the one tier that needs it least.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Frustum culling does not help the flagship scenario, and the Tier 3\u20135 bandwidth math is missing",
+   "description": "Line 70 assumes \"~50k visible at ground level.\" The motivating scene (lines 22, 90) is a camera inside a collision of two 1M populations, where the visible set approaches the whole population and culling saves little. The doc has no occlusion culling and no margin for camera round-trip latency, which produces pop-in at the edges when the view turns.\n\nBandwidth at 2M and 30 Hz:\n- Current format (32 B/agent): ~1.9 GB/s, about 15 Gbps.\n- Doc's scheme (int16 positions, unchanged float64 velocities, 20 B/agent): about 9.6 Gbps before framing. That does not fit the 10G link Tier 4 relies on (line 72), and the 10/25G network is excluded from scope (line 20).\n\nThe camera control channel \"must be reliable\" (line 90). Camera pose is latest-value state, so reliability is the wrong requirement, and over TCP-based WebSocket it adds head-of-line stalls. Per-client culling and delta encoding across 2M agents and up to 20 clients (`300-arch:56`) is not costed.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:70"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Sibling-doc contracts are not carried into this design",
+   "description": "- Line 68 decouples the stream to 30 Hz. The 300 NFR requires p99 `STATE_UPDATE` inter-arrival under 1.5 \u00d7 tick budget (`300-arch:51`). If \"tick budget\" means the 60 Hz period (16.7 ms), the ceiling is about 25 ms, and a 30 Hz stream's roughly 33 ms interval violates it. The NFR needs restating for decoupled streams.\n- The 300 doc requires a single-worker sim executor (`300-arch:121`; `server.py:416-417`). This doc never mentions it, though GPU launches, host readbacks, and decimation all sit inside that boundary.\n- The 300 doc requires per-client send queues with drop policies (`300-arch:133`) and \"warn on overrun, continue at best effort\" (`300-arch:141`). The doc specifies no overrun policy at 60 TPS.\n- A new client's first snapshot must arrive within p99 100 ms (`300-arch:48`) and must be complete, because no camera pose exists yet. The doc does not say whether culling applies to SNAPSHOT.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:68"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Failure handling is absent from the envisioned state",
+   "description": "The doc describes only successful paths. Missing:\n- GPU out-of-memory and device loss at 2M. There is no degradation path.\n- Kernel numeric faults. A dense collision produces zero-distance neighbor pairs, and on GPU nothing raises, so NaN or inf can propagate into positions silently. The doc has no policy. CLAUDE.md:8 prohibits silent fallback values.\n- Tick overrun (see the sibling-contracts finding).\n- Culling behavior when the camera channel stalls: send everything, send nothing, or hold the last camera?\n\nEach needs a stated policy.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:62"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Wrap-world semantics are absent from the design",
+   "description": "The benchmark scenario (`wide.yaml`) is an 800\u00d7400 wrap world (journal line 1490). The journal records that all three spatial backends ignore wrap in neighbor distance (lines 1589\u20131591). The doc never mentions wrap. The GPU hash must decide whether cell lookup wraps, cKDTree can use `boxsize`, and delta encoding must treat wrap crossings as large-delta events (line 88). The \"verifiable against NumPy\" target currently verifies against a reference that ignores wrap, and the doc does not say so.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The planned sequence contradicts the doc's own principles, and slice ownership is split",
+   "description": "- Line 42 says staggered updates (algorithmic) come before Numba JIT (constant-factor). The slice list puts Numba (118) first and staggering (119) second (lines 97\u201398). Tier 1 (line 66) bundles both, which hides the order.\n- Line 46 says wire work \"should not be gated on the compute substrate migration.\" Line 68 bundles delta compression and binary WebSocket into Tier 2, the Quadrants tier.\n- Line 106 schedules the Quadrants-versus-Numba evaluation after the Numba slice it could make unnecessary.\n- Line 38 says to profile before optimizing. The forces-first choice is made from the journal's conclusion, which the synthetic table contradicts (see the Current State finding).\n- Line 117 says slices 118\u2013119 are \"added here\" but recorded in 100-slices, so ownership is split.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:42"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Three implementations of each force and two JIT stacks for one kernel set",
+   "description": "The design keeps NumPy (reference), Numba (slice 118), and Quadrants (slices 106\u2013108) for every force. Line 82 says Quadrants also runs on ARM64 and x86 CPU, so the Quadrants kernels could serve Tier 1 on CPU as well. The Numba forces would then be a second JIT for identical logic. The doc's own principle, \"same code, different backend\" (line 44), implies one kernel source. CLAUDE.md:7 says \"Always resist adding complexity,\" and CLAUDE.md:16\u201317 forbid duplicated logic. The cheapest path is to run the substrate evaluation (line 106) on CPU first, and drop slice 118 if Quadrants CPU matches.\n\nTwo spatial backends are also planned (cKDTree for Tier 1, GPU hash for Tier 2), alongside the existing `AdaptiveSpatial` dispatch (journal Entry 8 and Entry 4 addendum). The doc does not say which survives.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Scope includes out-of-scope and undefined work",
+   "description": "- Biome shading (line 92) is viewer-side and excluded by the scope on line 20 (\"viewer/client rendering optimization\"). Yet the doc sets a deadline (\"before or alongside the 50k milestone\") and a JSON schema, with no slice and no owner.\n- The Tier 4 \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\" (line 72) is a different product: a server GPU render pipeline plus video encode, with its own camera path. It has no interface and no slice, and it conflicts with the rendering exclusion on line 20.\n- The 2M demo is the stated purpose, but the critical path is the GPU substrate, wire protocol, culling, and two optional transports (dedicated LAN and server render). Cut the server-render path to its own doc, and move biome shading to the viewer doc. Design goal 5 (line 34) is a content requirement, not an architectural constraint.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:92"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "GPU backend packaging and hardware are not planned",
+   "description": "`pyproject.toml` declares only numpy and scipy (lines 9\u201314). Numba and Quadrants are not declared. The doc does not say how GPU backends are packaged (optional extras, or per-platform builds for Metal versus CUDA). Tier 2 is Metal-only and Tier 3 is CUDA-only (line 70), and design goal 2 (line 28) requires NVIDIA hardware with no acquisition or CI plan.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82"
+  }
+ ]
+}

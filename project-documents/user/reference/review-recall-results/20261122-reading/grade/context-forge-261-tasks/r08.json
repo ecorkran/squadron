@@ -1,0 +1,89 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough steps read stdout, but `cf build` only prints the prompt with `--json`",
+   "description": "Without `--json`, `cf build` writes only a status message to stderr; `build.test.ts:60-69` pins \"nothing to stdout\". Task 15 (lines 262\u2013265) inherits the design's commands unchanged, so:\n- **Step 1:** `cfl build > /tmp/before.md` and `/tmp/after.md` are both empty, so the `diff` passes vacuously. This is the only end-to-end check of the \"byte-identical for planned projects\" requirement.\n- **Step 2:** the `sed` range prints nothing.\n- **Step 3:** `grep -c 'Adoption Facts'` returns 0 in both cases, so \"expect: 1\" can never match.\n- **Step 4:** a \"copy of `/tmp/bf`\" is not a registered project. `cfl build` there fails with \"No project specified and no registered project found at current path\" (`packages/cli/src/utils/project.ts:137`), not the `AdoptionError`.\n- **Step 1 worktree:** a fresh `git worktree add` of `main` has no `node_modules`; \"built there\" needs `pnpm install` first, and the task does not say which directory the build runs from.\n\n\"Any defect is fixed in its own commit\" (line 266) invites a junior to \"fix\" `cf build` to print to stdout, which breaks the pinned test. Rewrite the steps with `cfl build --json` and extract `.context`; state that the step-4 copy must be registered (or use `--project`).",
+   "location": "packages/cli/src/commands/build.ts:99-114"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The live `/cf:build` run exercises the published `cf`, not the slice",
+   "description": "The slash command runs `` !`cf build $ARGUMENTS --json` ``, which is the global binary. Context Summary line 40 itself says the global `cf` is the published package. Task 15 line 264 would therefore record the agent's behaviour against a build without slice 261. Depending on the installed command version, that is the concept prompt, not the brownfield prompt with the squadron statement. The task needs a way to put the local build first on `PATH` as `cf` for that run (a shim or `pnpm link`), or the recorded outcome is not evidence for D8.",
+   "location": "packages/cli/commands/cf/build.md:9"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The guide fixture as specified has no profiles block, no concept prompt and no Phase 2 prompt",
+   "description": "Task 9T (line 194) builds the brownfield fixture by adding \"a profile line\" and one prompt section to this file. The file has no `context_profiles` block at all, and its only sections are Context Initialization (two), Tool Usage, implementation, design, review and Task Breakdown (Phase 5).\n- **Profile line alone will not parse.** `ContextProfileParser.parseProfiles` (`ContextProfileParser.ts:131-150`) needs `context_profiles:\\n` inside a fenced block. With only a line added, every \"selected\" case fails the D9 check with `profile`.\n- **\"Concept prompt\" is unassertable.** Task 12 items 1, 2, 5, 7 and 9 expect \"the concept prompt\" and item 10 \"the Phase 2 prompt\". With this fixture both fall to `SectionBuilder`'s custom-instruction fallback (`SectionBuilder.ts:109-118`), so those assertions cannot tell the concept prompt from a missing prompt.\n- **Side effect of a one-profile block.** With no `_default` entry, `getProfileForInstruction` returns `[]` for every other instruction and `applyProfileFiltering` blanks all artifact fields (`ContextIntegrator.ts:246-254`).\n\nSpecify the fixture fully: the fenced `context_profiles` block with `_default`, `concept-phase-0` and `brownfield-adoption`, plus `##### Concept (Phase 0)`, `##### Architecture (Phase 2)` and `##### Brownfield Adoption` sections with distinct marker text.",
+   "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`gitExec`'s error message is not what Task 5 says, and it would put guide-install advice into the prompt",
+   "description": "Task 5 (line 118) sets `reason` to the error message and claims the timeout message \"already reads 'timed out after 5s'\". The real rejection is `git rev-list --count HEAD -- . failed in <cwd>: timed out after 5s`. `withNetworkErrorHint` then appends a second line because `/timed out after \\d+s/i` is a network pattern (`gitExec.ts:26`): \"This looks like a network/DNS problem reaching the remote. Check your VPN/proxy connection, or install offline by pointing guide.source\u2026\".\n- That text would land in the `### Adoption Facts` history bullet, as a multi-line bullet with advice unrelated to history.\n- Every `unknown` reason (not a repo, no commits) also embeds the git command and the absolute checkout path. D5's example is \"git timed out after 5s\".\n- Task 5T (line 128) mocks the rejection as exactly `timed out after 5s`, so the test cannot catch any of this.\n\nTask 5 should derive a short single-line reason (strip the `git \u2026 failed in <cwd>: ` prefix and the hint line, or classify the failure). Task 5T's mock should use the real message shape.",
+   "location": "packages/core/src/guides/gitExec.ts:96-101"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The parity test as written compares prompts that can differ by path",
+   "description": "Task 13 builds \"twice from identical copies\", which are two directories.\n- **History bullet.** If the fixture is not a git repo with commits, the `unknown` reason contains `failed in <copy path>` (previous finding), so the strings differ.\n- **CI bullet.** Any CI file makes them differ too, because D5 renders CI matches as absolute paths.\n- **Registration.** \"Follow how `mcpIntegration.test.ts` registers projects\" does not transfer: `setupFixtureEnv` patches a committed `projects.json` to one fixed in-repo path (`integrationSetup.ts:19`).\n- **Guide fixture.** The brownfield guide fixture lives under `packages/core/tests/fixtures/`, and the task does not say how the MCP package's test obtains it.\n\nState the shape: one directory built twice with `.context-forge.toml` removed between builds, or copies with a committed git history and no CI. Have the test write its own `projects.json` under a temp `CONTEXT_FORGE_DATA_DIR`, and name the guide fixture path.",
+   "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:112-116"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "State is written before the render-only facts are read, and their errors become an error stub",
+   "description": "Task 9 writes `in_progress` in step 5, then gathers `presentPaths` and `recognizeCi` in step 6. Both throw raw filesystem errors by design:\n- A root-level regular file named `docs`, `doc` or `adr` makes `docs/adr` (and similar) throw `ENOTDIR`; Task 4T line 112 pins that throw.\n- A dangling `AGENTS.md` or `CLAUDE.md` symlink throws (`pathPresent.ts:27-29`).\n- `.github/workflows` as a file throws in `recognizeCi` (`ciDetection.ts:50-53`).\n\nNone of these is an `AdoptionError`, so `generateContextFromProject` turns them into the error stub with exit 0 (`ContextIntegrator.ts:113-118`). The outcome is state already persisted, the state-set notice never shown, and every later Phase 0 build \u2014 and `--it brownfield-adoption`, D9's escape hatch \u2014 hitting the same stub. No task specifies or tests this path. Gather the step-6 reads before the step-5 write (render after), or wrap step-6 failures in `AdoptionError` with the overrides. Add one 9T case, e.g. a brownfield repo with a regular file named `docs`.",
+   "location": "packages/core/src/detection/pathPresent.ts:19-31"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Renderer tests cover three of six outcome kinds",
+   "description": "The slice's Technical Requirements (line 336) ask for `renderAdoptionFacts` tests on \"every outcome\". Task 8 switches exhaustively over all kinds, but Task 8T lists only brownfield, adoption-in-progress and `NOT_EVALUATED`. The `adoption-closed`, `already-planned` and `greenfield` branches have text no test pins. Add one case each, or narrow the renderer's input type to the kinds that can be selected and say so.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Lines 78, 105, 131, 148, 178, 202, 225, 251, 257 and 269 are `- [ ] **Task NC: Commit** \u2014 \u2026` checkboxes. The marker rule is a plain `**Commit**:` line, never a checkbox. The 260 task file used the same checkbox form, so this follows repo habit, but it counts ten commits as tasks. Placement is fine: each sits after a passing test task. Convert them to plain lines.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`generateContext` cannot take a trailing required parameter as its signature stands",
+   "description": "The current parameters are `overrides?`, `additionalInstructions?`, `worktreeId?`. Task 11 adds a \"required `adoptionStateWrites` parameter\" and Task 13 calls `generateContext(..., 'persist')`. A required parameter after optional ones does not compile (TS1016). Say where it goes: second position, an options object, or change the three to `T | undefined`. Both call sites (lines 200-205, 264-269) already pass all four arguments.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The `it.skipIf` precedent is not in the detection tests",
+   "description": "Context Summary line 39 says to skip permission tests \"as the 260 detection tests do\". `packages/core/tests/detection/` has no `skipIf`, `chmod` or `getuid`. The pattern to copy is `it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)` at the location above.",
+   "location": "packages/core/tests/introspection/setupCiOffer.test.ts:70"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "New tests read the developer's real user config unless `CONTEXT_FORGE_DATA_DIR` is set",
+   "description": "`readAdoptionState` goes through `ConfigManager.get`, which falls back to the user-level `config.toml`. Tasks 2T (\"no `.context-forge.toml` \u2192 `''`\"), 9T and 12 do not mention the env override that existing tests use (`ConfigKeys.test.ts:57-58`, `CoreServiceFactory.test.ts:79-80`). Add one line to those tasks.",
+   "location": "packages/core/src/config/ConfigManager.ts:159-169"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Smaller precision points in Tasks 3, 5T and 12",
+   "description": "- **Task 5T / Task 12:** `git`, `writeRel` and `writeAndCommit` already exist at the location above; point the tasks at them instead of raw `spawnSync`.\n- **Task 3:** `sourceVolume.ts` needs `AdoptionError`. Say it is imported from `adoption/contracts.js`, and the threshold from `adoption/adoptionOutcome.js`, never from `adoption/index.js`, which will pull in the resolver and import `detection/` back.\n- **Task 12 item 4:** say the commit and clone happen before any build of fixture 3. Otherwise `.context-forge.toml` with `in_progress` is committed and the clone is selected through the state, not through detection.",
+   "location": "packages/core/tests/helpers/gitWorktreeFixture.ts:24-40"
+  }
+ ]
+}

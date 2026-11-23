@@ -1,0 +1,222 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 6 leaves `tests/tools/test_package.py` red, and no task updates it",
+   "description": "`test_exactly_the_three_builtin_tools_are_registered` asserts the registry equals `{\"read_file\", \"write_file\", \"bash\"}` (line 11). `test_materialize_binds_every_registered_tool` asserts `len(executors) == 3` after materializing `list_tools()` (lines 20\u201322). Once Task 6.4 imports `cf_tools`, both fail. Task 6's success criterion (task file lines 217\u2013218) requires the eight-name set, so the plan asks for the failure. Tasks 6, 7, and 9 never mention this file, and the design's Files-changed table (slice lines 197\u2013206) omits it. The Sequencing claim that \"each task leaves the suite green\" (task file lines 53\u201355) is therefore false at Task 6, and the failure would only surface at Task 9.2. Fix: add a Task 6 subtask that updates both assertions to the eight names, or to a builtins-subset check.",
+   "location": "tests/tools/test_package.py:11"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The executor reads config at execute time, inside the async turn",
+   "description": "Task 6.3 (task file lines 205\u2013206) reads `cf.mcp_command` and `cf.mcp_timeout_s` \"at execute time.\" `get_config` parses TOML files on each call (`src/squadron/config/manager.py:46\u201351`, `:87\u201391`). The agent's own comment at `agent.py:97\u201399` says config file I/O must not happen inside an async turn, and `.claude/rules/python.md:91` sets a 1ms budget for synchronous work in `async def`. The provider already reads config and passes values down (`src/squadron/providers/openai/provider.py:62\u201364`), and `builtin.py:164\u2013167` moves blocking work to a thread. The design permits factory-time reads (slice lines 188\u2013189). Fix: resolve both values in the factory, which runs at `materialize`, and update Task 7.3 (lines 241\u2013243) to match. Alternatively, wrap the read in `asyncio.to_thread` and say so.",
+   "location": "src/squadron/providers/openai/agent.py:97"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Config reads ignore the bound project directory",
+   "description": "`get_config(key, cwd=\".\")` and `get_typed_config(..., cwd=\".\")` resolve `.squadron.toml` relative to `cwd` (`manager.py:41\u201343`, `:64\u201366`). Task 6.3 gives no `cwd`, so a project-level `cf.mcp_command` in the bound project is ignored whenever the process cwd differs. The file tools bind to that directory, and the provider passes `cwd=config_cwd` (`provider.py:62\u201364`). Fix: pass `cwd=str(bound_cwd)`. Add a test where the bound directory has a `.squadron.toml` and the process cwd does not. Task 7.3 (lines 241\u2013243) asserts only the `cwd` field of `StdioServerParameters`, so it would not catch this.",
+   "location": "src/squadron/config/manager.py:87"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config tests are not isolated from the developer's real config",
+   "description": "`patch_config_paths` is an explicit fixture, not autouse. Task 1's criterion (lines 81\u201382, \"returns the default with no config file present\") and Task 2's tests (lines 90\u201391) do not name it. Task 7.3 (line 241) sets `cf.mcp_command`, and `set_config` writes to the real user config path unless the fixture is active. The existing `tests/config/test_keys.py` uses the fixture for the same reason (lines 79\u201385), but Task 2.1 (lines 88\u201389) says only \"locate the tests.\" Fix: name `tests/config/test_keys.py` and `patch_config_paths` in Tasks 1, 2, and 7.3.",
+   "location": "tests/conftest.py:29"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commits land before their tests, and several tasks name no scoped test command",
+   "description": "Protocol item 3 (line 61) requires \"the task's scoped test command passes first,\" but Tasks 1, 3, 4, and 6 name none. Tasks 4 and 6 commit the implementation (lines 152, 220) before the tests that cover it (Tasks 5 and 7). Task 1 commits before its tests (Task 2). Task 3's only check is \"or via a trivial smoke test\" (line 119), which is optional. The plan commits after all nine tasks rather than at tested points. Fix: commit each implementation together with its tests (1+2, 4+5, 6+7), give every task a `uv run pytest` command, and make Task 3's smoke test mandatory.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Spawn-failure and closed-stream exception types are unnamed, so exceptions can escape the executor",
+   "description": "Task 4.3 says \"every path returns a `ToolResult`, never raises\" but names only `TimeoutError` and `McpError` (lines 139\u2013145). The mcp 1.26.0 SDK raises other types:\n- **Spawn failure:** `anyio.open_process` raises `OSError` (FileNotFoundError), and `stdio_client` re-raises it (`mcp/client/stdio/__init__.py:131\u2013137`). Task 5.3 (line 171) fails unless the bridge catches `OSError`.\n- **Dead server:** `stdin_writer` catches only `ClosedResourceError` (lines 166\u2013180), so a broken pipe (`BrokenResourceError`) propagates through the task group. anyio 4.x raises child-task failures as `ExceptionGroup` (`uv.lock` pins 4.12.1), which `except McpError` does not match.\n\nThe plan also omits the process-boundary catch-all that `builtin.py:94\u2013117` (`_guarded`) uses, which CLAUDE.md rule (c) permits. Fix: name `OSError` for spawn, handle the `ExceptionGroup` for closed streams, and add a boundary `except Exception` with `logger.exception`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:138"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Config-read and launch-string failures escape the executor",
+   "description": "Design failure row 1 (slice line 143) says a misconfigured command yields `is_error` with a WARNING. Task 6.3 (lines 205\u2013207) does not handle the cases where config produces a bad launch:\n- `shlex.split` raises `ValueError` on an unclosed quote.\n- `shlex.split(\"\")` returns `[]`, so `args[0]` raises `IndexError`.\n- `get_typed_config` raises `ValueError` on a wrongly typed value (`manager.py:94\u2013109`), which a hand-edited TOML can produce.\n\nNone of these is caught. Fix: map each to `ToolResult(is_error=True)` with a WARNING, and add tests for an empty command and an unbalanced quote.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:202"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The protocol/transport failure row has no test, though the design requires one per row",
+   "description": "Design line 146 lists \"Protocol/transport error mid-call (`McpError`, closed stream)\" with a WARNING, and line 150 says \"Each row above has a test asserting the observable signal.\" Task 5 covers echo, isError, empty, unknown tool, timeout, and spawn failure. Task 5.4 (lines 173\u2013176) lists only timeout, isError, and spawn. The fake server (Task 3.1) has no way to die mid-call. Fix: add a `crash` tool (`os._exit` during the call), a test for it, and a WARNING assertion in 5.4.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:173"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Result-mapping rules are untested (text join and non-text blocks)",
+   "description": "Task 4.2 specifies joining text blocks with `\\n` and noting non-text blocks by type. Design criterion 2 (slice lines 221\u2013222) requires the mapping rules to be verified. The fake server (3.1) provides only `echo`, `fail`, `sleep`, and `empty`, so no test produces multiple text blocks or a non-text block. Task 7 mocks the transport, so the mapping never runs in those tests. Fix: add `multi` (two text blocks) and `image` tools to the fixture and assert both in Task 5.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:134"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The timeout test's wall-clock bound contradicts the SDK's teardown grace period, and teardown placement is unstated",
+   "description": "Task 5.2 expects `is_error` \"within ~timeout wall-clock\" for a 1-second timeout. In mcp 1.26.0, `stdio_client` waits up to `PROCESS_TERMINATION_TIMEOUT` (2.0s) for the server to exit after stdin closes (`mcp/client/stdio/__init__.py:202\u2013209`). `terminate_posix_process_tree` then loops up to another 2.0s before SIGKILL (`mcp/os/posix/utilities.py:35\u201345`). The design itself says \"escalating to SIGKILL after 2s\" (slice line 154). Teardown therefore adds several seconds after the timeout fires. Assert that the process is gone, and bound wall-clock at roughly timeout plus 4\u20135s. Task 4.1 (lines 127\u2013128) also places the whole span inside `asyncio.timeout`. With that nesting, a slow exit can turn a successful call into a timeout error. The plan should say whether teardown sits inside or outside the timeout.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:166"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The timeout test covers only the direct child, not the grandchildren the design relies on",
+   "description": "Context Fact 6 (lines 42\u201345) says `npx` grandchildren are reaped on timeout and asks the timeout test to \"assert the behavior.\" Task 5.2 (lines 167\u2013169) checks only the direct child's PID. The fake server is a single Python process with no children, so it cannot show grandchild reaping. Fix: have the fake server start a subprocess, record both PIDs, and assert both are gone after the call.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:42"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The fixture specification omits what Tasks 5 and 8 need",
+   "description": "Task 5.2 (line 167) needs the fake server to write its PID to a temp file, but Task 3.1 (lines 102\u2013111) lists no argument or environment variable for that, and Task 3.2 (lines 112\u2013115) builds parameters with no extra args. Other needs are missing too: a `crash` tool, `multi` and `image` tools, and a grandchild process. The spawn path should also be absolute (`Path(__file__)`), since test cwd varies. The \"under ~80 lines\" budget (line 111) will not hold once these are added, so state a new one. For the `empty` tool, FastMCP rejects a bare empty return; return `CallToolResult(content=[])` instead (`mcp/server/fastmcp/utilities/func_metadata.py:288`).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 6 does not define the table that Task 8 imports",
+   "description": "Task 8.1 (lines 263\u2013264) says to import the argument-name constants from the Task 6 mapping table. Task 6.1 (lines 186\u2013189) names no constants and does not give the table's shape. Without that, the contract test cannot iterate the argument names. Fix: specify the table's public name and structure, for example keyed by squadron name, with a CF tool name and an argument map.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:186"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Task 7.4 tests one of the five names that success criterion 1 requires",
+   "description": "Design criterion 1 (slice lines 219\u2013220) requires \"a pipeline step declaring them\" to pass validation. Task 7.4 (lines 244\u2013246) checks only `[\"cf_workflow_status\"]`. Parametrize it over all five names. The premise holds: `validate_allowed_tools` reads the registry at call time (`src/squadron/pipeline/steps/utils.py:71\u201380`).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:244"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Status is set to complete while success criterion 6's dispatch demo is still open",
+   "description": "Design criterion 6 (slice lines 229\u2013231) requires both a live `cf_workflow_status` result and a non-SDK dispatch that calls `cf_build_context`. Task 9.3 (lines 289\u2013292) marks both documents `status: complete` while the dispatch half is deferred to a standard terminal. Either hold the status until that run is recorded, or amend criterion 6 to record the deferral.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The live-test gate depends on a CI assumption that CI does not meet",
+   "description": "Task 8.1 (lines 256\u2013259) and the design (slice lines 214\u2013215) say \"CI without node stays green.\" `.github/workflows/ci.yml:20\u201323` installs Node 22, and `:32` runs `uv run pytest` with no marker filter. So the gate will not skip in CI, the live test will run there, and it must fetch `@context-forge/mcp` at test time. CI installs `@context-forge/cli` (`ci.yml:23`), not the MCP package. Task 8.2 (lines 266\u2013268) then asserts real project status in CI. The gate's launch probe also has no stated timeout. Decide whether the live test runs in CI (then add the wiring and a probe timeout) or is excluded there, and say so.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:258"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 3 leaves the user's config changed, and its `unset` destroys any prior value",
+   "description": "Step 3 (line 283) sets `cf.mcp_command` in the user's real config and says \"unset the key afterwards.\" `sq config unset` deletes the key outright (`src/squadron/cli/commands/config.py:43\u201360`, `src/squadron/config/manager.py:139\u2013160`), so a developer's own override (the local-dev path in design lines 163\u2013165) is lost. If the run stops before the unset, the bad command persists, and the Task 8 gate then skips the contract test without saying why. Fix: record the prior value with `sq config get`, restore it afterwards, and run set, step, and unset in one shell command so the unset runs even if the step fails.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:283"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "No load test and no stated deferral, though the python rules call for one on environment-layer paths",
+   "description": "The bridge adds subprocess spawning, a network fetch through `npx`, and timeout-bounded calls. The python rules (line 64) call for a load test under `tests/load/` for \"network, concurrency, or environment-layer paths,\" with CI gating. The repo has no `tests/load/` tier, and slice 262 already records that gap (`project-documents/user/slices/262-slice.openaicompatibleagent-agentic-loop.md:616\u2013617`). The design restates no NFR, so applicability is a judgment call. Fix: add a minimal load task plus a CI gate, or record the deferral in the slice.",
+   "location": ".claude/rules/python.md:64"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "The design's \"documented\" npx cold-start mitigation has no task",
+   "description": "Design Risks (slice lines 273\u2013275) call for the first-call `npx` fetch and the config override to be \"documented.\" Task 9.3 makes the CHANGELOG bullet conditional. Because this slice adds user-visible pipeline names and a config key, make the bullet unconditional and say where the override is documented.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Task 3's rationale names the wrong tasks",
+   "description": "\"tasks 5, 6 both need a real stdio peer\" is wrong. Task 4's smoke test (line 151) and Task 5 need it. Tasks 6 and 7 mock the transport. Say \"tasks 4 and 5.\"",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Empty-text success is not handled",
+   "description": "A `TextContent(text=\"\")` yields `ToolResult(\"\", is_error=False)`, which is the empty success design fact 3 (lines 33\u201335) rules out in spirit. Decide whether all-blank text counts as \"no text.\"",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:134"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "Tests restate CF vocabulary that Fact 4 says belongs only in the mapping table",
+   "description": "Fact 4 (lines 36\u201338) says CF names appear only in `cf_tools.py`. Task 7.2 writes them as literals (lines 231\u2013235), and Task 8.1 restates the four tool names (lines 260\u2013262) while forbidding restated argument names (lines 263\u2013264). Pick one rule and apply it to both.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:231"
+  },
+  {
+   "i": 22,
+   "severity": "NOTE",
+   "title": "The subprocess environment is set in two places",
+   "description": "Task 4.1 (lines 129\u2013131) says the bridge uses `get_default_environment()`. Task 6.3 (line 207) passes `env=get_default_environment()`. The SDK already does this when `env` is None (`mcp/client/stdio/__init__.py:127`). Give one owner.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129"
+  },
+  {
+   "i": 23,
+   "severity": "NOTE",
+   "title": "The \"hard cap 300\" claim misquotes the rule",
+   "description": "CLAUDE.md line 16 says \"~300 lines ... where practical.\" That is not a hard cap.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:146"
+  },
+  {
+   "i": 24,
+   "severity": "NOTE",
+   "title": "The \"everything is additive inside `tools/`\" claim is inaccurate",
+   "description": "Task 1 edits `src/squadron/config/keys.py`, and Task 7 edits `tests/tools/test_package.py`. The design's own Files-changed table (slice line 202) also lists `config/keys.py`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:20"
+  },
+  {
+   "i": 25,
+   "severity": "NOTE",
+   "title": "The `tools/__init__.py` docstring will go stale",
+   "description": "The docstring says importing the package \"registers the built-in tools and does nothing else.\" After Task 6.4 it also registers the CF tools and imports `mcp`. Update it in Task 6.4.",
+   "location": "src/squadron/tools/__init__.py:3"
+  },
+  {
+   "i": 26,
+   "severity": "NOTE",
+   "title": "Importing `squadron.tools` will now load the mcp SDK",
+   "description": "Nothing in `src/` imports `mcp` today; `src/squadron/mcp/__init__.py` is an empty placeholder. Task 6.4 makes every `import squadron.tools` load it. `utils.py:66\u201368` defers this import on purpose to protect step-type import order. State that the cost is acceptable, or import `mcp_bridge` lazily.",
+   "location": "src/squadron/pipeline/steps/utils.py:66"
+  },
+  {
+   "i": 27,
+   "severity": "NOTE",
+   "title": "Server stderr passes through to the user's terminal",
+   "description": "The SDK's default `errlog=sys.stderr` sends the child's stderr, including `npx` download output, to the terminal mid-dispatch (`mcp/client/stdio/__init__.py:106`, `:254`). Neither the design nor the plan says whether to capture it. Decide.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:124"
+  },
+  {
+   "i": 28,
+   "severity": "NOTE",
+   "title": "Granularity and duplication",
+   "description": "Tasks 1 and 2 are a two-line change and its tests; merge them. Task 5.4 (lines 173\u2013177) repeats assertions already in 5.1\u20135.3; fold it in. Task 7.2 asks for \"one test per tool,\" which the repo's rules prefer as a `parametrize` (`python.md:62`). Task 9.4 (lines 293\u2013295) can fold into 9.3.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:86"
+  },
+  {
+   "i": 29,
+   "severity": "NOTE",
+   "title": "The merge target is only partly defined",
+   "description": "Task 9.4 says to merge \"into the target read in the Branch note,\" but the Branch note (lines 63\u201366) defines only the fork point. The merge target, and the rule against merging to `main` when `integration_branch` is set, live in CLAUDE.md's Git Rules. Name them here.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293"
+  },
+  {
+   "i": 30,
+   "severity": "NOTE",
+   "title": "The prompt-document reference could not be verified",
+   "description": "Task 9.3 (line 287) cites `prompt.ai-project.system.md`, Session State Summary. No such file is in this worktree.",
+   "location": "unverified"
+  }
+ ]
+}

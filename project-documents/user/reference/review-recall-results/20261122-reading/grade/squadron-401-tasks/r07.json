@@ -1,0 +1,124 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2's \"suite passes unchanged\" is false: three existing tests break",
+   "description": "Adding four `SnapshotMetric` members (Task 2) breaks these existing tests:\n- `test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 replaces `PythonAdapter.metrics` with the explicit four 400 metrics, so this assertion fails from Task 2 until Task 25 restores the full set.\n- `tests/metrology/snapshot/test_render.py:31-65` (`python_snapshot`) builds a `LanguageSnapshot` with exactly four measurements. `LanguageSnapshot._one_measurement_per_metric` (`snapshot_models.py:185-198`) then raises \"missing metrics\". That breaks both render tests.\n- `tests/metrology/snapshot/test_snapshot_models.py:225-253` (`test_json_round_trip_is_lossless`) also lists four measurements explicitly and fails the same way.\n\nSo the Task 2 commit either contains failing tests or edits tests the task says it won't touch. Fix: in Task 2, update `test_python_length.py:60` to the explicit set (and update it again as each metric is added in Tasks 8, 12, 14 and 25). Have the two snapshot builders absent-fill the new metrics, and change the success line to \"suite passes with these fixture edits\".",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 4's Success Criterion 3 fixture can't score 6 under Task 3's own rule",
+   "description": "Task 3 (line 54, following D2) counts 1 per comprehension `for` plus 1 per `if`. A comprehension that contains an `if` always has a `for`, so it adds 2. The fixture `if` + `elif` + `and` + comprehension-with-`if` + `except` therefore scores 1 + 1 + 1 + 1 + 2 + 1 = **7**, not 6. The error comes from the slice: its Success Criterion 3 contradicts its D2. A junior implementer will hit a failing test with no way to resolve it. Fix: settle it in the slice design (expect 7, or swap the comprehension `if` for another single-point construct). Then update Task 4 line 65 and the Python half of the Task 30 criteria mapping.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:65"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 7 adds a required field, but existing callers are told to edit \"only for the rename\"",
+   "description": "`FunctionLength` is built positionally with four arguments in `tests/metrology/snapshot/test_lengths.py:104-106` and `tests/metrology/snapshot/test_render.py:36`. Adding a required `complexity: int` makes those calls fail, so they need a new argument, not just a rename. `test_render.py` isn't a length test, and Task 7 doesn't list it. Fix: name both test files in Task 7 and say they gain a `complexity` argument (don't give the field a default to avoid the edit).",
+   "location": "src/squadron/metrology/snapshot/lengths.py:37-44"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Complexity and tokenizer walks may raise `RecursionError`, which TypeScript doesn't catch",
+   "description": "TypeScript's parse errors are `(TypeScriptParseError, MemoryError)`, and Task 14's token errors are the same. `RecursionError` isn't among them. 400's `_extract_functions` walks with an explicit stack for this reason: tree-sitter trees for long `a+b+\u2026` chains are very deep. Tasks 5 and 14 don't say the walk must be iterative. A recursive complexity walk or leaf tokenizer would crash the whole snapshot, which contradicts the failure table's \"handled as a parse error\" row that Task 9 line 111 tests.\n\nOn the Python side `RecursionError` is caught, but a recursive Task 3 walk could mark files unparsed that 400 measured fine. That would change function length values and break Success Criterion 12. Fix: require explicit-stack walks in Tasks 3, 5 and 14 (or add `RecursionError` to the TypeScript error tuples), and run the Task 9 deep-nesting test for TypeScript too.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:142-152"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 9 checks a function set the complexity measurement doesn't expose",
+   "description": "Complexity has no `per_file` and no `over_limit` rows (D2, Task 8). Function length shows names only through `over_limit` when a limit is set. So \"the same (path, qualified name, start line) set\" can't be read from the two measurements. Fix: compare `distribution.count` on the measurements, and compare the set on the extractors' `MeasuredFunction` lists (Python `_collect_functions`, TypeScript `_extract_functions`).",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:110"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two failure-mode rows lack the signal or outcome check the slice requires",
+   "description": "The slice's Technical Requirements ask tests to check both the signal and the outcome for every failure-mode row. Two rows fall short:\n- **`RecursionError` row (Task 9 line 111):** no WARNING is asserted.\n- **Token-ceiling row (Task 11 line 138, Success Criterion 10):** the test covers `measure_duplication` alone, but the criterion also requires \"its other metrics are unchanged\".\n\nFix: add a WARNING assertion to Task 9. Add one adapter-level test (Task 13) with the ceiling lowered, showing `duplicated_lines` is `tool_failed` while file length, function length and complexity are still present.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 16's path parser doesn't reject non-string values",
+   "description": "`get_config` returns the raw TOML value without coercing it, so `\"metrology.coverage_report\" = 5` or a list arrives unchanged. The parser in Task 16 line 175 rejects only empty, absolute and `..` values. Preflight's `_read_exclusions` (`preflight.py:111-114`) shows the existing pattern: check `isinstance(..., str)`. Fix: reject non-strings with `SnapshotPreflightError` and add that case to Task 17.",
+   "location": "src/squadron/config/manager.py:107-111"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Freshness `stat` follows symlinks, so one dangling tracked symlink disables coverage",
+   "description": "Task 21 stats every file from `git ls-files`, and any `OSError` makes coverage fail. Git tracks the link itself, and 400 already treats tracked dangling symlinks as a real case (`tests/metrology/snapshot/test_python_length.py:202-213`). Plain `os.stat` on such a link raises every time, so that repo can never get coverage. Fix: use `os.lstat` (`follow_symlinks=False`), which reads the mtime of the tracked object, and add a dangling-symlink case to Task 22.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:215"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 21 describes a two-way result where Task 23 needs three",
+   "description": "Line 218 says the result is \"either a reading or an absence (reason, detail)\". But lines 215 and 217 (via Task 19) also produce *failures*, and Task 23 line 233 maps failures to `tool_failed` separately. Fix: define the result as reading | absence | failure (or failure as an absence carrying `tool_failed`) so Tasks 21 and 23 agree. Also say that Task 21 resolves the key through the Task 16 parser.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 26's \"real adapters\" harness has no precedent in `test_take.py`, and its porcelain check conflicts with config setup",
+   "description": "`test_take.py` uses only `FakeAdapter`; no 400 test runs real adapters through `take_snapshot`. Two traps follow:\n- **Tool lookup:** `measure_ruff_lint` resolves ruff with `use_path=True` (`python_lint.py:85`). On a developer machine it finds the real ruff, and `FakeToolRunner` raises `AssertionError` on the unscripted call. The 400 lint tests avoid this by setting `PATH` to an empty directory (`test_python_lint.py:37-38`). That would also hide `git` from `preflight`'s `run_git`, so `take_snapshot` would fail.\n- **Porcelain check:** setting the key in an uncommitted `.squadron.toml` (as `test_take.py:184` does) makes `git status --porcelain` non-empty. That conflicts with line 260's empty-porcelain assertion.\n\nFix: say how tool lookup is controlled (patch `resolve_tool`, or a `PATH` that contains only git's directory). Commit `.squadron.toml` and a `.gitignore` for the report in the `snapshot_git_repo` files. Or assert porcelain is unchanged rather than empty.",
+   "location": "tests/metrology/snapshot/test_take.py:22-25"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 18's coverage.py fixture covers all of `src/squadron`",
+   "description": "`--cov=src/squadron` reports every file under the source tree (387 `.py` files), executed or not, with one `<line>` per statement. Kept \"as it was written\", that is a multi-megabyte fixture checked in for a reader test. Fix: capture with `--cov=src/squadron/metrology/snapshot`. The fixture stays real and unedited, and the Success Criterion 6 totals check still works.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 29 step 9 fails on the scratch project for reasons unrelated to this slice, and the task says to \"fix\" it",
+   "description": "The scratch vitest project needs three things the steps don't mention:\n- `git init`, a commit, and an origin remote or `metrology.project_id`. Otherwise `derive_project_id` raises.\n- `node_modules/` in `.gitignore`. Preflight runs `git status --untracked-files=all` (`preflight.py:71`), which lists untracked `node_modules` files and refuses the snapshot. The slice step mentions only `coverage/`.\n\nTask 29 line 281 calls every failing step \"a bug in this slice: fix it\". That points a junior implementer at the wrong fix, such as exempting `node_modules` in preflight. Fix: spell out the scratch-repo setup in Task 29 (and correct walkthrough step 9 in the slice).",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:279-282"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes",
+   "description": "Every commit line (46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283, 290) is written `- [ ] Commit: \u2026`. Markers should be plain `**Commit**:` lines, never checkboxes. Where they sit is fine: after each test task, at tested points.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Task 8 doesn't say the Python caller passes the complexity identity",
+   "description": "Task 8 line 104 says TypeScript's `measure_typescript_lengths` passes the new identity to `measure_parse_metrics`. It doesn't say the same for Python's `measure_lengths`, which must change too.",
+   "location": "src/squadron/metrology/snapshot/python_adapter.py:88-98"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "A failed coverage read logs three WARNINGs per language",
+   "description": "Task 21 logs WARNING for each failure. Task 23 then builds two `tool_support.tool_failed` measurements, and each logs again (`tool_support.py:50-53`). Not wrong, but worth choosing one place to log, because Task 26 checks warning counts for absences.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 11's single-token run must be shorter than 200 tokens",
+   "description": "In a run of \u2265200 identical tokens, windows 0 and 100 don't overlap, so D3 correctly reports them as duplicates. Specify a length such as 150 so the \"doesn't count\" check holds.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:134"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The walkthrough leaves the coverage key in squadron's `.squadron.toml`",
+   "description": "The worktree has no `.squadron.toml` today. Step 3 creates it, and the success line only restores the key after steps 6 and 7. The file is gitignored, so this is harmless to git, but future squadron snapshots will read coverage. Add \"remove the key (or the file if the walkthrough created it)\" to the final cleanup.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:282"
+  }
+ ]
+}

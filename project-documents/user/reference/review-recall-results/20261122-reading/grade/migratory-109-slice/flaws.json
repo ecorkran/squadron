@@ -1,0 +1,18 @@
+{
+ "case": "migratory-109-slice",
+ "kind": "slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Architecture, Vectorized Force Patterns, Cohesion sketch: `center_of_mass = np.sum(neighbor_pos, axis=1) / np.maximum(counts, 1)` then `cohesion = (center_of_mass - self_positions) * weights`. For an agent with zero neighbors the sum is the zero vector, so the force is `-self_position * weight`, not zero. The section \"Handling Zero-Neighbor Agents\" says the masked reduction \"produces zero force for that agent, matching current behavior\". **VALID**: self-contradiction. Needs: doc alone. The implementation had to add `forces[~has_neighbors] = 0.0` (`flocking.py` at `f252659`)."
+  },
+  {
+   "id": "F2",
+   "text": "Verification Walkthrough step 4 runs `grep -n \"for.*agent_idx\\|for.*eval_indices\\|for.*list_idx\"` on the force modules and expects no matches, while the design's own Per-Agent Profile Weight pattern is `np.array([... for pi in state.profile_indices[eval_indices]])` in those modules. The regex `for.*eval_indices` matches that line, so the step cannot return empty if the design is followed. **VALID**: the step cannot be completed as written. Needs: doc alone. At close the author rewrote the grep."
+  },
+  {
+   "id": "F3",
+   "text": "Technical Scope and Success Criteria call all five forces \"neighbor-dependent\" and include `MomentumForce`, which the document later says \"does not use neighbors at all\". **VALID** (minor): self-contradiction. Needs: doc alone. Raised by the original review (its only NOTE, \"wording inconsistency\")."
+  }
+ ]
+}

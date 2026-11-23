@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Moved core still imports from `pipeline`, so F002's dependency inversion is not removed",
+   "description": "- Task file lines 109\u2013113 (T3) say `verification.py` keeps importing `RoundDiff` from `pipeline.actions.findings_addressed.screens`. They call this \"the pipeline\u2192review direction\". After the move, `review/addressed/verification.py` would import from `pipeline/`. That is the review\u2192pipeline direction the slice's \"Dependency direction (review F002)\" section (slice lines 141\u2013155) exists to eliminate.\n- It is also a package-level cycle. `screens.py:15` imports `models`, which now lives in `review.addressed`. `review.addressed.verification` would then import `pipeline\u2026screens`. Importing `screens` also executes `findings_addressed/__init__.py`, which imports `policy`, which imports the gate registry.\n- `judge_residue_core` (T5) takes `diff: RoundDiff` in its signature and has the same problem.\n- No task moves `RoundDiff`, defined at `screens.py:34`, into `review/addressed/`. The slice says `screens.py` stays, so only the dataclass needs relocating. Add a task before T3 to move it, probably into `review/addressed/models.py`. Then rewrite T3's bullet and its claim that the import is pipeline\u2192review.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "`models.py` imports `pipeline.models.ActionResult`, but T1 moves it \"verbatim\"",
+   "description": "- T1 (lines 82\u201384) moves `models.py` with \"no logic changes\". `models.py:14` has `from squadron.pipeline.models import ActionResult`, used by `read_findings`.\n- Moved verbatim, `review/addressed/models.py` depends on the pipeline package. That is the same inversion as the previous finding.\n- T1 also lists `models.py`'s imports as \"only the file's own internal imports\". It never mentions this one.\n- The task needs a step to decouple `read_findings` from `ActionResult`. Options are to accept the findings list or dict directly, or to keep the `ActionResult` adapter in `pipeline/`.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "T5/T6 promise 305's judge tests pass unchanged, but they patch a symbol that moves",
+   "description": "- `test_findings_addressed_judge.py:32` and `test_findings_addressed_e2e.py:27` patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile`.\n- T5 moves the `run_review_with_profile` call into `review/addressed/judge.py`. The patch would then stop intercepting the transport. If the wrapper drops the import, it raises `AttributeError`. If the wrapper keeps it, the real transport is called.\n- T6 (lines 143\u2013151) demands \"all pass unchanged\" and treats a test rewrite as a stop-and-reconcile signal. The task as written cannot satisfy that.\n- The task needs an explicit step to retarget `_JUDGE_TRANSPORT` in both files to `squadron.review.addressed.judge.run_review_with_profile`. T6 must say this retarget is expected and is not a behavior change.\n- T5 also moves `JUDGE_TEMPLATE_NAME`. `__init__.py` and any caller of `judge.JUDGE_TEMPLATE_NAME` need updating. T7 covers only the `__init__` exports.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T7 drops re-exports with no step to update tests that import from the package root",
+   "description": "- `tests/pipeline/test_findings_addressed.py:18`, `test_findings_addressed_evidence.py:16` and `test_findings_addressed_judge.py:16` import moved names such as `FindingRecord` and `parse_status_lines` from the package root.\n- T1 and T3 only say \"same grep pattern\" for importers. T7 says \"importers outside the package\u2026 are updated\" but lists no tests and has no grep.\n- T8 is where a failure would surface, so T7 and T8 could spend effort on test import fixes the plan never scheduled. Make this an explicit step in T7: grep `src tests` for the removed names.\n- The T1 grep pattern `findings_addressed.models\\|findings_addressed import` also misses `from squadron.pipeline.actions.findings_addressed.parsing import \u2026`-style paths after T3. T3 says \"rerun after T1's edits\" but gives no pattern for `.parsing` or `.verification`.\n- The intermediate state after T1 is workable only because `__init__` is edited to re-import from the new location. T1 should say so explicitly.",
+   "location": "tests/pipeline/test_findings_addressed.py:18"
+  },
+  {
+   "i": 4,
+   "severity": "FAIL",
+   "title": "Part D guards `save_review_file`, which the re-review path does not call",
+   "description": "- Slice success criterion line 364 requires that re-running `sq review code <N>` over an edited review archives the prior content.\n- Every `sq review \u2026` CLI call goes through `save_review_result` (`cli/commands/review.py:451,523,610,746`). `save_review_result` writes directly with `path.write_text` at `persistence.py:300` and `:303`, and never calls `save_review_file`.\n- `pipeline/actions/review.py:253\u2013278` also uses `save_review_result` whenever `slice_info` is present. It uses `save_review_file` only in the no-slice-info fallback.\n- T12 and T13 add the guard only to `save_review_file`. The data-loss hazard that motivated Part D would therefore remain for the primary command.\n- T13's tests exercise only `save_review_file`, so they would pass while the success criterion stays unmet. The guard must cover `save_review_result` for both `.md` and `.json`, and for `name_suffix` files. A shared archive helper called from both would do it.\n- Pipeline loops also rewrite the same review filename each iteration. The guard will therefore fire on every loop re-review. The task should state whether archiving is intended there, because it affects the filename scheme in the next finding.",
+   "location": "src/squadron/review/persistence.py:257-314"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Archive filename `{original filename}` is overwritten on the second overwrite",
+   "description": "- T12 (lines 233\u2013237) archives to `archive/{original filename}`. A second overwrite of the same review replaces the first archived copy. That silently destroys the earlier hand-edited content the guard exists to protect.\n- This is the same hazard in a different place, and the plan is fail-closed only for the first overwrite.\n- T12 needs a collision rule, for example a numeric or timestamp suffix. T13 needs a test that saves three times and asserts that all prior contents survive.\n- The same rule interacts with T14's possible filename mangling.",
+   "location": "src/squadron/review/persistence.py:220-254"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "T14 gates T12 but is numbered after it; the slice requires it before Part D",
+   "description": "- Slice lines 381\u2013383 say the cf `archive/` verification must be its own task \"sequenced before Part D lands\". The task file puts it as T14, after T12 and T13.\n- T12 (lines 253\u2013255) and T14 (lines 293\u2013295) carry \"don't mark T12 done until T14 is known\" workarounds. The T13 `Commit:` marker (line 272) sits before T14, so the commit can land before the answer is known. The marker may then commit the filename scheme that T14 is meant to decide.\n- Renumber T14 to precede T12, and drop both workaround bullets.\n- T14 also calls for asking the Project Manager. That is fine, but it should state its default if no answer arrives, for example \"assume recursive and use the mangled name\". As written, a junior agent can block indefinitely.",
+   "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md:381-383"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "T10 duplicates HEAD resolution and leaves the `cwd` unspecified",
+   "description": "- `save_review_result` has no `cwd` parameter. It writes relative to `reviews_dir or _REVIEWS_DIR`, which is relative to the process directory. T10 (line 204) says `run_git(\u2026, cwd=...)` without saying which value. `run_git` requires `cwd: str` (`git_utils.py:19`). Specify `cwd=str(target.parent\u2026)` or the process directory, and say which.\n- T10 (lines 209\u2013211) has `pipeline/actions/review.py` do \"the same resolution\". But that module calls `save_review_result` at line 255, which would already stamp. Only the `save_review_file` fallback at lines 264\u2013278 would need a stamp, and it has `cwd` available.\n- T10 should say: resolve once in a persistence helper, reuse it from the fallback path, and add no duplicate logic in the action. The pipeline action also wraps persistence in `except Exception` at line 281. State that a stamp failure must not abort persistence.\n- Existing tests such as `tests/review/test_persistence.py` and `tests/pipeline/actions/test_review_action.py` call `save_review_result` or mock it. Adding a real `git rev-parse` there makes those tests depend on the environment. T11 should say to patch `run_git` in the existing fixtures, or confirm that the real call is harmless.",
+   "location": "src/squadron/review/persistence.py:257-314"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "T12 does not state what callers do when `save_review_file` returns `None` on the new abort path",
+   "description": "- Slice line 329 says that on an aborted overwrite \"the review content is still printed to the terminal\". T12 does not mention printing the content. T13 does not test it.\n- For the pipeline path, `None` already means the file was silently not saved (`review.py:279\u2013280`). The action then reports `success=True` without a `review_file` output. An aborted overwrite therefore looks like a normal persistence failure to the loop.\n- Add a step or a note about how callers surface the abort, and a test for it.",
+   "location": "src/squadron/pipeline/actions/review.py:279-280"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "T13's unwritable-archive test must build the idiom against the archive directory, not the reviews directory",
+   "description": "- The cited test blocks the *parent* of the reviews directory with a file. Copying that idiom as written would make `mkdir` of the reviews directory fail before the guard runs.\n- The plan needs a file named `archive` inside an existing reviews directory that already holds the original file. State that the original must exist first, and compare bytes before and after.\n- The existing `test_persistence.py:251` uses `patch.object(Path, \"write_text\", \u2026)`. T13 should make sure that patch cannot mask a guard failure.",
+   "location": "tests/pipeline/test_findings_addressed_evidence.py:183-195"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "T3 misdescribes the existing imports",
+   "description": "- T3 (lines 105\u2013108) says `squadron.review.parsers.location_path` and `squadron.review.models.Verdict` are \"already in the target package\". They live in `squadron.review`, not in the new `squadron.review.addressed`.\n- Moving the file removes no cross-package import. They are ordinary imports from the parent package.\n- Correct the claim, because it supports the incorrect \"removes a cross-package import\" reasoning around the `RoundDiff` issue above.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:18-19"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "T2/T4/T6/T8 are very small and mostly re-run the same suite",
+   "description": "- Part 0 has eight tasks for what is one mechanical relocation with four verification runs. T1/T3/T7 could merge and T2/T4/T8 collapse into a single verification, leaving T5/T6 separate because the judge extraction carries behavior risk.\n- Four commits in Part 0 are acceptable, but the `Commit:` after T4 and T8 mostly repeat T2's check. This is a proportionality observation, not a defect.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94-184"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Baseline pass count (2832 passed, 2 skipped) is unverifiable and brittle",
+   "description": "- T8 pins the suite count to slice 305's close-out. Part A and D tests add to it, so \"same pass count \u2026 plus later additions\" can't be checked mechanically.\n- Replace with \"no failures, no new skips, and the count equals a baseline recorded before T1\".",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:178-179"
+  }
+ ]
+}

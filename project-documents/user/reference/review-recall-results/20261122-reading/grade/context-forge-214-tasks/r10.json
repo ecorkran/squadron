@@ -1,0 +1,103 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not `**Commit**:` lines",
+   "description": "Task file lines 71, 94, 117, 126 and 134 are written as `- [ ] **Task NC: Commit** \u2014 ...` checkboxes. The convention is a plain `**Commit**: \\`type(scope): message\\`` line, never a checkbox. As written, the commit points show up as open tasks in any checkbox tracker. The placement is right: after 2T, 3T and 4T, with 5C and 6C conditional on the step before them.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 5 fixes land after their test commits, and 5C's message covers only docs",
+   "description": "Task line 122 says a bug found by the sweep is fixed \"and add a test in the matching test task's file\". By then 2C, 3C and 4C have already committed the validator, file layer and command, so the fix is an uncommitted change to committed code. Task line 126 (5C) is `docs: record slice 214 parity sweep results` and runs \"only if Task 5 changed files\". A code fix would then be committed under a docs message, or left uncommitted, and no task says which. Give code fixes their own commit with a `fix(...)` message, and make 5C docs-only.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The parity sweep cannot detect differences in `missing:` lines",
+   "description": "Step 6 (design lines 213\u2013217) reduces each run to `head -1 | cut -d' ' -f1`, so it compares only PASS and FAIL. The success criterion requires each missing line to be \"written as in the template\" (design line 168), and walkthrough step 2 checks only one broken copy. A FAIL file whose cf missing list differs from the script's shows no DIFF. Both tools print the same shapes (design lines 118\u2013123; script lines 124\u2013126), so compare the full output of each run for FAIL files and treat any difference as a DIFF.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:121"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5's leniency list leaves out divergences that exist in the code",
+   "description": "Task line 122 accepts a DIFF only if it comes from \"quoted docType, CRLF, \\r, real heading syntax\". Three divergences are missing from that list:\n- **Marker:** the script compares `<!-- required -->` exactly (script line 58). cf trims it (design line 103).\n- **Frontmatter:** the script needs `---` and `docType: slice-design` at column 0, after trailing-space trim (script lines 82\u201385). `parseFrontmatter` also trims leading whitespace, so an indented `docType` passes in cf and fails in the script.\n- **Unclosed frontmatter:** the script's awk ends with `exit found ? 0 : 1` (script line 85), so a file whose frontmatter never closes but contains `docType: slice-design` passes the script. `parseFrontmatter` returns `found: false` there (`frontmatterParser.ts:61-62`), so cf fails it. This is a strictness difference, and the design does not record it.\n\nA DIFF from any of these would be classed a bug and \"fixed\", which would undo a design decision. The current slice corpus has no CRLF, quoted or indented `docType` lines, so no DIFF is expected today. The rule is still wrong for the cases it will eventually meet. Replace the list with the design's full list (design lines 89\u201390, 97\u2013103) and record the unclosed-frontmatter case.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`parseFrontmatter` swallows read errors, so Task 3 cannot wrap them",
+   "description": "Task lines 78\u201379 parse frontmatter with `parseFrontmatter` first, then say to \"wrap any unexpected fs error in `SliceDesignValidationError` so all I/O failures surface as that one type.\" `parseFrontmatter` catches every error and returns `{ found: false, data: {} }` (lines 9 and 63\u201365). If the read fails after preflight passes, the file gets `reason: 'doctype'` and exits 1 with a frontmatter message, not an I/O error with exit 2. That breaks design line 78 (\"every I/O failure exits 2\"). The window is narrow, since preflight already checked readability, but the task names the swallowing call as the first I/O step. Tell the implementer to do a wrapped `readFile` before calling `parseFrontmatter`.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63-65"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The missing-template remedy `cf guides update` fails when no guide is installed",
+   "description": "Task lines 76 and 113, and design lines 107 and 171, require the missing-template message to name `cf guides update`. When no guide is installed, the update path throws \"Guide is not installed. Use guide_install (or cf guides install) to install it first.\" (`GuideManager.ts:259-262`). The `cf guides update` action passes that error straight through (`packages/cli/src/commands/guides.ts:367-390`). So in a checkout with no guide, the message sends the user to a command that refuses and names a different one. The wording is right only when the guide is installed but its template is missing. Name both cases: `cf guides install` when the guide directory is absent, `cf guides update` when only the template is missing.",
+   "location": "packages/core/src/guides/GuideManager.ts:259-262"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Original heading text\" does not say the `#` markers are kept",
+   "description": "Task lines 48 and 61 (\"original text for messages\") and line 75 (\"`missing` as original heading text\") leave open whether `#` markers are kept. The contract needs the full template line: `  missing: ## Value` (task line 109; design line 120) and `\"missing\": [\"## Value\"]` (design line 135). The script does this (script line 126 prints the full `$prev` line). Someone who strips the hashes, as \"text\" suggests, fails task line 109 and the \"exactly that missing heading\" assertion in task line 88. Say \"the full template line, `#` markers and placeholders included\".",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:75"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Unreadable-file, unreadable-template and CLI no-marker exit-2 paths have no test",
+   "description": "Design line 171 requires exit 2, a stderr message and empty stdout for \"a missing, non-regular or unreadable file, a missing or unreadable template, or a template with no required headings\". Task 3T (line 91) covers a missing template, a no-marker template at core level only, a missing file after a valid one, and a directory. Task 4T (line 113) covers no arguments, a nonexistent path, valid-before-missing, and a missing template. Nothing tests an unreadable file, an unreadable template, or the no-marker template through the CLI. Add them to 3T and 4T. When tests run as root, `chmod 000` does not block reads, so these tests need a guard or another way to make a file unreadable. A CRLF document end to end is not tested (task line 66 is unit only); design line 180 does not require more, so this is optional.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 4 does not say that `design` needs a registered project",
+   "description": "Task line 100 says to resolve the root \"the same way the frontmatter subcommand does\". That path calls `resolveProjectWorktree`, which throws \"No project specified and no registered project found at current path.\" when the cwd is not a registered project or worktree (`packages/cli/src/utils/project.ts:135-142`). So `cf validate design` in an unregistered client repo exits 2 before any file is checked. The users are agents in client repos (design line 23), and the success criterion is unconditional (design line 167). State the precondition and test it, or accept it on purpose. Also copy the `!project` and `!project.projectPath` guards from `validate.ts:157-162`. Without them, `join(undefined, \u2026)` throws a TypeError that exits 2 with an unhelpful message.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:100"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 4T's real-design list is unpinned",
+   "description": "\"Several files ... that pass the bash script today\" names no files. The implementer must run the script to choose, and the set changes whenever a slice is edited or renamed. Pin the file names in the test, including 214. The test reads tracked user documents (`.gitignore:34` ignores only one slice), so a rename or edit will break it.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Prefix matching applies to every heading, though the script's comment says placeholders only",
+   "description": "The script's comment (lines 89\u201390) says prefix matching is for a template heading that \"carries a placeholder\". `key_matches` (lines 91\u2013100) applies it to every heading. Design line 98 also states it for every heading, so the port is at parity, and `## Value` is satisfied by `## Value Proposition`. Task 2T (line 63) tests only the placeholder case. Decide which behavior is intended and pin it with one non-placeholder test.",
+   "location": "project-documents/ai-project-guide/scripts/validate-slice-design:89-100"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Task 1's \"add there if the barrel lists names explicitly\" is already answered",
+   "description": "The barrel is an explicit `export { ... } from './types.js'` list, and it includes `GUIDE_RELATIVE_PATH` (line 24). So the new constant must be added there. Write it as a direct instruction.",
+   "location": "packages/core/src/guides/index.ts:4-32"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 0 uses the global `cf`, though the context says to use the local build",
+   "description": "Task line 37 runs `cf config get git.integration_branch`, which is the published global `cf`. The Context Summary (line 28) says to use the local build, since the global `cf` is the published package. The key exists (`packages/core/src/config/ConfigKeys.ts:146`), so reading it is harmless. Use `node packages/cli/dist/index.js config get ...` for consistency.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Design's guide-coupling line references are off",
+   "description": "The design gives `prompt.ai-project.system.md:291` and `readme.md:68`. In the guide checkout, the call is at line 293 (`project-guides/prompt.ai-project.system.md:293`) and the script line is at `readme.md:72`. Task 6 does not use these references, but the guide session will.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:157"
+  }
+ ]
+}

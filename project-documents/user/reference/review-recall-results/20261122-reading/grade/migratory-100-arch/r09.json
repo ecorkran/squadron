@@ -1,0 +1,89 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Stateless\" tick conflicts with the behaviors the archetypes require",
+   "description": "The doc says the engine is stateless and that all state is in the passed arrays (line 70). It also says behavior is forces, not decisions or state machines (line 41). Several archetypes need state that is neither position, velocity nor profile index (line 39).\n- Pack hunting has \"target selection\" and \"convergence-on-target\" (lines 74, 111). That needs a persistent per-agent target ID.\n- Herding \"leadership tendency\" (line 109) needs leader identity or rank.\n- Territorial \"home-range attraction\" (line 76) needs a per-agent home position.\n- Swarm \"stigmergy / reinforced paths\" (line 77) needs a mutable pheromone field that agents write to.\n\nThe environment is described as a read-only interface the engine does not own (line 47). So nothing in the design says who deposits into the stigmergy field. The agent state schema is never defined. Add the extra columns, or add an explicit engine-side or world-side \"deposit\" output.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Interface descriptions disagree: register/remove, environment as input vs query, and tick return semantics",
+   "description": "- Line 81 lists \"register/remove agents\" and \"query agent state\" as part of the engine's interface. A stateless pure function (line 70) has nothing to register against. 300-arch line 70 says the server owns entity lifecycle and array allocation, and the engine \"does not manage the entity lifecycle.\" Drop these methods or say who owns the arrays.\n- Line 64 says environmental context is received as a tick input. Line 47 says the engine queries it through a read-only interface. These are different contracts: snapshot-in-argument versus callback or object. The callback form also breaks the \"no callbacks into Python\" GPU constraint (line 99).\n- Line 68 \"Returns the updated state array\" doesn't say whether this is a copy or in-place. That choice drives memory cost at tens of thousands of agents and decides the read semantics below.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Subset and variable-rate ticking: no per-agent dt, no read/write ordering rule",
+   "description": "The subset tick is the \"foundation\" for multi-resolution simulation (line 49). Agents ticked at 1/4 or 1/16 rate must integrate with a larger effective dt. The interface carries no per-agent dt or last-updated tick. Non-active neighbors keep stale positions and velocities, and nothing says how they are treated.\nLine 93 calls fixed-timestep integration \"essential\", which conflicts with variable-rate integration. This is unresolved.\nThe spec also has to say that all forces are computed from the pre-tick snapshot (Jacobi-style) and only then written back. Without that, results depend on evaluation order, and determinism (line 31) fails once subsets are used.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Determinism goal is under-specified and overstated for the distribution use case",
+   "description": "Line 31 claims regions \"must agree on simulation results from shared boundary state.\" That needs bit-exact reproducibility across processes and probably machines. The doc leaves several things open:\n- The float32 versus float64 choice is deferred (line 95).\n- Reduction order in NumPy sums depends on neighbor ordering, which differs between spatial-hash, KD-tree and GPU strategies. Swapping the spatial strategy (line 45) can therefore change results.\n- No RNG policy exists (seeding, per-tick or per-agent streams) for any noise or tie-breaking.\n- SIMD and BLAS paths can differ across CPUs.\n\nState the actual determinism level (same machine and build, or cross-platform bit-exact). Fix the precision and a canonical neighbor ordering. The cross-region determinism claim should be cut from this doc unless it is backed by those choices.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Neighbor query interface is the hardest part and has no signature; per-agent framing contradicts the bulk and GPU constraints",
+   "description": "Line 87 frames the query as \"which agents are within radius R of agent A.\" NumPy cannot afford that per agent (Python-level loop). The interface must be bulk. Candidate shapes are CSR pair lists, padded fixed-K neighbor tables or cell-sorted arrays. Each constrains the force code differently. Line 99 requires \"no dynamic allocation,\" but variable-size neighbor sets are dynamic allocation unless padded or capped. Nothing says what happens at the cap in dense regions.\nAt 10K agents, naive O(n\u00b2) (line 45) is 10\u2078 pairs per tick. That is hundreds of MB of temporaries in NumPy and unlikely to be tick-feasible, so it is not a viable \"initial implementation.\"\nLine 97 says aggregates will arrive \"through the same neighbor query interface.\" Aggregates have count and dispersion rather than being unit agents, so that is not the same interface. The doc also gives no tick-rate or millisecond budget to validate \"tens of thousands\" against (line 33).",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:87"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Heterogeneous interactions: profile-pair rules and the profile data model are not defined",
+   "description": "Line 91 admits that elk-vs-wolf separation differs from elk-vs-elk and that this adds a \"combinatorial dimension.\" The design never says how that is represented: an N\u00d7N profile interaction matrix, per-profile role tags, or something else. It is presented as a later concern (predator-prey slice, line 111). Yet it determines the shape of the force kernel and the neighbor result (which must carry neighbor profile index). The flocking slice (line 105) would build a kernel that predator-prey then has to rework.\nRelated gaps:\n- \"Swapped at runtime\" (line 43) is undefined when profiles are referenced by array index.\n- Profile validation is missing.\n- Fundamentals like max speed and max steering force are absent from the force model.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Spatial setup unspecified: dimensionality, world bounds and terrain interaction",
+   "description": "The prototypes were 2D canvas and Three.js 3D (lines 55-56). The engine doc never states 2D or 3D, or whether the world is bounded, toroidal or unbounded. It does not say how terrain elevation (line 47) constrains movement (ground-following for herds, free 3D for starlings or jellyfish). Each choice changes the array shapes, the spatial index and the force set. This is load-bearing and should be fixed before the first slice.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:53"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No failure or invariant handling for numeric and input errors",
+   "description": "Nothing covers NaN or inf propagation from zero-distance separation (coincident agents), force clamping, out-of-range subset indices, mask and array length mismatches, or profile indices with no matching profile. Because the engine is a pure function over shared arrays, one NaN poisons neighbors the next tick. Say whether the engine validates, clamps or trusts the caller.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Speculative scaling machinery is baked into the engine design",
+   "description": "The single-CPU target is tens of thousands of agents. The doc nonetheless shapes the engine for GPU offload, multi-GPU tiers, four interchangeable spatial strategies (grid, KD-tree, GPU, hash) and aggregate-entity interaction. Examples are the GPU compute path (line 99), the \"Aggregation interface support\" slice (line 115) and the multi-resolution section (line 97). The world server owns all of these. Defer them:\n- Cut the aggregation slice and the GPU section, and keep only the subset-tick contract.\n- Build one concrete spatial strategy first, and extract the abstraction from it.\n\nThe array-in/array-out constraint costs little and can stay. The aggregate-neighbor and \"same interface\" claims should be dropped until the world server actually needs them.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Broken and inconsistent cross-references",
+   "description": "- Line 21 cites the world server as \"300-arch\", but line 122 links `200-arch.world-server-foundation.md`. The file that exists is `300-arch.worldserver-foundation.md`, so the link is dead.\n- Line 119 links `000-concept.migratory.md` and `dependsOn` (line 9) uses `000-concept.migratory`. 300-arch line 134 links `001-concept.migratory.md`. The concept filename is inconsistent across docs.\n- Line 97 says the \"world server architecture describes scaling tiers,\" which presumes a doc this one links wrongly.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Array layout and precision are deferred but already implicitly decided",
+   "description": "Line 39 already commits to \"contiguous typed arrays\", and line 85 says SoA is \"the natural fit\" but \"needs validation.\" The float32/float64 decision (line 95) shapes the determinism and serialization claims above. The tick-time budget and the unproven O(n\u00b2)/spatial-hash cost (line 87) are the real unknowns. Resolve them with a quick benchmark before slice 100, not as an open consideration.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Slice ordering",
+   "description": "Slice 1 builds the subset tick, but the spatial query abstraction (line 107) comes third, after flocking. Define the bulk neighbor result shape, including neighbor profile index, in the first or second slice. Otherwise flocking is written against naive queries and then reworked.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:103"
+  }
+ ]
+}

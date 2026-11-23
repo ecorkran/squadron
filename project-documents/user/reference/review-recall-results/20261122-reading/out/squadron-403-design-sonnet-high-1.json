@@ -1,0 +1,459 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Renaming the `git_utils` helpers breaks tests the design says pass unchanged",
+      "description": "The design renames `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit` to public names (lines 77, 90, 386). It also requires \"`sq review code`'s range-resolution tests pass unchanged\" (line 351).\n\nThose two statements conflict. `tests/review/test_git_utils.py` imports `_find_slice_branch` and `_resolve_fork_point` at lines 26-28. It also patches `squadron.review.git_utils._find_slice_branch`, `._resolve_fork_point`, `._find_merge_commit` and `._search_merge_commit` by string at lines 217-512. `tests/pipeline/test_code_pipelines_branching.py:17` imports `_find_slice_branch` directly.\n\n`patch()` on a name that no longer exists raises `AttributeError`, and the imports fail. Development step 1 (\"confirm the review resolver tests still pass\") fails as written. The design needs to either keep the underscore names as aliases or list the test edits.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `first_parent` argument on `_search_merge_commit` has no consumer",
+      "description": "The resolver data flow (lines 111-113) issues its own `git log --merges --first-parent --reverse --format=%H`. It needs every match, because D1 requires multiple landings.\n\n`_search_merge_commit` (`git_utils.py:221-242`) runs `git log ... -1` and returns one hash. Adding `first_parent` to it serves no 403 caller. `sq review code` is stated to be unchanged (D2, line 195), so the existing resolver does not use it either.\n\nThis is a dead parameter, and Technical Requirements line 346 even names it as allowed growth in `git_utils.py`. Cut it. The shared grep-pattern function is the only part of the `git_utils` change that both resolvers use.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A required `environment_root` field breaks 400's test builders",
+      "description": "D5 makes `AdapterContext.environment_root` \"a required field with no default\". Development step 4 says \"the 400 tests pass unchanged\".\n\n`AdapterContext(` is constructed in `tests/metrology/snapshot/builders.py:80` and `tests/metrology/snapshot/test_python_length.py:25`. Neither passes the new field, so both break.\n\nEither give the field a default (for example `None`, falling back to `repo_root`), or list the builder edits. A default would also keep the 401 adapters working in place if they land first.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:211"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Export measurement cannot reuse `_measure_all` or `PreflightResult` as written",
+      "description": "The design says `take_snapshot_at` shares `_measure_all` (line 92). The shared code does not fit an export:\n- **File discovery:** `_measure_all` calls `resolve_files(repo_root, exclusions)` (`take.py:100`). That runs `git ls-files` in the repo root (`files.py:42`). The export directory has no `.git`, so it would raise `SnapshotIntegrityError`. The design says the file list is \"the archive's member names\" but never says `_measure_all` takes a file list instead.\n- **Config type:** `_measure_all` takes a `PreflightResult`, whose `head_sha` is required (`preflight.py:41-47`). The design never gives the return type of `read_snapshot_config`.\n- **File-set parity:** The design says the export's members are \"regular files\". `git ls-files` also lists symlinks and gitlinks. Criterion 5 says the export JSON equals the in-place JSON apart from `measured_at`. Only `export-ignore` is documented as a file-set difference (line 217). The in-place equality test could fail on symlinked sources.\n- **Integrity check:** In-place snapshots run `check_integrity` (`take.py:130`) to catch tools writing into the live repo. Exports run tools with the live checkout as `environment_root`, but the design says nothing about whether that check runs, or what replaces it.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D5 contradicts itself on where `uv sync --check` runs",
+      "description": "D5 says adapters resolve \"the venv and the uv check from `environment_root`\". The next sentence says \"Tools run with `cwd=repo_root`\". The code runs uv as `ctx.runner.run(argv, cwd=ctx.repo_root, ...)` (`python_types.py:93`).\n\nAt an export, `uv sync --check --locked` with the export directory as cwd reads the export's `pyproject.toml` and `uv.lock`, then looks for `.venv` in the export. That venv does not exist, so the check would always fail. Type errors would then never be present at an export, which breaks criterion 6 and walkthrough step 4.\n\nD6 needs uv to validate the live lockfile against the live venv, so it must run with the live checkout as cwd. The design should state that explicitly, and name where the lockfile-equality gate sits. The component table (line 94) lists only tool and venv resolution for `python_types.py`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D3's claim about fast-forwards is wrong, and a wrong range is persisted forever",
+      "description": "D3 says \"A fast-forward is only possible if the target hadn't moved past the fork, so for that case the two definitions agree.\" That holds only for a branch that was never synced. A branch that merged the target into itself (squadron has such sync merges, per D2) can fast-forward after the target moved.\n\nIn that case the fork is an ancestor of the tip, so the `FORK_NOT_ANCESTOR` check passes. Then `before=fork` and `after=tip` span everything the target gained in between. The persisted range attributes other slices' work to this one.\n\nRebased branches are caught by `FORK_NOT_ANCESTOR`, but sync-merged branches are not. Add a check, such as `fork..tip` containing merges from the target, with its own unresolved reason or a recorded flag. Also add a resolver test fixture for a synced branch that is then fast-forwarded. The throwaway-repo list (line 347) has none.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Follow-up fast-forward landings overlap the first landing, and merge-then-fast-forward is never tried",
+      "description": "The fast-forward path runs only when no merge landings are found (line 114). It always takes `before` from the branch's creating reflog entry (line 118).\n\n- **Second fast-forward on the same branch:** If a branch is fast-forwarded, gets follow-up commits, and is fast-forwarded again, the second landing's `before` is the original fork. It therefore includes the first landing's changes, which contradicts D1's \"nothing sums them\". The fast-forward `before` should be the later of the fork and the previous stored landing's `after_sha`, when that is an ancestor of the tip.\n- **Mixed landings:** If a slice's first landing was a merge commit and its follow-up was a fast-forward, the merge search succeeds and the fast-forward path is skipped. The follow-up is never recorded, although D1 and criterion 3 promise that \"a later landing is added\".\n\nEither run both paths and union the results, or say mixed landings are unsupported.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The merge grep can persist false landings with no removal path",
+      "description": "`git log --grep` matches the whole commit message, body included. The pattern `slice[^0-9]N...` therefore matches any first-parent merge that mentions the slice, for example a merge of another slice that cites this one, or a design-branch merge.\n\nFor `git review code` that was an acceptable, logged risk. D2 notes the existing resolver can return a wide diff. Here every match becomes a permanent, append-only landing (D1, line 186). The only remedy offered is deleting the whole record, which also drops fast-forward landings whose reflog has expired (lines 376, 381).\n\nMitigations that fit the design:\n- Re-test the pattern against the subject line only.\n- Require `M^2` to be a tip that matches `N-slice.*`.\n- Allow a stored landing to be marked superseded.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:110-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Git failures are handled inconsistently, with no reason that says \"git could not answer\"",
+      "description": "The failure table says a `None` from the reflog or merge search is \"this path can't answer\", and the next path is tried. Every path failing gives an unresolved reason.\n\n`RangeUnresolvedReason` (line 87, data flow lines 115-120) has no value for git failure. If the merge search times out and there is no local branch, the slice is recorded as `NO_LANDING`, which says nothing landed. That is the \"empty answer\" the table says it avoids.\n\nAPI Contracts line 275 says the command \"Exits 1 on a git or store error\", which contradicts the INFO-and-continue row. The target ref may also be absent, for example an integration branch present only as `origin/...` in a fresh clone.\n\nThe repo already has the precedent for this case. `pipeline/git_ops.py:157-198` raises `GitStateUnknownError` because \"an empty answer would reopen a merged slice\". Add a git-unavailable reason, or raise, and reconcile the two statements.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report assembly depends on inputs no component provides",
+      "description": "- **First-parent ordering:** `report history` orders snapshots by the target's first-parent history and counts off-line commits (line 298). That needs `git log --first-parent`. The table says the assembly modules have \"No git\" (line 99), and no listed function supplies the ordering. Behavior on a shallow clone is also unstated.\n- **Audit run selection:** D8 takes the latest run at `before_sha` and at `after_sha` \"under the same `audit_prompt_hash`\". When the latest runs differ in hash, or several hashes exist at a commit, the design does not say which pair is compared. `baseline_report` (`audit_report.py:77-79`) keeps one latest run per (commit, hash) group.\n- **Store scans:** The design states \"one store scan per command\" only for ranges (line 110). `list_snapshots`, `list_audit_runs` and `list_code_reviews` each read every record file (`store.py:186-199`). `ensure_snapshot` called twice per landing, plus per-commit audit lookups in `history`, could multiply scans. The architecture names record-count cost as the one that matters (arch line 49). State that each report loads each record type once.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design's ordering assumption about 401 is wrong and orphans 403's snapshots",
+      "description": "The design says 401 is \"not a prerequisite\" and that 403 may land first. 401's Compatibility section (401 lines 246-247) accepts that 400-era snapshot records fail validation and are skipped with a WARNING. It justifies this because \"403 and 420 aren't built\".\n\nIf 403 ships first, every boundary snapshot it writes becomes unreadable once 401 lands. That produces a WARNING per skipped record on every store scan, and `ensure_snapshot` silently re-measures. Either make 401 a prerequisite or state the ordering consequence.\n\nTwo related gaps:\n- Line 74 says reports iterate over `SnapshotMetric` and 401's metrics \"appear unchanged\". Complexity, duplication and coverage have different value shapes. 401 line 253 says coverage is a rate summed from covered and coverable lines. The design does not say how `compare_snapshots` picks a headline figure for a metric it does not know.\n- 401 validates `metrology.coverage_report` in `preflight` (401 line 83) and reads it with `get_config(cwd=repo_root)`. If 401 lands first, the `read_snapshot_config` split must carry that validation. At an export the key would resolve against the export directory rather than the live checkout, which contradicts D5's \"settings read from the live checkout\".",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 2 and the resolver tests do not exercise what they claim",
+      "description": "`git clone . /tmp/sq-clone` copies the original repo's path as `remote.origin.url`. `derive_project_id` (`identity.py:131-149`) then yields a different `ProjectId` from squadron's real remote.\n\nThe clone therefore does not read the stored record. It resolves from topology and writes a second `sliceranges-*` record under the local-path project. Step 1 expects exactly one file. The step's \"same before_sha and after_sha\" check would pass without any stored data, so it proves topology resolution, not durability.\n\nAlso, `tmp_path` repos for the resolver and CLI tests (line 347) have no remote. `derive_project_id` raises `MetrologyIdentityError` unless `metrology.project_id` is configured. The test plan does not mention this.\n\nThe State Management claim about a clone of the same remote (line 176) holds, but the walkthrough does not test it.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The audit section is almost always empty and has no verification",
+      "description": "Slice boundaries are arbitrary merge commits. Audit runs and noise floors are keyed to exact (commit, prompt hash) pairs (`audit_report.py:41-52`). The audit delta will rarely have runs at both boundaries, and floors are rarely present at a historical `before_sha`.\n\nCriterion 8 has no listed test and no walkthrough step. Walkthrough step 5 accepts \"`no audit run at \u2026` unless one exists\", so `compute_delta` is never exercised. Keep the section, since the plan asks for LLM-sourced figures against their floor. Add a fixture test for the both-runs-present case and one for the missing-run message.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design is heavier than the slice needs in several places",
+      "description": "Cuts and deferrals:\n- The `first_parent` argument on `_search_merge_commit` (see the earlier finding).\n- D7's \"Cross-language rows are never compared\" (line 229). No such rows exist.\n- Per-row review findings in `report history` (line 298). The review-to-landing attribution needs `get_slice_ranges` per row. A closing project-level count, which the design already specifies for unattributed reviews, would meet the plan's \"over-time breakdowns\".\n- Fourteen new modules and seven report models. `ComparabilityBreak`, `ensure_snapshot` and the resolver are justified. A separate `boundaries.py` and `reviews.py` could fold into `slice_report.py`.\n- The Verification Walkthrough repeats the Technical Requirements checks. For example, step 3 duplicates criterion 5 and step 4 duplicates criterion 6.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Export extraction has no degrade path and a fixed 30-second archive bound",
+      "description": "`git archive` goes through `run_git`, which has a fixed 30-second timeout (`git_utils.py:25,48`) and no parameter to change it. A large repository fails every export as a \"hang\", and the failure table gives no override.\n\nThe `data` filter hard-fails on any absolute symlink or any link that escapes the tree (line 161). A repo that has ever committed one can never have that commit measured. `report slice` then stops for every slice whose boundaries include it (line 163).\n\nSpecify a timeout parameter for the archive call. Decide whether a refused link is skipped with a WARNING and recorded, or whether the hard stop is intended for that commit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:157-161"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Existing first-parent and ancestry helpers are not reused",
+      "description": "`pipeline/git_ops.py:157-237` already has `_first_parent_chain`, `_is_ancestor` and a strict `_checked_git`. The new resolver re-implements the same checks, and its precedence logic parallels `resolve_slice_diff_range` (`git_utils.py:595-656`). The design should either reuse or share these helpers, or note why not. Two sets of \"landed\" logic will drift.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:107-125"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Schema text is inconsistent",
+      "description": "The validator \"rejects an empty `landings`\" (line 315), but the model's field is `slices: dict[int, list[SliceLanding]]` (line 305). The record id uses `sha256(project_id)` (line 173) where `snapshot_record_id` uses `project_id.value`. The store write should also check the id against the derived one, as `write_snapshot` does (`store.py:429-434`).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:315"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about existing code that check out",
+      "description": "- `run_git` returns `None` on timeout or `OSError`, with a 30-second bound.\n- `resolve_diff_base`, `resolve_files`, `effective_exclusions`, `store.list_snapshots` and `compute_delta` exist with the stated behavior.\n- `is_within_floor` returns `None` for no floor.\n- `.squadron.toml` is gitignored (`.gitignore:174`).\n- `metrology.py` is 1,032 lines.\n- `requires-python` is `>=3.12`.\n- `_write_atomic` is last-write-wins.\n- `report_app` and `metrology_app` exist, and the `register_*_command(app)` mount pattern matches 324 and 400.\n- The existing `trend` command is taken (`metrology.py:403`).\n\nThe slice also fits the architecture:\n- The 403 refinement of \"fork against merge\" is acknowledged in the architecture (arch line 80).\n- There is no composite score, no pipeline hook and no change to the audit vocabulary.\n- Reports read from the store and write only snapshot and range records.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:71"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Renaming the `git_utils` helpers breaks tests the design says pass unchanged",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The `first_parent` argument on `_search_merge_commit` has no consumer",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:90",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A required `environment_root` field breaks 400's test builders",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:211",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Export measurement cannot reuse `_measure_all` or `PreflightResult` as written",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:92",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D5 contradicts itself on where `uv sync --check` runs",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D3's claim about fast-forwards is wrong, and a wrong range is persisted forever",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Follow-up fast-forward landings overlap the first landing, and merge-then-fast-forward is never tried",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114-121",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The merge grep can persist false landings with no removal path",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:110-113",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Git failures are handled inconsistently, with no reason that says \"git could not answer\"",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Report assembly depends on inputs no component provides",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The design's ordering assumption about 401 is wrong and orphans 403's snapshots",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 2 and the resolver tests do not exercise what they claim",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The audit section is almost always empty and has no verification",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is heavier than the slice needs in several places",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Export extraction has no degrade path and a fixed 30-second archive bound",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:157-161",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "Existing first-parent and ancestry helpers are not reused",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:107-125",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Schema text is inconsistent",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:315",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Claims about existing code that check out",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:71",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-22T21:35:44.948907",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "chars": 37735,
+      "sha256": "477b294c1c53b69f7e05963600b57ccd92b5ea49108298d1cb923f4906b49127",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+      "chars": 9887,
+      "sha256": "430f139babc62db413f67f5c9c54b7a44985c2f8577c72d55d61960d3a599f29",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/git_utils.py",
+    "src/squadron/metrology/snapshot/take.py",
+    "src/squadron/metrology/snapshot/preflight.py",
+    "src/squadron/metrology/snapshot/contract.py",
+    "src/squadron/metrology/snapshot/python_types.py",
+    "src/squadron/metrology/snapshot/tool_support.py",
+    "src/squadron/metrology/snapshot/files.py",
+    "src/squadron/metrology/snapshot/runner.py",
+    "src/squadron/metrology/snapshot/typescript_lint.py",
+    "src/squadron/metrology/snapshot/python_lint.py",
+    "src/squadron/metrology/store.py",
+    "project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md",
+    "src/squadron/metrology/audit_report.py",
+    "src/squadron/cli/commands/metrology_snapshot.py",
+    "src/squadron/cli/commands/metrology.py",
+    "src/squadron/metrology/audit_models.py",
+    "src/squadron/metrology/models.py",
+    "src/squadron/metrology/identity.py",
+    "tests/review/test_git_utils.py",
+    "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "src/squadron/pipeline/git_ops.py"
+  ],
+  "searches": [
+    "grep def (run_git|resolve_diff_base|_find_slice_branch|_resolve_fork_point|_search_merge_commit|_find_merge_commit)|GIT_COMMAND_TIMEOUT_SECONDS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src",
+    "list_files src/squadron/metrology/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "list_files project-documents/user/slices/40*.md in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep repo_root|AdapterContext\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/snapshot",
+    "grep AdapterContext\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep RECORD_TYPE|class MetrologyRecord|model_validator|schema_version|code_snapshot in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/models.py",
+    "grep def (baseline_report|compute_delta|is_within_floor)|class (BaselineReport|AuditDelta) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron",
+    "grep report_app|metrology_app|add_typer|def snapshot|ingest_reviews|register in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/cli",
+    "grep class AuditRun|commit_sha|audit_prompt_hash|head_sha|measured_at in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/audit_models.py",
+    "grep repo_root|cache|export|403 in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "grep D7|D3|D9|environment|export|403|squadron.toml|exempt in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/project-documents/user/slices/400-slice.snapshot-record-and-first-adapters-keystone.md",
+    "list_files project-documents/user/architecture/400-arch*.md in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep fork|range|noise floor|export|403|reflog|NFR|latency|score|non-goal|Non-goal in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "grep export-ignore|export-subst|squadron\\.toml in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep _find_slice_branch|_resolve_fork_point|_search_merge_commit|_find_merge_commit in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep AdapterContext\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/tests",
+    "grep _measure_all|take_snapshot\\(|preflight\\(|PreflightResult\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep ^ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/cli/commands/metrology.py",
+    "grep metrology (snapshot|report)|## .*metrology|ingest-reviews in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/docs/COMMANDS.md",
+    "grep ^#.*|^class |^def  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/snapshot/render.py",
+    "grep ^class |^    [a-z_]+: |def _|model_validator|field_validator in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/snapshot_models.py",
+    "grep get_config|metrology\\.[a-z_]+ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "grep requires-python in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/pyproject.toml",
+    "grep first.parent|first_parent in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src"
+  ],
+  "sections_in_document": 40,
+  "sections_not_covered": [
+    "Technical Decisions",
+    "Implementation Details"
+  ],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 48,
+  "prompt_tokens": 2026797,
+  "cached_tokens": 1889787,
+  "cache_write_tokens": 136968,
+  "completion_tokens": 41288,
+  "reasoning_tokens": null,
+  "duration_seconds": 314.0818424159661,
+  "cost_usd": 1.1518152000000002,
+  "cost_basis": "provider"
+}

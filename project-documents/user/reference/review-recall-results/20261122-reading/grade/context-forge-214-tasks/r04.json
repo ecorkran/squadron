@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 4 never handles the registered-project requirement, so exit 2 gains an unlisted cause",
+   "description": "Tasks 4 (lines 100, 103) and 4T copy the `frontmatter` project resolution. `resolveProjectWorktree` throws a `UserError` (\"No project specified and no registered project found\u2026\") when the cwd is not a registered cf project. The `frontmatter` action also throws `UserError` for \"Project not found\" and for a missing `projectPath` (`validate.ts:157-162`).\n\nThe slice's exit-2 list (slice lines 143 and 171) has none of these causes. The Phase 4 caller is an agent in a methodology repo, and it may not have run `cf init`. The task doesn't say what happens here: whether the command refuses to run, or falls back to cwd as the checkout root. Task 4T also has no test for this path.\n\nTask 4 should state the intended behaviour. It should also say whether the whole action is wrapped so every throw reaches `handleError(err, 2)`. Line 103 only mentions `SliceDesignValidationError`. Task 4T should add one case for an unresolvable project, with empty stdout.",
+   "location": "packages/cli/src/utils/project.ts:135-142"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 4T gives no way to get the real template into the project fixture",
+   "description": "Task 4T (lines 108 and 114) runs real slice designs and a worktree-template check. Existing tests, including `validate-worktree-scope.test.ts`, mock `FileProjectStore` and build `projectPath` from temp dirs. A temp project has no `project-documents/ai-project-guide/...`, so the template would be missing and every run would exit 2.\n\nThe task has to say one of two things:\n- point `projectPath` at the repo root for the real-design tests, or\n- copy the real template into each fixture checkout.\n\nThe worktree test needs a different template per checkout so the `template` JSON field can tell them apart. That means writing distinct template text into each worktree's guide path, which the task doesn't spell out. The \"reuse the pattern\" instruction covers the project and worktree setup only. A junior would stall here.",
+   "location": "packages/cli/tests/commands/validate-worktree-scope.test.ts:20-34"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unreadable file and unreadable template are in the success criteria but never tested",
+   "description": "Slice line 171 lists \"unreadable file\" and \"missing or unreadable template\" as exit-2 causes. Task 3 implements both (lines 76-77). Task 3T (line 91) and Task 4T (line 113) test only a missing template, a missing file and a directory.\n\nNo task covers an unreadable file or an unreadable template. Nor is the \"wrap unexpected fs error\" path (line 79) covered. Either add a `chmod 000` case that skips when running as root or on Windows, or narrow the criterion.",
+   "location": "unverified"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 1 is a one-line task with no test or commit point",
+   "description": "Task 1 adds a single constant, and only Task 4 uses it. It has no test-with partner and no commit marker, so it is too granular. Fold it into Task 4, or into Task 3 where the template path first matters.\n\nLine 43 hedges with \"add it there if the barrel lists names explicitly\". It does: `guides/index.ts` lists names one by one (lines 4-32), and `node.ts:17` re-exports it with `export *`. The step should say to add the name to that list. The name does not belong in the browser-safe `index.ts` list.",
+   "location": "packages/core/src/guides/index.ts:4-32"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 2 exports pure validator functions from the core index with no consumer",
+   "description": "Line 56 exports three functions and two types from `packages/core/src/index.ts`. Nothing in the plan imports them from there. `sliceDesignFiles.ts` imports them by relative path, and the tests can too. The only justification is the design's \"Provides to Other Slices\" line, which is speculative. This is scope creep with a public-API cost. Cut it, or export only what a named consumer needs.",
+   "location": "packages/core/src/index.ts:29-39"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 5's parity rule omits a real behavioural difference: unclosed frontmatter",
+   "description": "Line 122 treats a `DIFF` as legitimate only if it comes from a listed leniency: quoted `docType`, CRLF, `\\r`, or real heading syntax.\n\n`parseFrontmatter` returns `found: false` when the closing `---` is missing. The script's awk `END` still passes a file whose `docType: slice-design` line appears before EOF with no closer. A design in that state would show up as a `DIFF` that the task would call a bug, though the cause is the chosen `parseFrontmatter` reuse. Add this case to the list of intended differences, or define the doctype check so it matches the script.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:61-62"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Several real slice designs that pass the bash script today\" is open-ended and brittle",
+   "description": "Task 4T line 108 doesn't name the files. A junior has to run the bash script over about 100 designs and pick some. Real documents under `project-documents/user/slices/` are edited over time, so a test pinned to them can fail for unrelated reasons.\n\nName 3\u20134 stable designs, including 214. Also note that the Task 5 parity sweep already covers the whole set, so the command test only needs a few.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Preflight path resolution and the doctype message text are left implicit",
+   "description": "Task 3 preflight (line 77) doesn't say whether relative paths resolve against `process.cwd()` or the operation path. `frontmatter` resolves paths against its document root. The design says paths are printed as given, so cwd is the natural reading, but one sentence in the task would settle it. The doctype failure message text is only referenced (\"frontmatter message\", line 101). The task could quote the exact string from slice line 123, or define it as a constant, since the CLI renders it while core only sets `reason`.",
+   "location": "unverified"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Existing-code claims and sequencing check out",
+   "description": "Verified against the code:\n- `validate.ts` is 258 lines.\n- `GUIDE_RELATIVE_PATH` sits at `types.ts:313`.\n- The `frontmatterSchema` / `frontmatterFileValidator` split exists, with exports in `index.ts:30-39` and `node.ts:22-29`.\n- `withJsonOption`, `withProjectOption`, `handleError(err, 2)`, `resolveProjectWorktree` and `resolveOperationPath` exist as described.\n- The README `cf validate` row (line 355) lists no subcommands, and `packages/cli/README.md` has no `validate` match.\n- The template carries `<!-- required -->` markers, including `### Verification Walkthrough`.\n- The script is in the guide checkout.\n\nSequencing is sound: constant, then pure validator, then file layer, then CLI, then parity sweep. Each implementation task is followed by its tests. The commit markers fall at tested points. Task 3 sits at one task per layer, which is proportionate. The slice has no NFR, so no load test is needed.",
+   "location": "packages/cli/src/commands/validate.ts:234-258"
+  }
+ ]
+}

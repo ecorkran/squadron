@@ -1,0 +1,103 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Timeout remediation depends on a regex pattern that does not exist",
+   "description": "D10 (slice line 135) and Task 13 (lines 211\u2013214) say `/timed out/i` is already in `NETWORK_ERROR_PATTERNS`, so the auto-init timeout message gets the remediation appended automatically. The list at `gitExec.ts:20-30` contains `/connection timed out/i` (line 23) and `/etimedout/i` (line 29), and no generic timeout pattern. A message such as \"git command timed out after N seconds\" matches none of them, so `withNetworkErrorHint` returns it unchanged and `GUIDE_OFFLINE_REMEDIATION` is never appended. Task 14's assertion (message contains \"timed out\" and the remediation) fails as written, and D10's promise that the read command fails with remediation is unmet. Fix: have the timeout branch in `gitExec` append `GUIDE_OFFLINE_REMEDIATION` explicitly, so it does not depend on message wording, and correct the parenthetical in Task 13.",
+   "location": "packages/core/src/guides/gitExec.ts:23"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 20 anchors the auto-init call after a guide read in `cf prompt get`",
+   "description": "In `get`, line 114 calls `resolvePhaseInput(phase, opPath)`. For `P<n>` input, that reads the prompt file through `getPhaseShorthands` (`phaseShorthand.ts:22-23`, no try/catch), so a missing file throws ENOENT. Task 20 places `ensureGuideReady` \"before ~line 116\", which is after that read. On a fresh clone, `cf prompt get P1` would fail with a raw file error before auto-init runs, which is the failure #80 describes. Task 21's prompt test does not say which command it exercises. Fix: call `ensureGuideReady` at the top of each action, after `opPath` resolves (before line 60 in `list` and before line 114 in `get`), and have the `prompt.test.ts` cloned() case run `cf prompt get P1`.",
+   "location": "packages/cli/src/commands/prompt.ts:114"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 20's named call sites omit a guide-reading CLI file its own grep returns",
+   "description": "Task 20 says to grep for `PROMPT_FILE_RELATIVE_PATH` and cover every non-test hit, but it names only `build.ts`, `prompt.ts`, and `setup-ide.ts`. The grep also returns `phaseShorthand.ts:22`, which reads the prompt file and is imported by `prompt.ts:12`. D3 (slice line 123) says the call-site list is finite and enumerated, so the task should name this file. Coverage is currently transitive only, and that depends on the ordering problem above.",
+   "location": "packages/cli/src/utils/phaseShorthand.ts:22"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Rename grep criteria cannot detect double-quoted `manual` strings, and the design sweep list is incomplete",
+   "description": "Task 3 (lines 92\u201394) and Task 32 (lines 421\u2013423) grep for `'manual'` with single quotes. Several user-facing messages use double quotes: `CloneStrategy.ts:34`, `SubmoduleStrategy.ts:39`, and `SubmoduleStrategy.ts:45` (\"Use --strategy clone or --strategy manual instead\"). A passing grep would leave those messages reading `manual`, so it does not verify the rename. `SubmoduleStrategy.ts:45` is also missing from the design's sweep list (slice line 171). Task 7's CLI/MCP criterion (lines 143\u2013144) already greps unquoted `manual`, so the core criterion is weaker than its neighbour. Fix: use `grep -rn \"manual\" packages/core/src` in Tasks 3 and 32, allowing only the alias entry and the `ConfigKeys` enum line, reword the comments at `GuideManager.ts:135` and `TarballStrategy.ts:1`, and add `SubmoduleStrategy.ts:45` to the sweep.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:45"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit points are embedded text, and the first one lands where the workspace does not build",
+   "description": "The file has no `**Commit**:` marker lines. It has 13 \"Commit:\" phrases inside checkbox items (lines 100, 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389, 412). Read as a marker-less file, the default is a commit at the end of each top-level task, which conflicts with those 13 points. The Task 4 commit (line 100) is the worst case. After Task 3 the core rename is done, but CLI `guides.ts` and MCP `guideTools.ts` still use the old literal (`guideTools.ts:101` has a zod enum containing `'manual'`), and Task 4 runs core tests only. The slice says to run the full suite after step 1 (slice line 256). The first full `pnpm -r build && pnpm -r test` is Task 32. Fix: convert the commit points to plain `**Commit**:` lines at states where `pnpm -r build` passes, which is after Task 8 at the earliest, and move the Part 1 full-workspace build there or into Task 4.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure paths have no test at the detection or command level",
+   "description": "Task 11 throws when `checkSyncStatus` returns `'error'` (git unavailable, not a repo). No test in Tasks 12 or 18 covers that throw. The auto-init failure path is tested only at GuideManager level (Task 18). The slice says the command must fail with the remediation rather than run against an empty tree (slice line 165), but no CLI or MCP test checks for a non-zero exit and the remediation on stderr after a failed or timed-out init. Fix: add a git-unavailable case to Task 12, and one CLI case to Task 21 (for example, an unreachable `guide.source` on a cloned() project: non-zero exit, remediation on stderr, guide directory still empty).",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-192"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Config-path and malformed-config criteria are tested only with mocks",
+   "description": "The slice requires that a shared config with `guide.git_strategy: manual` installs as tarball with the same warning (slice line 193), and that a malformed shared config makes `cf guides install` fail with the config error (line 197). Task 6 covers the GuideManager half with a mocked `ConfigManager.get()` that throws. Task 8 covers only `install --strategy manual`. No test runs the CLI against a real config file, so the stderr warning on the config path is untested, and the malformed case does not exercise the real parser. F5 also asks for `Method: tarball` in text output (slice line 192), but Task 8 checks only JSON. The project's parser rule requires a fixture in the real file format. Fix: add to Task 8 a CLI case with a real config containing `guide.git_strategy: manual` (stderr warning, tarball installed), a real malformed config (non-zero exit with the config error), and a text-output check for `Method: tarball`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-152"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Alias detection is specified three different ways",
+   "description": "Task 5 says to choose a return shape such as `{ method, deprecatedAlias? }` and use it \"for both the CLI flag and the config path.\" Task 2 adds `GUIDE_METHOD_DEPRECATED_ALIASES` for detecting an alias. Task 7 has the CLI flag call `normalizeGuideMethod()`, which the design defines as returning a `GuideMethod` only (slice line 127), and then print the warning. A junior AI would have to pick among these. Fix: name one mechanism. For example, use the lookup constant at the CLI and MCP boundaries, and have `resolveStrategy()` return the shape only for the config path. State which signature `install()` returns.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-114"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Tasks 1 and 10 are too granular to stand alone",
+   "description": "Task 1's criterion is a red typecheck until Task 3 (lines 71\u201373). Task 10's is a red typecheck until Task 11 populates the field (line 186). Each is a half-change. Merge Task 10 into Task 11 and Task 1 into Task 3. That takes the count from 32 to 30 and puts the commit points at green states.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-186"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "D10's \"install and update stay unbounded\" has no check",
+   "description": "D10 (slice line 135) requires that only `SubmoduleStrategy.init()` pass a timeout. Task 13 says \"no other caller passes a timeout,\" but no criterion checks it, and Tasks 15 and 32 do not grep for it. A regression would be silent. Fix: add `grep -rn timeoutMs packages/core/src` to Task 15's criteria, expecting only the `gitExec` signature and `init()`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:207-238"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 19 should reuse `getGuideContext` rather than duplicate it",
+   "description": "Task 19 builds `GuideManager` \"the same way `getGuideContext()` does.\" That function is local to `guides.ts` and not exported. Copying its construction breaks the DRY rule in the project CLAUDE.md. Fix: export it, or move it into `utils/guideReady.ts`, and have both call sites use it.",
+   "location": "packages/cli/src/commands/guides.ts:23"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`guide_status` already calls `checkSyncStatus` per worktree",
+   "description": "`guide_status` already calls `detector.checkSyncStatus(wt.worktreePath)`. Task 22 adds a `checkout` field fed by `detect()`, which runs the same check for the project. D1 says the field exists so no second call is needed. Task 22 should state whether the per-worktree loop reuses the new field.",
+   "location": "packages/mcp-server/src/tools/guideTools.ts:71"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 9 fixture may hit git's file-transport restriction (unverified)",
+   "description": "The fixture uses a local bare repo as the submodule remote. Recent git releases restrict the `file` transport for submodule clones by default, which could break `initialized()` and `outOfSync()` on first run. I could not run git in this review, so this is unverified. Task 9's smoke test would surface it, but the task could name the `-c protocol.file.allow=always` fixture flag up front.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-167"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Task 23 leaves an open choice, and Task 22's \"one shared shape\" is not checkable",
+   "description": "Task 23 says \"pick one\" for the no-notices case (lines 329\u2013330). Task 22's \"one shared shape\" (lines 324\u2013325) has no mechanical check. Choose one: always include `notices: []`, and check that `notices` is declared in a single shared type.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-330"
+  }
+ ]
+}

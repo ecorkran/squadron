@@ -1,0 +1,145 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Dense-regime spatial design: uniform GPU hash with no neighbor bound",
+   "description": "Tier 2 (L68) replaces cKDTree with a GPU spatial hash, and L84 dismisses Entry 4 as \"bookkeeping overhead killed it.\" The journal says the grid won 3.3\u00d7 on uniform populations and lost once clustered (Entry 4). Entry 6's addendum traces the loss to candidate-pool growth under high neighbor retention. Entry 8 then recommended the KD-tree as the default because it held ~59 TPS across both regimes without decay. The document never mentions the `max_neighbors` cap (Entries 5\u20137), which bounded force cost. It also gives no world extent for any tier, so density and k cannot be checked from the document.\n\nWith cell size equal to the query radius, a 3\u00d73 gather produces about 9/\u03c0 \u2248 2.9\u00d7 the true neighbors. At the journal's herd density (average ~280 neighbors, Entry 2), that is ~800 candidates per agent and ~1.6 B candidate pairs per tick at 2M. Uncapped, 2M \u00d7 280 = 560M edges, and the float64 positions gathered per edge alone come to ~9 GB per temporary. At k=13 the same population is 26M edges (~0.4 GB). The Tier 5 demo, two colliding 1M populations, is the dense regime. The GPU spatial kernel needs a bounded-neighbor policy as a first-class parameter and a dense-regime benchmark before the slice at L107 is scheduled.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Cross-tick neighbor cache conflicts with engine statelessness and is keyed by index",
+   "description": "L86 and slice 119 (L98) imply neighbor lists cached across ticks. The engine is specified as stateless between ticks, with all state, including the spatial index, in arrays the caller passes (100-arch L73; initiative plan L36). The 100-slices 119 design adds a `NeighborCache` inside the tick engine and selects refreshes with `agent_index % stagger_period` (`100-slices.behavior-engine.md:85-96`).\n\n- **Removal corrupts neighbors silently.** Entity removal runs inside the tick after behavior evaluation (300-arch L99, L139). When an entity is removed, the arrays compact, so cached CSR segments point at different agents for up to `stagger_period` ticks. Forces then act on the wrong neighbors. Nothing in the 119 plan covers removal.\n- **The O(n/k) claim fails on the GPU tier.** L42 claims O(n/k) spatial work, but a GPU hash rebuild is a whole-population radix sort plus prefix sum (L84). A partial refresh saves only the gather. The document does not say whether the hash is rebuilt every tick.\n\nFix: use stable agent IDs or generation counters with invalidation on lifecycle events, and move cache ownership to the caller, or revise the stateless contract explicitly in 100-arch.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:86"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Delta stream has no resync path and conflicts with permitted drops",
+   "description": "L88 describes int16 deltas accumulated onto last-known positions, with a large-delta fallback and no keyframes.\n\n- **Drops desynchronize clients.** The world server allows STATE_UPDATE drops up to 5% under saturation (300-arch L52), and slice 318 uses drop-oldest for STATE_UPDATE. One dropped delta frame permanently offsets every agent in that frame. Nothing in 140 recovers from it.\n- **Drift is unbounded or needs per-client state.** An open-loop encoder (deltas from true positions) accumulates quantization error with no bound. A closed-loop encoder (deltas from the quantized reconstruction) bounds drift, but then the server must keep reconstruction state per client, which 140 never assigns.\n- **Decimation changes the delta base.** Stream decimation (L102, sim 60 / stream 30) makes the delta span two ticks, but L88 says \"consecutive ticks.\"\n\nSlice 319 already specifies keyframes every N ticks, a keyframe flag, and resync on new-client SNAPSHOT (`300-slices.worldserver-foundation.md:53`). Adopt that, or explain the departure.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:88"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Wire baseline misdescribed: wrong format, byte counts, and compression ratio",
+   "description": "- **Format.** L60 says the wire is \"uncompressed JSON\" at \"24 bytes \u00d7 3,500 agents\" (84 KB). `src/migratory_server/protocol.py:181-187` serializes STATE_UPDATE as binary float64 positions and velocities, `9 + 32\u00b7N` bytes. At 3,500 that is ~112 KB, at 10k ~320 KB, and at 50k ~1.6 MB per tick (~96 MB/s at 60 Hz, ~770 Mbit/s). Tier 2's \"binary WebSocket replaces JSON\" (L68) therefore describes work already done. The real gap is the float64 payload.\n- **Tier gating.** L60 says 50k+ \"requires compression and culling,\" but Tier 2 (50k, L68) has no culling. Culling is at Tier 3 (L70).\n- **Compression ratio.** L88's \"~32\u00d7\" is wrong. int16 2D is 4 bytes per agent: 2\u00d7 over float32 positions and 4\u00d7 over the float64 positions actually sent. Reaching 32\u00d7 would need one bit per coordinate.\n- **Range.** \u00b132767 LSB at 1/1024 is \u00b132 world units per tick. The document gives no agent speed to show deltas stay in range. On the 800\u00d7400 wrap world from the journal (Entry 7) and the `wrap` bounds policy (300-slices 313), every wrap crossing is a ~800-unit delta that trips the fallback.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:60"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-client culling conflicts with shared delta streams, threading, and client count",
+   "description": "- **Delta baselines become per-client.** Each client gets a different subset, so each needs its own delta baseline. Slice 319 places \"per-client delta streams diverging from a shared canonical state\" out of scope (`300-slices.worldserver-foundation.md:53`). Tier 3 (L70) combines culling and delta without addressing this.\n- **Threading.** Per-client serialization is O(clients \u00d7 visible) CPU work. The 300 architecture requires serialization off the asyncio thread (300-arch L30), and the sim worker is single-threaded by contract (300-arch L121). The document does not assign the work to a thread.\n- **Client count.** L70's \"fits within 10G LAN or modern WiFi\" assumes one client. The 300 stretch target is 20 concurrent clients (300-arch L56). At 50k visible \u00d7 4 B \u00d7 60 Hz that is 12 MB/s per client, or ~240 MB/s (~1.9 Gbit/s) aggregate. That is not WiFi.\n- **Positions must be on the CPU.** Culling needs host-resident positions every stream frame, so L72's claim that the contract \"determines whether position data exits the GPU at all\" is false for the streaming path.\n- **Different culling semantics.** Slice 311 in the 300 plan specifies aggregate descriptors for distant groups (`300-slices.worldserver-foundation.md:57`). 140 specifies nothing beyond the frustum.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:90"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Wire slices duplicate and split ownership of slices already in the 300 plan",
+   "description": "L101\u2013103 list delta compression and frustum culling as new slices under \"World server (extending initiative 300).\" The 300 slice plan already contains (311) Client Spatial Culling and (319) STATE_UPDATE Delta Encoding, with dependencies on (318) (`300-slices.worldserver-foundation.md:53`, `:57`). The initiative plan assigns wire work to 140 but \"delivered as new slices extending initiative 300\" (`001-initiative-plan.migratory.md:43-44`). Three documents now hold the same work with different designs. Slice 319 specifies dead-band omission and a DELTA (0x06) type, while 140 specifies int16 without dead-band. The frontmatter (`relatedSlices: [118, 119]`, L7) omits all of these. Assign wire slices to 300 and have 140 define only the tier gates that depend on them.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:101"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tick return type contract is undefined, and the options do not reduce coupling",
+   "description": "The document calls the contract \"the central architectural decision\" and \"the single shared interface\" (L18, L32). It lists three options and says to \"support all three behind an abstraction, with the choice made per-platform\" (L80). That leaves the decision unmade and introduces coupling:\n\n- **Platform branching in the server.** A per-platform choice means the server branches on platform, contradicting L32 (\"should not need to know whether forces are computed by NumPy or Quadrants\"). Option (b), where the server owns Quadrants fields, does the same.\n- **Option (c) is not zero-copy at the server boundary.** The server serializes with `ndarray.tobytes()` (`protocol.py:184-187`), which copies. The zero-copy benefit ends at the socket.\n- **`to_numpy()` copies on every platform.** It allocates a new host array. Unified memory avoids a PCIe transfer, not the copy. L80's \"nearly free (no actual copy, just cache flush)\" is unmeasured.\n- **Missing signature elements.** The contract omits active-subset indices, caller-provided output buffers (100-arch L88), spatial-index ownership, and aggregate neighbors (100-arch L100).\n- **Contradiction with Related Work.** L116 says this initiative \"optimizes but does not change\" the behavior engine's interfaces, which a changed return type does.\n\nThe initiative plan says this document \"defines that contract\" (`001-initiative-plan.migratory.md:44`). It does not.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Verification oracle and behavior-change policy contradict each other",
+   "description": "- L26 requires every optimization to be verifiable against the NumPy implementation.\n- L44 names the Numba implementations as the verified reference for the Quadrants port.\n- L86 says staggered updates change trajectories and \"must be documented as a behavioral change.\"\n- Slice 119 says behavioral fidelity \"is preserved\" (`100-slices.behavior-engine.md:91-93`).\n- Float32 GPU kernels cannot match float64 NumPy bit-for-bit, and the document gives no tolerance.\n- The GPU test plan is absent. L28 requires NVIDIA by 250k, and the harness at L110 has no hardware or CI plan. The 300 architecture requires load tests in CI (300-arch L66\u201367).\n\nPick one oracle, define numerical tolerances per tier, and state whether stagger is a behavior change.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:26"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "GPU numerics and determinism are unaddressed, and replay depends on them",
+   "description": "- **Determinism.** Replay relies on determinism: \"logging only the initial state plus any non-deterministic inputs is sufficient\" (300-arch L143). GPU atomics and parallel reductions reorder float operations, so results vary run to run and between Metal and CUDA. L86 claims determinism only within a stagger configuration.\n- **No float64 on Metal.** Metal does not provide 64-bit float in compute kernels, so Metal tiers run float32. The engine's float64 precision (100-arch L98) does not carry over. Confirm Quadrants' Metal behavior before committing to Tier 2.\n- **Precision of the identity distance.** The journal's identity-form distance (Entry 1) was measured in float64, where misclassification begins near coordinate magnitude 10\u2078 (error ~15 squared units). With error \u2248 \u03b5\u00b7|p|\u00b2, the same error in float32 occurs near 10\u2074. Any identity-form kernel ported to float32 needs its own precision study.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Baseline is untraceable, the per-tick budget does not reconcile, and the scaling claim overreaches",
+   "description": "- **Untraceable baseline.** The 3,500 agents at 57 TPS baseline (L50) has no source. The journal measures 2,492 agents (wide.yaml) at ~59 TPS live, and in an N-scaling addendum (goal set to 120 TPS) gives 2,500 at ~79 and 4,500 at ~43 (Entry 8). L50 attributes a 2,492-agent benchmark to 3,500 agents. The 2,492 vs. 2,500 gap (59 vs. 79) is unexplained, and it undermines any curve drawn through those points.\n- **Unreconciled budget.** The table at L52\u201356 sums to ~9.4 ms, which is the journal's ~106-TPS ceiling. At 57 TPS the tick is 17.5 ms, so ~8 ms (~46%) is unattributed. That gap may be serialization, bounds, logging, asyncio/GIL contention, or Python glue. Until it is measured, Numba and GPU gains cannot be projected against the whole tick.\n- **Overclaimed scaling.** \"Confirming\" O(n) versus O(n log n) from two points in one run overclaims. Entry 7 warns that single-point TPS is formation-dependent, and L38 states the same principle.\n- **Envelope not met.** The configured tick rate in the journal is 20 Hz (Entries 4\u20135). The 300 NFR requires 5,000 agents at 60 Hz on a laptop (300-arch L46), and failing it blocks release (300-arch L68). By the document's own numbers, 3,500 agents at 57 TPS does not meet that envelope.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:50-58"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "No per-tier performance targets, and the ~600\u00d7 gap is not decomposed",
+   "description": "None of the five tiers states a TPS target, latency budget, or memory budget. Linear extrapolation from the document's own 57 TPS at 3,500 gives ~20 TPS at 10k, ~4 TPS at 50k, and a tick of ~10 s at 2M. Reaching 60 TPS at 2M is therefore ~600\u00d7 faster than current code. The document never shows how the factors combine (Numba 2\u20135\u00d7 per phase per the concept, staggering, GPU, culling).\n\nTwo tier boundaries also conflict with the 300 architecture. 300-arch L145 places 50k\u2013500k on CPU multi-core, while 140 places 50k on GPU. 300-arch L145 says \"500K\u20134M+ GPU,\" while 140 uses 1M and 2M. At 2M, one STATE_UPDATE is 9 + 32 \u00d7 2M \u2248 64 MB per tick (~3.8 GB/s at 60 Hz) before culling or logging, and the document does not say whether culling runs on the device.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:64-74"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Numba integration: GIL, thread oversubscription, and first-tick compilation",
+   "description": "- **GIL.** Numba `@njit` holds the GIL unless `nogil=True`. The 300 architecture moved sim work off-loop because a GIL-holding sim starved sends (300-arch L113, L117). A non-`nogil` kernel in the executor reintroduces that stall. The document is silent.\n- **Thread oversubscription.** Parallel Numba (`prange`) brings its own thread pool. 300-arch L121 keeps sim parallelism \"unchanged and orthogonal,\" but Numba threads plus NumPy/BLAS threads on a 4-core laptop (300-arch L46) will oversubscribe. The document needs a thread policy.\n- **First-tick compilation.** JIT compilation happens on first call, inside the single sim worker. The first tick overruns. Use `cache=True` and a warm-up step.\n- **Version compatibility.** Numba has historically lagged NumPy releases, and the project pins only `numpy>=1.26` (`pyproject.toml:11`). Verify Numba supports the NumPy version in use before slice 118.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:66"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The BulkForce interface is Python-object based, and the GPU port boundary is undefined",
+   "description": "L30 says Quadrants \"operates behind the existing `SpatialQuery` and `BulkForce` interfaces,\" and L108 says to port \"all BulkForce implementations to `@ti.kernel`.\" The interface (`src/migratory/engine/forces.py:43-49`) takes `state: AgentState`, `neighbors: CSRNeighborData`, `profiles: list[BehavioralProfile]`, and `active_indices`. A device kernel cannot take a Python list of profile objects. Profile parameters must be flattened into device arrays indexed by profile ID, which is the index-based dispatch in 100-arch L102 and is never mentioned here. Repulsors such as `WorldBoundsRepulsor` (300-slices 314) need bounds on the device. Environment and terrain reads (100-arch L50) need device-resident terrain and an update path. The document treats the port as a per-force rewrite and lists none of this.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:108"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Failure handling is absent",
+   "description": "The document has no failure section. Unaddressed cases:\n\n- GPU out-of-memory at 2M across state, CSR, hash, and temporaries (see the dense-regime finding).\n- Device loss or driver reset mid-run, and kernel duration limits enforced by the display driver.\n- NaN or inf propagation through float32 forces, with no guard or clamp.\n- Overrun semantics. GPU work is asynchronous, so the overrun warning at 300-arch L101 needs a defined measurement point.\n- Default-config fallback. The 300 hard floor requires default config to work \"on any developer machine\" (300-arch L62). The document requires Apple Silicon or NVIDIA for GPU tiers and does not say what runs elsewhere.\n- Delta-stream recovery (see the delta finding).",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Tiers 4 and 5 depend on an excluded hardware decision and an undesigned server render path",
+   "description": "- The scope (L20) excludes \"network hardware decisions (10G/25G LAN).\" Tier 4 (L72) and Tier 5 (L74) nonetheless require a dedicated 10G or 25G link.\n- The \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\" is a new subsystem that puts rendering in the world server. The 300 architecture says \"rendering belongs to clients\" (300-arch L24), and the concept says the server \"deals only in points, vectors, and behavioral parameters\" (`000-concept.migratory.md:78`). It is a different product, a different topology, and has no decision record, design, or trigger. It is offered as an alternative to the LAN without any of those.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:72"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Biome terrain shading is out of scope and conflicts with the concept's \"no custom shaders\"",
+   "description": "L92 places fragment-shader biome shading in a scaling document, with a schedule (\"before or alongside the 50k milestone\"). The document's own scope (L20) excludes viewer and client rendering optimization. The concept says \"no custom shaders in v1\" (`000-concept.migratory.md:76`, `:88`). Either the shader work belongs to the client layer (initiative 600) with its own schedule, or the concept changes. Keeping it here makes this scaling plan a dependency for a client task.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:92"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Aggregation and variable-rate ticking are omitted from the 2M plan",
+   "description": "The 300 architecture names multi-resolution simulation as \"the key future strategy\" beyond tens of thousands (300-arch L145). The 100 architecture requires neighbor queries that accept aggregate neighbors (100-arch L100\u2013102) and has an aggregation slice (100-arch L118). This document's 2M plan is per-agent, with no aggregation, no variable-rate ticking, and no statement that either is rejected. Staggered updates (L42, slice 119) and the subset-evaluable tick (100-arch L52) both reduce per-tick work, with different owners (engine versus caller), and the document does not reconcile them. Choose one mechanism or state how the two split.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Quadrants is chosen without a recorded comparison, and its fallback covers only 10k",
+   "description": "The concept's GPU path is PyTorch on the server (Model B), with \"NumPy \u2192 PyTorch (MPS on Apple Silicon, CUDA elsewhere) or JAX\" (`000-concept.migratory.md:126-127`, `:209-211`). The document requires Metal as a first-class backend (L28), which is the main reason to consider MPS, and does not compare the options. The concept also says \"do not optimize today for Model B/C/D\" and sets the trigger as \"Model A hits its ceiling on a simulation we actually want to run\" (`000-concept.migratory.md:161-163`). The document should cite that trigger and record the comparison.\n\nThe Numba fallback (L82) covers only 10k, so Tier 2 and above have no fallback if Quadrants stalls. The version claims at L82 (0.7.2 released 2026-04-27; Python 3.10\u20133.13) are not verifiable from the repo and should be pinned and cited. The document also writes `@ti.kernel` for Quadrants, so confirm the fork's decorator and import name. `riskLevel: medium` (L8) is low for a substrate change of this size.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Proportionality: the plan carries more mechanisms than the 2M milestone needs",
+   "description": "Cut or defer, in order of payoff:\n\n- **Server-side render path** (L72): a separate product. Defer or remove from this document.\n- **DLPack option (c)** (L80): gives no zero-copy benefit past the socket. Drop it.\n- **Per-platform contract selection** (L80): choose one option.\n- **GPU spatial hash replacing cKDTree** (L68, L107): gate it on a dense-regime benchmark and a bounded-neighbor design. Keep the KD-tree/KNN path, which is already shipped, as the default until then.\n- **NVIDIA benchmark harness** (L110): premature until Tier 3 requires CUDA (L28).\n- **Biome shading** (L92): move to the client initiative.\n\nKeep staggered updates (slice 119), but make it conditional on the post-Numba profile, as the document's own principle at L40 requires.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:106-110"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Journal citations are imprecise",
+   "description": "L38 attributes \"profile before you optimize\" to Entries 2, 4, 7, and 8. The principle is stated in Entry 1's lessons. L40 says force cost \"became co-equal after slice 117,\" but Entry 8 calls `force_total` \"the dominant cost\" directly beside a `spatial_query` figure (5.67 ms) larger than `force_total` (3.14 ms). Cite the table rather than the prose.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:38-40"
+  }
+ ]
+}

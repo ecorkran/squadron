@@ -1,0 +1,138 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Server profile construction breaks at startup and no task covers it",
+   "description": "`build_profiles` constructs `BehavioralProfile` from six keyword arguments. Task 2.1 makes `leadership_weight` and `momentum_weight` required (task file lines 57-59), so every call raises `TypeError`. `Server.run()` calls `build_profiles` at startup with no guard (`src/migratory_server/server.py:70-71`). No task in the file touches `src/migratory_server/`. Context line 20 says all existing tests constructing `BehavioralProfile` \"must be updated\", but the task scope stops at `tests/`.\n\nExisting tests this breaks: `tests/test_simulation.py:24-42` (TestBuildProfiles) and `tests/test_server.py:233-237` and `:278-283` (server runs with profiles). Task 2.2's verify step (line 71) would fail, and the 2.3 commit (line 73) would land on a red tree. Nothing in the plan continues the 2.1 change into `src/`, so a run killed after 2.1 leaves a server that cannot start, and only a person can repair it. Fix: add a step to 2.2 that passes `leadership_weight=0.0, momentum_weight=0.0` in `build_profiles`, and name `src/migratory_server/simulation.py` in the scope.",
+   "location": "src/migratory_server/simulation.py:18-25"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "EntityManager.spawn_population leaves leadership out of sync with the population",
+   "description": "`spawn_population` merges `positions`, `velocities`, `accelerations`, and `profile_indices` by hand (lines 136-147). It does not concatenate `leadership`, and the batch's `leadership` from `AgentState.create()` is discarded. `Server.run()` calls `spawn_population` for every configured population at startup (`server.py:77-78`), so the running server gets a `leadership` array shorter than `count`.\n\nConsequences:\n- `remove_entity` (entities.py:151-161) calls `remove_agent`. Removing an index past the short array's end raises `IndexError`. Removing one inside it silently deletes the wrong leadership value.\n- `add_agent` (entities.py:73) appends to the short array, so the lengths stay mismatched.\n- Once herding forces run against this state, `state.leadership[neighbors]` (task 4.1 line 116) indexes past the end or reads the wrong agent's value.\n\nExisting tests miss this. `tests/test_entities.py:110-160` checks counts, positions, and velocities but never `leadership`. `TestRemoveEntity` (test_entities.py:165-225) spawns only through `spawn_entity`. Tasks 1.1 and 1.2 never mention `EntityManager`. Fix: add to 1.1 \"concatenate `batch.leadership` in `spawn_population`\", and add to 1.2 a test that `len(state.leadership) == count` after `spawn_population` and that `remove_entity` works after it.",
+   "location": "src/migratory_server/entities.py:135-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2.2's file list omits the test modules whose profile helpers need the new keys",
+   "description": "Task 2.2 names `conftest.py`, `test_profile.py`, `test_state.py`, `test_forces.py`, `test_tick.py`, and `test_flocking.py`, plus a catch-all search for `BehavioralProfile(` (lines 64-70). `tests/test_entities.py:19-27` and `tests/test_simulation.py:57-65` build profiles from a `defaults` dict through `BehavioralProfile(**defaults)`. The search matches only the `**defaults` line, not the six keys in the dict, so the implementer has to infer what to add. Both helpers feed fixtures used throughout their modules (test_entities.py:30-35, test_simulation.py:68-70), so each module fails with `TypeError` until the dicts are fixed. Fix: name both files and say to add the two keys to each `defaults` dict. The same applies to the `_make_profile` helpers in `tests/test_profile.py:8-19` and `tests/test_flocking.py:15-25`.",
+   "location": "tests/test_entities.py:19-27"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The new \"missing field\" test has the same name as an existing test and does not check the new fields",
+   "description": "`test_missing_new_field_raises_type_error` already exists. It passes only `max_speed` and `query_radius`, so it would pass whether or not the new fields are required. Task 2.2 asks to \"add test for missing new field raises TypeError\" (line 65). A new function with the same name would silently shadow this one. Fix: the new test should pass all six existing fields and omit each new field in turn (`leadership_weight` alone, then `momentum_weight` alone). Rename or delete the existing test.",
+   "location": "tests/test_profile.py:47-49"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "As specified, MomentumForce cannot resist turning, and its speed effect is unchecked",
+   "description": "Option A makes the force `heading * speed * momentum_weight`, which equals `v * w` (slice lines 157-158). Task 3.1 implements it (task lines 85-88). `integrate()` (`src/migratory/engine/integration.py:36-44`) applies `v += dt * (F_other + w*v)`, so `v' = (1 + dt*w) * v + dt*F_other`. The added term is parallel to `v`, so it does not resist turning. It only divides the turning response by `(1 + dt*w)`, a 0.15% reduction at the demo weights (w=0.03, dt=0.05). Speed grows by the same 0.15% per tick until the `max_speed` clamp, about 57% over 300 ticks.\n\nThe slice calls this \"a damping term on angular velocity\" (line 154) and says \"herds resist turning\" (line 174), which is wrong. Task 3.2 checks only the formula. Tasks 5.2 and 5.3 measure heading. Nothing in the plan would detect this. Decide before implementing: either accept Option A as a speed term and drop the corridor claim from the momentum behavior, or specify a heading-persistence term with a test that fails under Option A.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:151-176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The convergence assertion cannot distinguish herding from flocking",
+   "description": "Task 5.2 asserts the mean heading has a positive x-component. The five leaders start at `[4.0, 0.0]` and are part of the same 50-agent population (line 150), so an eastward mean is likely even with `leadership_weight=0`. The test would probably pass without leadership. \"Mean heading\" is undefined: mean of unit vectors, mean of velocities, or circular mean (which matters near \u00b1\u03c0). The follower velocity distribution is not given either. The criterion (slice lines 389-391) requires the mean heading to converge toward the leaders' initial heading. Fix: define the metric, run the flocking-only control inside this test, and assert that herding exceeds it by a stated margin over several seeds. This also makes 5.3 redundant or means the two should merge.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The differentiation test uses \"or\" and one seed, not the \"and\" and statistics the slice asks for",
+   "description": "Task 5.3 line 161 passes if either heading variance is lower or the mean eastward component is higher. The slice walkthrough (slice lines 474-476) says the herding run should show lower heading variance \"and\" eastward bias. The criterion (slice lines 403-405) requires \"statistically different\" movement, but one seed per profile gives no distribution. Fix: pick the metric(s) the walkthrough names, run several seeds, and state the threshold.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:160-161"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 5.1 asserts nothing beyond \"runs without error\"",
+   "description": "Line 144 says to set high-leadership agents \"to confirm forces interact correctly\", and line 145 says \"Verify: test passes\". No assertion is specified. The directional-bias criterion belongs to 5.2. As written, 5.1 is a smoke test with no defined pass condition. Fix: assert something concrete, such as all forces finite, velocities within `max_speed`, and a non-zero leadership contribution; or fold this into 5.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The list-index convention for active subsets is not specified",
+   "description": "`tick()` builds `neighbor_lists` in the order of `eval_indices` (`src/migratory/engine/tick.py:48-52`). The flocking forces index it with `enumerate(eval_indices)` and `neighbor_lists[list_idx]` (flocking.py:30-31, 65-66, 114-115). Task 4.1 says \"For each active agent\" (line 113) without this convention, and the slice sketch (lines 297-304) gives no detail. A junior AI could write `neighbor_lists[agent_idx]`, which is correct only when `active_indices` is None. The 3.2 and 4.2 active-subset tests can miss this unless the subset's indices exceed the list length. Fix: state the `enumerate(eval_indices)` / `neighbor_lists[list_idx]` pattern in 4.1, and require a test whose active indices exceed the list length.",
+   "location": "src/migratory/engine/flocking.py:30-31"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The vectorization requirement is not carried into the implementation tasks",
+   "description": "The slice requires that both forces be \"vectorized within each agent's neighborhood \u2014 no nested Python loops\" (slice lines 395-396). Neither 3.1 nor 4.1 mentions this. Line 118 writes `sum(velocity[i] * leadership[i])`, which reads as a per-neighbor loop. Fix: copy the requirement into the 3.1 and 4.1 steps, and say to use NumPy operations over the neighbor index array.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:118"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Commit checkpoints are checkbox items, and two of them sit on a red tree",
+   "description": "The commit steps (lines 48, 73, 103, 134, 164, 180) are checkbox tasks, not plain `**Commit**:` lines, which the marker format does not allow. Two placements are also wrong. 2.3 (line 73) comes after tests that fail (findings 1 and 4). 1.3 (line 48) commits a `spawn_population` desync that the tests do not catch (finding 2). Fix: convert them to `**Commit**:` marker lines placed after each green verify step, or fold the one-line commit tasks into the preceding task.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The suite-count baseline does not match tests/",
+   "description": "Task 6.1 says \"existing 80 + new herding tests\". A grep finds 201 `def test_` lines across the 14 test modules in `tests/`, and parametrized cases would add more. The figure of 80 probably covers only the engine and spatial modules. An implementer running the suite will see a different count and may treat it as a failure. The \"no warnings\" check on line 174 also has no command behind it. Fix: capture the baseline with `pytest --collect-only -q tests/` before task 1.1, record it in the plan, and replace the warnings line with a specific command.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:173"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "No task creates the branch the frontmatter says to create",
+   "description": "The `projectState` field says \"Branch to be created from main.\" No task does this. The worktree's `.git/HEAD` points at `refs/heads/main`, so tasks 1.3 through 6.3 would commit to `main`. Fix: add a setup step that creates the slice branch from `main`, or remove the statement if the harness creates it.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The uniform-leadership check in 4.2 is vague",
+   "description": "\"Result should be similar to plain velocity averaging\" can be made exact. With equal leadership, the weighted average equals the mean velocity, so the force equals `(mean_v - v) * leadership_weight`. Assert that equality instead of \"similar\".",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:127"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The protocol conformance check is weaker than it looks",
+   "description": "`BulkForce` is `runtime_checkable`, so `isinstance` checks only that `__call__` exists. The checks in 3.2, 4.2, and 6.2 would pass for any callable. The repo's existing tests use the same check (`tests/test_forces.py:107-109`), so this matches convention. No change is required unless you want the signature checked as well.",
+   "location": "src/migratory/engine/forces.py:27-28"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 6.2 repeats checks already in 3.1, 3.2, 4.1, and 4.2",
+   "description": "Both `isinstance` checks already appear in 3.1 and 4.1 (\"Verify\") and in the protocol tests in 3.2 and 4.2. Fold 6.2 into 6.1 or drop it.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-178"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Task 6.3 is open-ended and may produce an empty commit",
+   "description": "\"Git add any remaining changes\" can sweep unrelated edits into the commit. A `docs:` commit with no docs changed will fail with \"nothing to commit\". Name the paths, or say to skip the commit if the tree is clean.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:181"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Task 1.1 does not say whether `leadership` in `__init__` is required",
+   "description": "No direct `AgentState(` construction exists in `src/` or `tests/`, so either choice is safe. Pick required to match the `BehavioralProfile` pattern, and say so in the step.",
+   "location": "src/migratory/engine/state.py:22-32"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "The demo profile values are not in the task file",
+   "description": "Task 5.2 says \"Use herding profile from slice design\", and 5.3 gives only \"leadership_weight > 0\". The values are at slice lines 332-340, and the flocking control is at lines 347-355. Put the values in the task so it can be executed from the task file alone.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:149"
+  }
+ ]
+}

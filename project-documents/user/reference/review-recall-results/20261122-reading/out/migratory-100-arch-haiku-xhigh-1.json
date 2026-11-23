@@ -1,0 +1,480 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Swarm archetype (stigmergy) contradicts the read-only environment and the tick contract",
+      "description": "Swarm agents \"respond to environmental stigmergy (reinforced paths)\" (L77). Stigmergy requires agents to write a shared field that later agents read. But the environment is a \"read-only interface\" the engine \"does not own or manage\" (L47), the tick's outputs are only updated positions and velocities (L67\u201368), and the tick is described as pure (L62, L70). Nothing in the contract records deposits. The engine would need a write channel, which breaks purity and the subset contract, or the trail field must be written elsewhere. The document must choose. The option that fits the rest of the design is for the environment layer to derive the trail field from committed positions after each tick (one-tick lag), with the engine only sampling it as a gradient force. That assigns a write path to the environment layer that the document never mentions. No slice implements swarm either (see the Anticipated Slices findings).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:77"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Entity-slot and state ownership is undefined and duplicates the world server",
+      "description": "L81 gives the engine \"register/remove agents,\" while L70 says the engine is stateless and all state lives in arrays passed in. The world server says the opposite: it \"assigns entity IDs, allocates space in the state arrays, and removes entities,\" and \"the behavior engine ... does not manage the entity lifecycle itself\" (300-arch L70). 300-arch L88 also requires that removals never happen during evaluation. Two components claim the same lifecycle.\n\nThe document also leaves these open:\n- Whether `tick()` mutates arrays in place or returns copies. L68 says \"returns the updated state array,\" L70 says \"feed in state, get back state,\" and L99 forbids dynamic allocation.\n- What an index means across removals. Compaction moves indices and invalidates the subset arrays in L49 and L64.\n- Where the spatial index lives. An incrementally updated hash or KD-tree is state that persists across ticks, which contradicts L70.\n\nThe initiative plan (lines 71\u201374) says the world server cannot finalize until the behavior engine defines the \"stable agent state format\" and tick signature. This document does not define either. The fix is to have EntityManager own the arrays and stable slot IDs, pass the engine views plus a per-tick subset, and remove `register/remove` from the engine.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Variable-rate ticking cannot be delivered by a fixed-timestep, stateless tick",
+      "description": "L49 and L93 require subset evaluation so that \"some agents [are] evaluated every tick, others at 1/4 or 1/16 rate.\" But the integrator is fixed-timestep (L93), the tick is stateless (L70), and the inputs are only state, environment, and subset (L64). A reduced-rate agent integrated with the base `dt` moves at 1/16 of its intended speed. Nothing stores each agent's last-evaluated tick, so the caller must supply a per-agent `dt`, which the document never mentions.\n\nTwo more gaps:\n- The document doesn't say who interpolates positions between evaluations. 300-arch L105 puts \"interpolated positions\" in the scaling tier, but L21 gives the engine \"what happens within a tick.\" The boundary is unassigned.\n- Unevaluated agents appear to their neighbors at stale positions and velocities. That may be acceptable, but it changes force results and has to be stated.\n\nThe fix is an integrator that accepts a per-agent `dt` array, with interpolation placed in the server's egress path.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism claim has no stated scope or mechanism",
+      "description": "\"Given the same state and inputs, a tick produces the same outputs\" underpins replay (300-arch L92), testing, and distribution, but \"same\" is never defined. Three things break it:\n1. Float addition is not associative. Force summation order depends on neighbor order, and neighbor order from a hash or KD-tree depends on the structure's internals, which L87 says are swappable. Swapping backends changes results unless neighbors are canonically ordered (for example, by agent ID).\n2. NumPy reductions use SIMD and pairwise paths that vary by CPU and NumPy build. The guarantee holds only per machine and build unless that is stated.\n3. There is no RNG strategy. A stateless tick with any stochastic element (spawn jitter, stigmergic sampling, hunt probability) needs a counter-based RNG keyed by (seed, tick, agent ID), such as `numpy.random.Philox`.\n\nThe determinism contract (scope, reduction order, neighbor ordering, RNG) should be written as a requirement.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Precision and serialization decisions are open, and the options conflict",
+      "description": "L95 leaves internal precision undecided and then offers two serialization options. The \"directly serializable\" option (raw Float32 buffers) implies float32 internal state. The \"zero-copy\" option is impossible if internal state is float64, because client-facing `Float32Array` requires a conversion copy. If state is float64 and the log is float32, replay cannot reproduce the trajectory, which is exactly what 300-arch L92 needs. Direct serializability also makes array layout a public contract, contradicting L35 (\"internal representation choices ... are hidden\"). The framing protocol belongs to the server (300-arch L80), so it's unclear who provides the \"conversion path.\"\n\nThe conversion cost at these sizes is trivial, so the \"compromise\" framed in L95 is not real. The 300-arch memory math (500K agents \u2248 24 MB, 300-arch L94) works out to 48 bytes per agent, which is six float64s (3D position and velocity). Recommendation: float64 internal state, an explicit float32 copy for egress, and logs recorded at internal precision. Make this a decision rather than a menu.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Array layout is declared decided and also left open",
+      "description": "The principle at L39 states that agent state \"is stored in contiguous typed arrays ... operated on in bulk,\" which is a decision. L85 then says the SoA-vs-AoS choice \"needs validation against the actual force computation patterns.\" Either the choice is made, and L85 is its rationale, or it is an open spike with a named benchmark and a deadline. The principle also omits agent slot IDs from its list of arrays, which ties into the ownership finding above.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration is claimed as engine output with no mechanism and no slice",
+      "description": "The Overview says the engine produces \"migration.\" Migration is not one of the five archetypes (L27, L73\u201377). No force source is defined (goal, waypoint, or seasonal attractor), and no slice in L103\u2013115 delivers it. The concept and the initiative plan assign seasonal waypoints to the environment layer (500), so migration is an environment-to-engine interface question this document never raises. The \"environmental context\" passed in (L64) has no defined seasonal shape. Either remove migration from the engine's outputs or name the force and its interface.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:19"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Archetype mechanics need per-agent state and decisions, contradicting \"forces, not decisions\"",
+      "description": "L41 rejects \"behavioral state machines or decision trees,\" and L79 says \"the same force-accumulation loop handles all archetypes.\" But:\n- Pack hunters need a per-agent target and \"convergence-on-target\" (L75, L111). A target assignment is state and a decision.\n- Herding needs leader identity and group membership (L74, L109). Neither is in the state description at L39.\n- Territorial agents need a per-agent home-range center (L76). Also absent.\n- Predator hunt/rest cycles (concept, prototype 1) are a two-state machine.\n\nNone of these becomes a force until the state that feeds it is defined. Either the state schema grows, with each archetype's state listed, or the principle is weakened to say decisions are computed by the caller and passed in as data. Pick one and say where target, leader, and home-range state live and who writes them.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile schema is undefined, and runtime swapping conflicts with the hot loop",
+      "description": "L43 defines a profile as \"named weights, ranges, and thresholds,\" but none of the three is specified:\n- L89 defers the parameter list.\n- The document doesn't say what a \"range\" does (per-agent sampling, or a clamp).\n- It doesn't say what a \"threshold\" gates. A branch in a vectorized kernel becomes a mask.\n\n\"Swapped at runtime\" also needs an answer. Agents reference profiles by index (L39), so a swap means rewriting a parameter table that the hot loop reads, and in-flight ticks must not see a half-swapped table. Ownership is also unassigned: 300-arch L86 puts \"enabled behavioral profiles\" in server configuration, while L88 here says interpretation is the engine's job.\n\nThe concept already names the knobs (concept L32, L70): cohesion, separation, alignment, flight response, leadership tendency, territorial range, group size, coordination mechanism, and movement drivers. Start from those rather than an open-ended dictionary.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"New species = new profile\" fails for inter-archetype interactions and new force kinds",
+      "description": "Design Goal L29 says adding a species means defining a profile, \"not writing new simulation logic.\" But L91 says predator-prey, flight response, and pack-target selection need agents to respond to other profiles, and then calls this a \"combinatorial dimension\" without representing it. Nothing says where pairwise rules live. A per-pair weight table (N_profiles \u00d7 N_profiles), keyed by profile index, would keep the kernel vectorized and make new species a data change. Per-pair code would not.\n\nSeparately, a new force kind (stigmergy, leadership-following, home-range) requires kernel code. No force-kind registry or contract is described. So the extension claim holds only for force kinds that already exist. The document should state which extensions are data (weights, pair table) and which are code (force kinds), and define the force-kind contract.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor-query contract is underspecified, and its shape conflicts with the no-allocation rule",
+      "description": "The neighbor query is the hot path (L87 says it sets the performance ceiling), but its contract is never written:\n1. **Return shape.** Neighbor counts are ragged. The document doesn't say whether the query returns CSR (offsets plus indices), padded arrays with a max-K, or a pair list. That choice determines whether the \"no dynamic allocation\" rule (L99) is achievable at all.\n2. **Radius.** L87 says \"within radius R,\" singular. Profiles have different ranges (territorial \"at range,\" L76; flight response, L91). A single R sizes cells to the largest range and inflates every query, or requires per-query radii.\n3. **Neighborhood definition and cap.** The world-server doc assumes \"~100 neighbors per entity\" (300-arch L94), which implies a cap or k-nearest. A radius neighborhood in a dense murmuration is unbounded, and so is worst-case storage. Choose one. If a cap is used, overflow must be an explicit error or counted metric, not silent truncation, per CLAUDE.md.\n4. **Index maintenance.** Moving agents change cells every tick. The cost of rebuilding or updating the index per tick is not estimated.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Performance is described as validated, but the prototypes measured rendering only, and the naive first strategy can't reach the stated scale",
+      "description": "L56 and L58 say the prototypes \"confirm ... the rendering pipeline can handle the agent counts we're targeting.\" Rendering an instanced mesh is not simulation. The concept records the prototype at 2000 agents (concept L40), not \"2000+.\" No prototype computed neighbor queries at scale.\n\nL45 also allows a \"naive O(n\u00b2)\" first strategy, which doesn't fit the target. Back-of-envelope estimates, not measurements:\n- At 10K agents, a brute-force pairwise matrix in float64 is 10\u2078 entries, about 800 MB per temporary. The kernel needs several (dx, dy, dz, d\u00b2).\n- At 50K agents with ~100 neighbors, that is about 5M pairs per tick. Thirty vectorized passes over 5M pairs at roughly 5\u201310 ms each is hundreds of milliseconds. The budget at 20 Hz is 50 ms (300-arch L78).\n\nThat puts the \"comfortable\" claim several times over budget unless the numbers are wrong. Add a benchmark gate at 10K and 50K before Slice 2 is committed, and remove \"validated\" from Current State.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The spatial-index choice is made from scratch when the stack provides a KD-tree",
+      "description": "The concept names SciPy for KD-trees (concept L83), and L45 lists \"grid, KD-tree\" as swap targets. The document never evaluates the existing option before proposing a hand-built NumPy spatial hash (L45; 300-arch L94 \"NumPy-vectorized spatial hashing\").\n\n`scipy.spatial.cKDTree` rebuilds in C each tick and works in any dimension. One trap matters: `query_ball_point` with an array input returns an object array of Python lists, which is the per-agent Python-object pattern that L33 forbids. The vector-friendly outputs are `query_pairs(r, output_type='ndarray')` or `sparse_distance_matrix`. `query_pairs` takes a single radius, so per-profile radii need a different path (see the neighbor-query finding). A spike comparing cKDTree against a hand-built grid at 10K and 50K should come before committing to a hash. cKDTree is CPU-only, which is acceptable because the GPU path is the 1M+ tier.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The integrator is deferred, and the Verlet option breaks the stateless tick",
+      "description": "L93 offers \"Euler,\" \"Verlet,\" and \"semi-implicit Euler\" with no decision, and blurs explicit and semi-implicit Euler. The two cost the same, and semi-implicit (symplectic) Euler is the right default. Verlet needs previous positions or stored acceleration per agent. That state would have to be carried through the tick and logged, which contradicts L70, and a skipped agent's stored acceleration goes stale under subset evaluation.\n\nMore important, the document never mentions speed or steering-force limits. Reynolds-style boids stabilize mainly through max speed and max steering force, not through the integrator. Neither appears in the profile description (L43). Slice 1's \"basic force integration\" (L103) cannot be built without this. Recommendation: semi-implicit Euler, with speed and force clamps as named profile parameters. Defer Verlet.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Error handling is absent for the failure modes boid kernels actually hit",
+      "description": "Step 3 (L66) evaluates forces with no failure behavior. The known failure modes:\n1. Coincident agents (d = 0) make inverse-distance separation infinite. One `inf` propagates to the agent's position and then into neighbors' sums.\n2. NaN or inf in any input corrupts state silently, because comparisons against NaN evaluate false and mask the value away.\n3. Subset indices that are out of range, duplicated, or refer to removed slots.\n4. Profile values that are out of range or missing keys.\n5. Agents outside world bounds (no behavior defined; see the dimensionality finding).\n\nCLAUDE.md forbids silent fallbacks. The document should name explicit behavior for each: validate subset and profiles at entry and raise; check outputs for finiteness at tick exit and raise, identifying the tick and agents; and for coincident agents, name the epsilon as a constant and count occurrences as a metric instead of clamping silently.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The environment interface has three different forms, is unassigned to slices, and its dependency is missing",
+      "description": "Three models appear:\n- L64 has the engine receive \"environmental context,\" a snapshot value.\n- L47 has the engine \"query\" through a \"read-only interface,\" which is a pull model.\n- 300-arch L62\u201363 passes environment context into the engine.\n\nPick one. A per-agent pull implies callbacks, which L99 forbids, so it must be a bulk query (arrays of positions in, arrays of values or gradients out).\n\nMany forces depend on this interface: resource attraction (L47), corridor effects for herding (L74), territory boundaries (L76, L113), trail gradients for swarm (L77), and threat zones for flight response (L91). No slice delivers the environment query. The Environment Layer (500 in the initiative plan) is not started and depends on the world server, which depends on this engine. Slices 4 and 6 (L109, L113) can't be built against a stable interface yet. Define the bulk environment query now, with a stub implementation behind it, or reorder the slices.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice ordering contradicts the document's own interface requirements",
+      "description": "Slice 2 (flocking, L105) implements cohesion, separation, and alignment, which need neighbor queries. The spatial query abstraction is Slice 3 (L107), described as \"replace naive queries in the tick loop.\" So naive queries get written in Slice 2 and rewritten in Slice 3. The document says the abstraction must be designed up front (L45, and \"from the start\" at L49).\n\nAggregation is last (L115), but the world-server doc requires the engine's interface to \"support aggregation and variable-rate ticking from the start\" (300-arch L114). The aggregate neighbor shape (see that finding) affects the kernel from the first force, so deferring it means reworking the kernel. Reorder so that the neighbor and aggregate contract comes before flocking, with implementation following.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:103-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices omit the swarm archetype, the profile system, and any validation work",
+      "description": "Five archetypes are design goals (L27), but no slice implements swarm or stigmergy. Slices cover flocking, herding, predator-prey (including pack), and territorial. Also missing:\n- A profile loading and validation slice, even though \"profile as data\" is a central principle.\n- A determinism and replay test, which is a stated design goal.\n- The scale benchmark gate (see the performance finding).\n\n\"Statistically distinguishable\" (L27) has no metric, so \"archetype fidelity\" cannot be accepted or rejected. Each archetype needs acceptance metrics, for example polarization, nearest-neighbor distance distribution, or group cohesion radius.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:103-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Passing aggregates through the same neighbor interface is a type mismatch, not interface reuse",
+      "description": "L97 says aggregates should reach the engine \"through the same neighbor query interface.\" Individuals are (position, velocity, profile). Aggregates, per 300-arch L106, carry center of mass, heading, dispersion radius, and count. The kernel must weight an aggregate by count, define what separation from a dispersed cloud means, and treat the aggregate as a point for alignment.\n\nIf the interface returns one ragged list, the kernel must branch on a discriminant. Masks can do that without Python per-agent branching, but only once the semantics for each kind are defined. The alternatives are a separate aggregate channel or a neighbor record with `kind` and `weight` columns. Choose before Slice 2, and state the force semantics for each kind.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dimensionality, coordinate frame, and world bounds are never stated",
+      "description": "The document says \"positions\" and \"velocities\" without saying 2D or 3D. Terrain elevation as an input (L47) suggests 3D, but the prototype origin is 2D. The world-server numbers imply 3D: 500K entities \u2248 24 MB is 48 bytes per agent, six float64s (3D position and velocity), and the egress figure of 12 bytes per entity is three float32s (300-arch L94, L110). Dimensionality determines the spatial index and the kernel's shape.\n\nBounds and boundary behavior (wrap, reflect, steer back, clamp) are also absent. 300-arch L84 says bounds affect \"the behavior engine's spatial indexing,\" but the engine's interface never receives bounds. Boundary behavior is either a force or an integrator rule, so it belongs to this engine and should be specified here.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU-readiness constraints are imposed now for a deferred tier, and the decisions needed now are undefined",
+      "description": "The initiative plan says Distribution & Scaling (620), which covers GPU offload and aggregation, is \"deliberately deferred\" and \"need not be designed proactively\" (001 plan lines 97\u201399). The world-server doc asks only that interfaces not preclude these (300-arch L112\u2013114). This document goes further: L99 mandates \"no dynamic allocation,\" \"no callbacks into Python during the hot loop,\" and array-in/array-out to a \"BulkForce pattern\" that is never defined.\n\nTwo problems follow:\n1. \"No dynamic allocation\" is not achievable with NumPy idioms, because every arithmetic expression allocates, unless the code uses preallocated `out=` buffers, which the document never mentions. As written, the rule can't be enforced.\n2. The immediately needed decisions (profile schema, integrator, neighbor output shape, state ownership) are the ones deferred.\n\nPer CLAUDE.md (\"Always resist adding complexity\"), reduce L99 to the constraint that matters now: kernels are written as array operations with no per-agent Python loops. Define or remove \"BulkForce,\" and measure allocation on the hot path rather than prohibiting it.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Related Work links a document that does not exist, and cross-links disagree on file names",
+      "description": "L122 links `200-arch.world-server-foundation.md`. No such file exists. The world-server architecture is `300-arch.worldserver-foundation.md`, which matches the 300 band in the initiative plan and L21's \"300-arch.\" The link also uses \"world-server\" where the file uses \"worldserver.\"\n\nThis is outside the scope of this document, but I noticed it while checking: `300-arch.worldserver-foundation.md` L134 links `../project-guides/001-concept.migratory.md`, which doesn't exist. The concept file is `000-concept.migratory.md`, which this document's frontmatter (L9) and L119 use correctly. Fix both links.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Swarm archetype (stigmergy) contradicts the read-only environment and the tick contract",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Entity-slot and state ownership is undefined and duplicates the world server",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Variable-rate ticking cannot be delivered by a fixed-timestep, stateless tick",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Determinism claim has no stated scope or mechanism",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Precision and serialization decisions are open, and the options conflict",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:95",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Array layout is declared decided and also left open",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Migration is claimed as engine output with no mechanism and no slice",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:19",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Archetype mechanics need per-agent state and decisions, contradicting \"forces, not decisions\"",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:41",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Profile schema is undefined, and runtime swapping conflicts with the hot loop",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "\"New species = new profile\" fails for inter-archetype interactions and new force kinds",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Neighbor-query contract is underspecified, and its shape conflicts with the no-allocation rule",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:87",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Performance is described as validated, but the prototypes measured rendering only, and the naive first strategy can't reach the stated scale",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:56",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The spatial-index choice is made from scratch when the stack provides a KD-tree",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The integrator is deferred, and the Verlet option breaks the stateless tick",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:93",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Error handling is absent for the failure modes boid kernels actually hit",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:66",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The environment interface has three different forms, is unassigned to slices, and its dependency is missing",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:64",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice ordering contradicts the document's own interface requirements",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:103-115",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Anticipated Slices omit the swarm archetype, the profile system, and any validation work",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:103-115",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Passing aggregates through the same neighbor interface is a type mismatch, not interface reuse",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Dimensionality, coordinate frame, and world bounds are never stated",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "GPU-readiness constraints are imposed now for a deferred tier, and the decisions needed now are undefined",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Related Work links a document that does not exist, and cross-links disagree on file names",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-22T21:17:06.209028",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "chars": 14571,
+      "sha256": "92b6d907f78dbb6c1fd76ea48e61e9fc7a9e18e4448fa3bfbcb6ba69fef15df9",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "project-documents/user/project-guides/000-concept.migratory.md",
+    "project-documents/user/project-guides/001-initiative-plan.migratory.md"
+  ],
+  "searches": [
+    "list_files project-documents/**/*.md in .",
+    "list_files **/CLAUDE.md in ."
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 22,
+    "in_fences": 0,
+    "in_section": 22,
+    "surviving": 22
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 57657,
+  "cached_tokens": 35634,
+  "cache_write_tokens": 22017,
+  "completion_tokens": 63112,
+  "reasoning_tokens": null,
+  "duration_seconds": 277.0250220000744,
+  "cost_usd": 0.03697144,
+  "cost_basis": "provider"
+}

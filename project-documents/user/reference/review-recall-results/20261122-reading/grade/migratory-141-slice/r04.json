@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "\"NumPy is the only backend that exists today\" is false; the `numpy` row would measure Numba kernels",
+   "description": "Slice 118 (Numba Force JIT) is `status: complete`, and its design states the JIT flag's \"default in production code is `True`\". Slice 140 describes the substrate as \"NumPy today, Numba already\". This design's own workload comment says the warmup \"lets caches/JIT warm\" (line 388).\n\nThe `numpy` backend is specified as \"today's `engine.tick.tick`\" driving the existing `BulkForce` implementations, with no mention of the JIT flag. Consequences:\n\n- **Mislabelled baseline.** `force_total` under `backend: \"numpy\"` is Numba time, and the \"NumPy golden\" parity hash (lines 465-467) comes from the JIT path.\n- **Gap for slice 142.** The plan says \"Numba and Quadrants slot in as those backends become available\", and Numba is available now. Deferring the Numba runner to \"slice 144 / 118 territory\" (line 92) leaves nobody delivering it before 142, which depends on (141) and (118) and must compare Quadrants against both.\n- **Corrupted gate.** Slice 142's go/no-go (\"under what conditions does Quadrants beat Numba?\") would rest on a mislabelled baseline.\n\nRequired changes:\n\n1. The `numpy` runner explicitly pins the engine JIT flag off.\n2. A `numba` runner is registered in this slice; by the design's own claim (lines 341-345) it is one file.\n3. The JIT setting is recorded in the JSON report.\n4. Because the flag is process-global, state how `--all-backends` sets and restores it per runner. This also answers the subprocess-isolation open question for the CPU pair.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-34"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-force timing is assigned to this slice by the plan but deferred to 142",
+   "description": "The slice plan entry for 141 specifies phases as \"spatial build, spatial query, CSR assembly, **force totals per force**, integration\". The design collapses this to one `force_total_ns` and hands per-force resolution to slice 142.\n\n- **Internal contradiction.** The integration criterion says 142 adds a backend with \"zero changes elsewhere in the harness\" (lines 586-588), yet 142 would have to extend `PhaseTimings`, both renderers and bump `schema_version`.\n- **Cheap to do now.** The force phase is already a loop over the force list, so bracketing each iteration is trivial in `tick_instrumented`.\n- **Fix.** Ship `force_breakdown` in schema v1 and keep `force_total` as the sum.\n\nThe same rigidity will hit slice 145: `PhaseTimings` requires all five CPU-shaped phases as mandatory ints, but a fused GPU tick has no separate `csr_assembly`. Say whether an inapplicable phase is omitted or null, not silently zero.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parity hash cannot serve the cross-backend role the design assigns it",
+   "description": "The design says slice 145's tick-level parity test \"consumes the harness's NumPy parity hash as the reference\" (lines 533-534), and that downstream consumers interpret a GPU hash \"within the documented tolerance band\".\n\n- **A hash has no tolerance.** A SHA-256 of raw bytes is either equal or not.\n- **The plan requires tolerance.** Slice 145's entry asks for parity \"within a documented tolerance\", and slice 118's criterion is `np.allclose(atol=1e-12)`, so even Numba is not promised bit-identical to NumPy.\n- **Divergence is certain.** After 660 ticks of a chaotic flocking system, any non-bit-exact backend will produce a different hash, so the field always reads \"different\".\n\nEither scope the hash to what it can do (same-backend, same-platform determinism and regression detection) and remove the 145 integration claim, or persist the final arrays so a tolerance comparison is possible. The Open Questions already name `tools/run_deterministic_trajectory.py` as the parity oracle, so the first option is the lighter one.\n\nSeparately, the data flow calls `finalize()` (which releases GPU memory) before `parity.hash(result)` at lines 205-211. Slice 140's lifetime rule on `TickResult` means the hash must be taken before teardown.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Consumed interfaces are described inconsistently and partly do not match the providing documents",
+   "description": "- **`tick()` call contradiction.** Lines 131-132 and 541 say the NumPy runner \"calls `tick()` directly\". Decision B (lines 255-267) says it runs a re-implemented `tick_instrumented()` and never calls `tick()`.\n- **Unlisted internals.** The re-implementation needs the self-exclusion and neighbour-cap helpers, the CSR container, the integrator and the density-notification hook. None appear under Interfaces Required.\n- **\"~5 lines per phase\" understates the copy.** It is the whole tick body, including both query paths (k-capped fast path and radius plus cap).\n- **Spatial module named two ways.** It is `migratory.spatial` at line 136 and `engine.spatial.KDTreeQuery` at line 542.\n- **Spatial backend not recorded.** It is neither a workload field nor a report field, although the plan makes it \"per-tier, config-selectable\" and slice 143 compares backends through this harness.\n- **Force singletons.** Force names \"resolve to module-level singleton instances (e.g. `flocking.cohesion_force`)\" (lines 398-400). Slice 118 describes forces as classes assembled by `build_forces()`. Name the real construction path and reuse it, or the harness duplicates engine wiring.\n- **Profile presets.** Profile names resolve to \"`migratory.engine.profile` presets\" or \"constructors used in `config/default.yaml`\" (lines 392-396). Profiles there are inline parameter blocks, and no `flocker` or `leader` preset is defined. The harness therefore must invent profile parameters, contradicting \"does not invent new profiles\". Put the parameters in the workload YAML.\n- **Propulsion omitted.** The plan's slice 144 entry lists six `BulkForce`s including `PropulsionForce`; the design says \"the five existing\". A `mid-flock` workload without propulsion is not \"roughly equivalent to the live-server default\" (lines 353-355).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#interfaces-required"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Headline metrics and report aggregation are under-specified",
+   "description": "- **`tps_observed` has no definition.** In the sample, 600 ticks / 9.21 s gives 65.1, while mean `total_ns` of 9.55 ms implies about 105 TPS. `wall_seconds` evidently includes setup or warmup, which makes TPS incomparable across backends with different setup or compile cost. Define it from the measured window only.\n- **Statistics method unstated.** State the percentile method and stdev convention so the \"stable\" v1 schema is reproducible.\n- **Markdown source set unclear.** Line 440 says the table spans \"all backends in `bench/results/`\", which means reading prior result files, while State Management says the harness is stateless. Say which files are selected, or render only the current invocation.\n- **CLI flags missing from the CLI section.** `--list-backends` and `--list-workloads` appear only in the walkthrough.\n- **`density` field missing.** It is listed as a workload field (line 71) and in the plan, but is absent from the schema.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#reports"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure-mode enumeration misses three of the new I/O paths",
+   "description": "The four listed modes cover the loader, the registry, `setup` and low TPS. Unhandled:\n\n- **`tick_once` raising mid-measure.** Is `finalize` called, and is a partial report written or suppressed?\n- **`git rev-parse` subprocess.** Git absent or not a repo must be an explicit error, not an empty `git_sha`. A dirty tree stamps uncommitted code with HEAD's SHA, which breaks the \"reproducible by repo hash\" claim; add a dirty flag.\n- **Result write.** `bench/results/` missing or unwritable after a ten-second run.\n- **Hang.** No timeout is stated. \"None; interrupt and `finalize` runs\" is acceptable but must be written down before GPU backends arrive.\n- **Loader validation beyond missing fields.** Malformed YAML, wrong types, and profile fractions that do not sum to 1.\n- **`finalize` on a half-set-up runner.** `setup` raising calls `finalize` on a partially initialised runner; state that `finalize` must tolerate that.\n- **Magic threshold.** \"TPS < 1\" should be a named constant.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#failure-modes"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Drift mitigation does not cover the tick changes already planned",
+   "description": "The bit-equality test catches algorithmic drift only on the paths it exercises. Slice 119 adds an optional neighbour cache to `tick()` whose default is behaviour-neutral, so the copy would stay bit-equal while no longer timing the production path. The test should cover both query paths and `active_indices`. Decision B is acceptable for one caller; the stated \"third call site\" trigger for revisiting is reasonable.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:682-695"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Small proportionality cuts and metadata additions",
+   "description": "Overall size fits the 3/5 effort. Candidates to cut:\n\n- reuse of `pytest-benchmark` in stub-backend tests (lines 122-124), which the synthetic-timing tests do not need;\n- cross-run Markdown aggregation;\n- `--workload-dir`;\n- walkthrough step 10.\n\nWorth adding: numpy, scipy and numba versions plus a CPU model string in `platform`. `platform.processor()` returns only \"arm\" on the primary dev machine, which is too coarse for the cross-machine comparison the slice is named for.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md"
+  }
+ ]
+}

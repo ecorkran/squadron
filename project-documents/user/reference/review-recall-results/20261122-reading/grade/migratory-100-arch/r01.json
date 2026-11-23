@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Stateless\" engine contradicts the register/remove/query interface and the world server's ownership split",
+   "description": "Envisioned State says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\" The last paragraph of the same section then says the engine's interface is \"tick the simulation forward, query agent state, register/remove agents.\" A stateless function has nothing to register agents into or query. `300-arch.worldserver-foundation.md` also says the `EntityManager` owns spawn/remove, ID assignment and array allocation, and that the engine \"does not manage the entity lifecycle itself.\" The Scope paragraph agrees with 300. So \"register/remove/query\" either belongs to the world server or implies hidden engine state.\n\nThe document also never says whether `tick()` mutates its input arrays in place or returns new ones. 300's \"tick as transaction\" principle needs a failed or aborted tick to leave canonical state untouched. Step 5, \"Returns the updated state array\", is ambiguous on this. Synchronous-update semantics are unstated too: active agents must read pre-tick positions of all agents, which means double-buffering. Without that, results depend on iteration order, which breaks the determinism goal.\n\nFix: state that `tick(state, env, subset) -> new_state` is a pure function, drop register/remove/query from the engine interface, and state the double-buffering rule.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The pluggable neighbor-query interface, the document's central abstraction, is never specified",
+   "description": "The document calls neighbor finding the cost dominator and promises a strategy swap \"without touching the force computation code.\" It never defines what the query returns. The options are mutually incompatible:\n- Ragged per-agent lists, which are hostile to NumPy vectorization and to the stated GPU constraint of \"no dynamic allocation.\"\n- A padded fixed-K array, which forces a K cap and a validity mask.\n- CSR offsets plus indices.\n- A flat pair list.\n\nEach choice fixes the shape of the force kernel, so the \"swap without touching force code\" claim only holds once the output format is fixed. The document also doesn't say whether the query radius is global or per-agent.\n\nPer-agent radius matters because profiles have different ranges, such as a wolf's detection range versus an elk's separation range. A spatial hash tuned to the largest radius degrades for everyone else.\n\nThe slice order makes this worse. \"Spatial query abstraction\" is slice 3, after \"Flocking behavior\" (slice 2). Flocking will therefore be written against naive queries, and the abstraction retrofitted later. That is how the result shape ends up baked into the force code. The \"initial implementation may be naive O(n\u00b2)\" line is also unsafe as a v1 position: at 10K agents, an N\u00d7N distance matrix is about 800 MB in float64.\n\nFix: define the query contract (output format, per-agent radius, K cap or CSR) before the flocking slice, or move the query slice ahead of it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-agent and shared state needed by the listed archetypes does not exist in the state model",
+   "description": "Agent state is listed as \"positions, velocities, profile indices,\" but the archetypes require more:\n- **Territorial:** \"home-range attraction\" needs a per-agent anchor point.\n- **Herding:** \"leadership tendency\" and \"momentum along travel corridors\" need a leader designation or corridor input.\n- **Pack hunting:** \"target selection\" and \"convergence-on-target\" need a per-agent target ID that persists across ticks. Statelessness means it must be in the arrays, yet no such array is described.\n- **Swarm:** \"environmental stigmergy (reinforced paths)\" needs a writable pheromone field that agents deposit into and read from. The document defines the environment as \"read-only,\" and the engine as stateless, so nobody owns the mutable field.\n\nTarget selection is also a discrete decision, which sits awkwardly with the \"Forces, not decisions\u2026 rather than implementing behavioral state machines\" principle. The document should say where this state lives, who updates it, and how the principle accommodates it.\n\nTwo further omissions:\n- **Migration:** The Overview lists \"migration\" as an emergent behavior, but none of the five archetypes or force terms provides a migration or seasonal-destination force.\n- **Dimensionality:** The document never states 2D or 3D. Prototype 1 was 2D and Prototype 2 is Three.js. Array shapes, spatial hash design and elevation handling all depend on it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Variable-rate ticking is not reconciled with fixed-timestep integration, and the state of non-evaluated agents is undefined",
+   "description": "Technical Considerations insists \"Fixed-timestep integration is essential for determinism.\" The Subset-evaluable tick principle has some agents evaluated at 1/4 or 1/16 rate. An agent evaluated every 4th tick must integrate with either dt\u00d74 or a held force, and the interface doesn't say which. That requires either a per-agent dt input or an explicit statement that integration always uses the fixed dt and merely skips agents.\n\nThe document also doesn't define what happens to inactive agents. 300 says reduced-rate entities get \"interpolated positions between evaluations,\" but the engine contract says it returns updated state \"for active agents.\" Who interpolates, and is it part of this engine?\n\nAlso, a subset tick still has to build or refresh a spatial index over the full population, because inactive agents remain visible as neighbors. Index cost is O(N) per tick regardless of subset size. The \"reduced load\" benefit of subset ticking is therefore overstated, and the document doesn't acknowledge it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#subset-evaluable-tick"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Determinism claim is under-specified, and RNG and floating-point ordering are unaddressed",
+   "description": "\"Tick determinism\" is a design goal. 300 builds replay on it, proposing to log only initial state plus non-deterministic inputs. The document gives no mechanism:\n- NumPy reductions and scatter-adds (`np.add.at`, `bincount`) depend on summation order. Spatial-hash neighbor ordering, subset ordering and multithreaded BLAS or SciPy workers change that order.\n- Results can differ across NumPy versions, CPUs (SIMD paths) and float32 versus float64.\n- The \"eventual distribution, where regions must agree\" justification requires bit-exactness across machines, a far stronger guarantee than same-process replay.\n- Any stochastic term (jitter, wander) needs an RNG state. A stateless engine must take it as an input and return it advanced, but no such input is listed.\n\nState the actual guarantee (same machine and library versions, or cross-platform), mandate a canonical ordering, and specify the RNG input. If cross-platform determinism isn't a v1 requirement, drop it as a justification.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Load-bearing numeric decisions are deferred while slice 1 depends on them",
+   "description": "These choices are left open, yet slice 1, \"Core agent state and tick function,\" cannot be built without them:\n- **SoA versus AoS:** \"needs validation.\"\n- **Internal precision:** \"the engine should define its internal precision.\" The concept specifies Float32Array. Float32 positions over a large world with sub-meter separation distances lose precision and make determinism harder.\n- **Integrator:** \"Verlet or semi-implicit Euler may be needed.\"\n- **Speed and force limits:** The document never mentions max speed or max steering force. These are standard stabilizers in boid models and matter for the integrator question.\n- **Boundary handling:** There is no mention of walled, toroidal or soft boundary forces, although 300 treats bounds as a world-server concern.\n- **Coincident agents:** Agents at the same position make a 1/d\u00b2-style separation force produce inf/NaN. There is no guard and no NaN or invalid-input policy.\n\nThe project's own Fail Fast and failure-mode rules call for NaN detection, validation of profile indices, and validation of subset indices (range, duplicates). None are specified, and a NaN introduced at one agent would propagate through neighbors.\n\nPick defaults, or at minimum record the decisions as explicit open questions with an owner and a slice where each is resolved.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Environment interface is not defined in a form compatible with the vectorized hot loop",
+   "description": "\"Environment as input surface\" says the engine queries terrain, resources, threat zones and seasonal parameters \"through a read-only interface,\" while the GPU section forbids \"callbacks into Python during the hot loop.\" These conflict unless the environment interface is explicitly bulk, with `positions[N,d]` in and `values[N]` out. The document doesn't say so.\n\nResource and threat queries (\"nearest resource within range\") are themselves spatial queries over a second set of objects. That implies a second spatial index owned by the environment, which isn't acknowledged. 300 puts the environment layer in a later slice (\"Environment layer foundation\"). The engine's flocking, herding and territorial slices need a stub or fake environment, and the document doesn't say what it is.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Stateless contract conflicts with spatial-index caching, scratch buffers and the GPU path",
+   "description": "The GPU compute section requires \"no dynamic allocation\" and bulk array operations. In NumPy, large temporaries are allocated per tick unless a preallocated workspace is passed in. That workspace is state, which contradicts \"No setup, no teardown.\"\n\nA GPU-resident or incrementally updated spatial index (grid, KD-tree) benefits from persisting between ticks. A stateless tick forces a full rebuild and a host-to-device transfer every tick. 300 also proposes offloading the tick to a thread, which is safe only if the engine holds no shared scratch state. The document should introduce an explicit workspace or context object, owned by the caller and passed to `tick()`, rather than claim pure statelessness.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Aggregate-neighbor design does not fit the neighbor-query abstraction",
+   "description": "The document says forces between individual agents and aggregates would be presented \"through the same neighbor query interface.\" The neighbor query returns indices of agents in the state array. An aggregate (center of mass, heading, dispersion radius, count) isn't a point agent. The pairwise force for cohesion, separation and alignment doesn't apply directly, because an aggregate's effect is count-weighted and extended in space. That needs a different force term and a different neighbor record type.\n\nThe \"Aggregation interface support\" slice sits last, after the query interface has been fixed in slice 3, so supporting it will mean retrofitting the contract. The document claims this is \"designed for\" but doesn't show how the extension point supports it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Design is weighted toward 1M+ and GPU tiers while v1 is tens of thousands, and the scale claim is unvalidated",
+   "description": "The \"GPU compute path for force accumulation\" and \"Multi-resolution simulation and aggregation\" considerations, the \"Aggregation interface support\" slice, and the \"Pluggable spatial queries\" principle with KD-tree, grid and GPU alternatives all serve tiers far above the v1 operating range. They impose constraints on v1 code: no per-agent branching, no allocation, a query interface shaped for aggregates. Those constraints are cheap to state but costly to honor, and nothing exercises them.\n\nProportionality suggestions:\n- Keep the subset argument on `tick()`, since it's inexpensive.\n- Cut the aggregation slice and the GPU constraints from this architecture and move them to 300's scaling notes or a future document.\n- Pick one concrete spatial strategy for v1 instead of \"pluggable.\" The concept already names SciPy `cKDTree`. `cKDTree.query(k=K, distance_upper_bound=r)` yields a padded fixed-K result suited to vectorization and would avoid hand-rolling a NumPy spatial hash. The document doesn't mention it.\n\nThe scale claim is also unsupported. \"Current State\" says the prototypes \"confirm\u2026 the rendering pipeline can handle the agent counts we're targeting.\" Prototype 2 proved 2000+ agents rendered at 120 fps, which is rendering only. No prototype validated simulation at 10K\u201350K agents on Python and NumPy with about 100 neighbors each at 20\u201360 Hz. The document has no per-tick budget and no benchmark or feasibility spike, and it should have both before committing the interface to that scale.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Cross-document references and dependency direction are inconsistent",
+   "description": "- Scope refers to the world server as \"300-arch,\" but Related Work links `200-arch.world-server-foundation.md`, which doesn't exist. The actual file is `300-arch.worldserver-foundation.md`.\n- This document's `dependsOn: [000-concept.migratory]` uses a different concept ID than 300's `001-concept.migratory`, and 300's concept link points at `001-concept.migratory.md`. The concept file in the repo is `000-concept.migratory.md`.\n- 100 draws its interface requirements from 300 (\"informs the engine's interface requirements\"), while 300 declares `dependsOn: [..., 100-arch.behavior-engine]` and 100 doesn't list 300. The dependency is circular in practice. Resolve it by having 100 own the interface contract (tick, neighbor, environment) and 300 consume it.\n- Language and version (Python 3.12, NumPy) are never stated in this document, although several constraints are Python-specific. `Float32Array` is a JavaScript type, so the document should say `numpy.float32`.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+  }
+ ]
+}

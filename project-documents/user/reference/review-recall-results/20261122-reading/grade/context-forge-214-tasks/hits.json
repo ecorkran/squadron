@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-214-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criteria say a missing, non-regular or **unreadable** file, and a missing or **unreadable** template, each exit 2. Task 3 implements the preflight and template checks, but Tasks 3T and 4T test only a missing file, a directory and a missing template; no test covers an unreadable file or template. **VALID** (minor, `coverage`): the tests leave out a branch the parent design's criterion names. Needs: doc (design plus tasks). **Raised by the original review (F004, note)**; the response then added the `chmod 000` test.",
+   "hits": {
+    "r01": [
+     11
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [],
+    "r04": [
+     2
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     1
+    ],
+    "r08": [],
+    "r09": [
+     5
+    ],
+    "r10": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "r01[11] is a note about CLI-only coverage that also says no test anywhere covers unreadable; counted. r07[1] is mainly about parseFrontmatter swallowing read errors but its related test-gap paragraph names the missing unreadable file/template tests; counted. r08[7] covers only the read-error swallowing, not the test gap; not counted."
+}

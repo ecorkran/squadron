@@ -1,0 +1,201 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Hot loop calls back into Python per active agent and passes ragged neighbor lists",
+   "description": "Data flow step 3 runs `query_radius` \"for each *active* agent\" (line 88). The BulkForce signature takes `neighbor_lists: list[NDArray[np.intp]]` (line 145), which is ragged Python state rebuilt every tick. Each force also allocates a fresh N\u00d72 array (line 148). Arch :99 requires the force interface to have \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\" The slice's own Technical Requirements say \"No Python-level per-agent loops in the hot path\" (line 247). Slices 101\u2013104 will all implement this signature, so changing it later breaks every force. Fix: one batched neighbor call for all active agents that returns flat indices plus offsets (CSR-style), with BulkForce consuming those flat arrays.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:88"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Neighbor query returns only AgentState indices, so aggregate neighbors cannot be presented",
+   "description": "`query_radius` returns `NDArray[np.intp]` indices into `AgentState` (lines 165\u2013167, repeated at 224). Arch :97 says the world server presents aggregates \"through the same neighbor query interface,\" and concept :79 says v1 interfaces \"must not preclude\" aggregation. An aggregate is not a row in `AgentState`. Fitting one into this return type means appending it to the agent arrays, which mixes statistical entities with simulated agents and collides with the subset semantics (lines 197\u2013199). Plan :49 (slice 108) would then force a breaking change to the protocol that 101\u2013105 all consume. Line 27's claim of \"no engine changes later\" is therefore false. Decide the return type now, for example a typed neighbor record with a kind field.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:165-167"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick returns None and mutates in place, contrary to the architecture and the slice's own Technical Scope",
+   "description": "Line 39 says tick should \"return updated state.\" Arch :68 says the engine \"Returns the updated state array,\" and arch :70 says \"feed in state, get back state.\" Concept :79 says \"keep the tick function pure.\" The signature (line 187) returns `None` and mutates arrays in place (lines 91, 191). In-place mutation may be justified on the hot path, but the slice must either return new state or record a decision that amends the architecture. Right now the slice contradicts both the architecture and itself.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Engine-side float32 conversion is excluded, contrary to the architecture's serialization requirement",
+   "description": "Lines 49 and 100 place float32 conversion entirely with the world server. Arch :95 says \"the engine should define its internal precision and provide an efficient conversion path at the serialization boundary.\" The concept's Float32Array claim (concept :88) is correct, but the ownership claim cannot be checked. The world server architecture (`200-arch.world-server-foundation.md`, cited in plan :43) is absent from this worktree. Either provide the conversion helper here, which is small, or amend the architecture first.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:49"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No seam for environment input or per-agent state that slices 102\u2013104 and 106\u2013107 need",
+   "description": "Arch :47 makes environment a read-only input surface. Arch :64 has the tick receive \"environmental context,\" and arch :35 names environmental queries as part of the engine boundary. The tick signature (lines 180\u2013187) and the Force/BulkForce signatures (lines 126\u2013150) take no environment argument. `AgentState` (lines 95\u201398) has no per-agent slot for leadership/experience (plan :25), target selection (plan :28), or home-range center (plan :31). Line 221 says 101\u2013104 \"add forces that operate on this state,\" and line 203 says the subset parameter \"doesn't need to be retrofitted.\" The same reasoning applies to these inputs and is not addressed. Deferring environment is reasonable, since plan 106 names the Environment Layer as a separate initiative. The slice should still name the seam: an optional read-only environment handle and a way to register extra per-agent arrays.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-187"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Architecture NFR is not restated; the slice targets hundreds of agents",
+   "description": "Arch :33 sets the NFR: \"tens of thousands of agents at full behavioral fidelity on a single CPU process.\" This slice changes the tick hot path and the spatial query that the NFR governs, but it states only \"the hundreds-of-agents scale this slice targets\" (line 173). It never restates the NFR or says when it will be met. Line 25 claims the slice validates \"SoA array layout,\" but arch :85 says layout \"needs validation against the actual force computation patterns,\" and the slice plans no measurement. Restate the NFR with its target, say this slice does not meet it, name the trigger (plan :40 allows pulling slice 105 forward), and add a benchmark.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Brute-force build precomputes an N\u00d7N matrix that the query cannot use",
+   "description": "`query_radius` takes an arbitrary `position` (line 166), not an agent index, so a precomputed pairwise matrix cannot serve it. The precompute adds O(N\u00b2) work and memory for no benefit. At the arch's 10,000-agent tier, a float64 N\u00d7N matrix is about 800 MB (10,000\u00b2 \u00d7 8 B). Queries are O(N) without any build step, so drop the precompute. The slice also needs to say whether `build()` copies positions. The walkthrough queries after ticks (line 290), and in-place integration (line 215) mutates the same arrays, so what the index sees after a tick must be defined.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Self-inclusion in `query_radius` is unspecified, though force slices depend on it",
+   "description": "The docstring returns \"all agents within radius\" with no decision on whether the querying agent is included. A separation force that divides by distance would hit division by zero if it is. The prototype excludes self (`reference/prototypes/01-migratory-2d-boids.html:158`, `if (i === j) continue;`), and the tasks file leaves the choice open (tasks:138). The slice should decide and document it in the protocol.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:168-169"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Neighbor ordering, dtype, and determinism scope are unspecified; slice 105's identical-output check depends on them",
+   "description": "Forces are summed over neighbors (line 89). Floating-point sums depend on order, so the order `query_radius` returns indices affects output bits. Plan :34 requires slice 105 to show that \"behavioral output is identical before and after the swap.\" A spatial hash will not return indices in brute-force order unless the contract says so. The contract should require ascending unique indices, specify dtype and empty-result shape, and state that determinism is same-process and same-platform only. Arch :31 requires that regions agree on results under distribution, which this slice does not address.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:165-169"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Zero-fill rationale contradicts the requirement that inactive agents stay untouched",
+   "description": "Line 152 says zero forces \"keeps the integration step simple (add force to velocity for all...).\" But integration also advances position with `position += velocity * dt` (line 90). If an implementer follows the rationale and integrates all agents, inactive agents with nonzero velocity move. That breaks line 91 and the success criterion at line 241. Line 215 specifies fancy indexing, which is correct. Remove or correct the rationale so the wrong instruction is not followed.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Velocity clamp is ambiguous, and the per-agent `max_speed` lookup is unspecified",
+   "description": "`clamp(velocity_new, max_speed)` (line 209) does not say whether it limits the magnitude or each component. The prototype scales the vector to the limit (`reference/prototypes/01-migratory-2d-boids.html:137-139`), and the tasks specify magnitude (tasks:97). The doc also does not say how a per-agent `max_speed` array is built from `profiles` and `profile_indices` (line 213). Specify magnitude clamping and the gather.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:209"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "`active_indices` validation is unspecified; duplicates, negatives, and masks fail silently",
+   "description": "Line 215 uses `state.velocities[active_indices] += ...`. In NumPy, a repeated index in augmented fancy assignment is applied once, so duplicates are silently dropped. Negative indices wrap to the end of the array. A boolean mask that goes through an integer conversion becomes 0/1 indices. Arch :49 allows \"index array or mask,\" but the slice picks indices and says nothing about other inputs. `CLAUDE.md:6-7` forbids silent fallbacks. Specify validation (dtype, range, uniqueness, and the error raised). The doc also does not cover `dt <= 0` or negative `query_radius`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:215"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Profile list and `profile_indices` have no owner and no bounds check",
+   "description": "`tick` receives `profiles` separately on each call (lines 182, 192). `AgentState.create` takes `profiles` (line 275), but the doc never says whether state keeps them. Nothing ties `profile_indices` to the list passed in. A caller that passes a different or shorter list gets silently wrong forces, and negative indices wrap. Lines 89 and 223 call forces \"registered,\" but the signature takes a list per call, so no registry exists. Name the owner of the profile registry and validate that indices are in range for the list passed.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:192"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "`AgentState` construction and initial state are unspecified; zero initialization would make the tests vacuous",
+   "description": "The walkthrough calls `AgentState.create(n=100, profiles=[profile])` (line 275), but the doc never defines that constructor. It does not say what initial positions and velocities are, or how `profile_indices` are assigned. The tasks zero-initialize (tasks:66). If all 100 agents start at the origin, the determinism check (lines 280\u2013283) and the subset neighbor check (line 290) exercise no geometry, because every agent neighbors every other. Specify the constructor, and require distinct test positions generated from a seeded `numpy.random.Generator` (`.claude/rules/python.md:73` allows `random` for simulations).",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:275"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Removing an agent shifts indices and silently invalidates index arrays held by callers",
+   "description": "Line 98 says add/remove \"resize arrays\" and says nothing about indices. Removing agent 5 renumbers agents 6 through N\u22121. The world server's `active_indices`, any held neighbor results, and profile references all use these indices. Arch :81 asks for \"register/remove agents,\" and arch :49 leaves subset choice to the caller, which holds index arrays. Nothing tells the caller its arrays are now stale. Decide between stable agent IDs, a remap returned from `remove`, or a rule that removal happens only between ticks and the caller re-derives its indices.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "A tick interrupted mid-integration leaves state half-advanced, and the design does not say how to recover",
+   "description": "Integration writes velocities, clamps, then writes positions (lines 208\u2013215). Forces are accumulated before any write, so a force that raises leaves state untouched, but the doc does not say so. An exception or interruption between the velocity and position writes leaves velocities advanced and positions not. A retry then applies the velocity step twice, which breaks the determinism goal (arch :31). State that a tick is all-or-nothing (compute new arrays, then commit), or state that a failed tick invalidates the state.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "`BehavioralProfile` cannot take new required fields \"trivially\" while forbidding defaults",
+   "description": "Line 308 says \"the dataclass design should make field addition trivial,\" and line 118 forbids default values. In a dataclass without defaults, adding any field makes every existing construction site (`conftest`, tests, walkthrough) raise `TypeError`. That is the fail-explicit behavior the design wants, but it is not trivial: each slice must update every profile. Either state that cost, or add one construction helper so the change is one line. The claim has to match whichever is chosen.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:308"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Inactive neighbors present last-integrated state; the neighbor contract does not say so",
+   "description": "Arch :65 says a reduced-rate agent is still visible to its neighbors. An inactive neighbor presents its last-integrated position and velocity, so alignment in slice 101 will read stale velocities. That may be acceptable, but it should be stated as part of the neighbor-state contract.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:175"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Frontmatter `interfaces` and Provides omit slices 106 and 108, which depend on slice 100",
+   "description": "Plan :47 and :49 list (106) and (108) as depending on (100). The frontmatter lists 101\u2013105 only (line 7), and \"Provides to Other Slices\" (lines 219\u2013226) names only 101\u2013105. Tooling that tracks dependents through `interfaces` will miss two slices, and the aggregation requirement behind the FAIL above is absent from the Provides list. Add both.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:7"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "Per-agent `Force` protocol has no consumer, and the criterion that needs it cannot be met",
+   "description": "`tick` accepts only `list[BulkForce]` (line 185), and nothing in the design calls the per-agent `Force`. The statement that \"the tick loop prefers the bulk variant when available\" (line 152) describes a fallback that does not exist. The success criterion that \"placeholder forces exercise both the Force and BulkForce protocol paths\" (line 248) cannot be met through `tick`. The per-agent protocol is also absent from the plan and the arch, and as a per-agent Python callback it would violate arch :99 if it reached the hot loop. Cut the per-agent protocol and its placeholder class, and drop the \"both paths\" criterion or move it to a protocol-conformance unit test.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:124-136"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "`accelerations` is never written and is not in the plan or the architecture",
+   "description": "Line 96 adds `accelerations (N\u00d72 float64)` to `AgentState`. No step in the data flow (lines 86\u201391) reads or writes it. Integration treats force as acceleration with unit mass (lines 208\u2013210), so the field would duplicate that role with no defined meaning. Plan :17 lists \"positions, velocities, profile indices,\" and arch :39 does the same. Cut it. If mass is needed later, add it in the slice that uses it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 21,
+   "severity": "CONCERN",
+   "title": "Several sections restate other documents or duplicate each other",
+   "description": "Cut or merge: (a) the Value section (lines 23\u201329) restates arch :49 and :97 and the plan; (b) \"2D now, 3D later\" appears at lines 102, 120, and 309; (c) the `active_indices=None` default is explained at lines 203 and 311; (d) Development Approach (lines 294\u2013304) duplicates the task file's section order (tasks sections 1\u20137); (e) walkthrough steps 1\u20132 repeat tasks 8.2. Keep one statement of each. `CLAUDE.md:5` asks to resist complexity unless it is necessary.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:23"
+  },
+  {
+   "i": 22,
+   "severity": "NOTE",
+   "title": "DIMS is not required by the architecture; \"single-point change\" is overstated; its location is unspecified",
+   "description": "Neither the arch nor the plan asks for 3D. The constant is cheap, so keeping it is fine. But \"switching to 3D is a single-point change\" is not true: the placeholder forces (line 154), the 2-element force return type (line 134), and the walkthrough's \"rightward force\" (line 287) are all 2D-specific. The doc also does not say where `DIMS` lives. Tasks put it in the package `__init__.py` (tasks:30). Name a constants module so engine modules do not import from the package root.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:102"
+  },
+  {
+   "i": 23,
+   "severity": "CONCERN",
+   "title": "The verification walkthrough cannot run as written",
+   "description": "Step 1 runs `cd migratory` (line 256). The repo root is the project root (`CLAUDE.md:20`; tasks:214 runs `pytest tests/` from the project root), and there is no `migratory/` directory. Step 3 passes `forces=[...]` (line 280), a placeholder, and uses `np` without importing it (line 283). `AgentState.create` is never defined (line 275). The component tree puts the project under `migratory/` (line 56), while the tasks put it at the root. Choose one layout and make the commands match it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:256"
+  },
+  {
+   "i": 24,
+   "severity": "CONCERN",
+   "title": "Tooling and dependency rules are not met by the design or the walkthrough",
+   "description": "The walkthrough uses `pip install -e \".[dev]\"` (line 257). The Python rules require `uv` for all projects (`.claude/rules/python.md:57`) and pinned direct dependencies (`:58`). The technology choices name NumPy and pytest without versions (lines 109\u2013110). The rules also require a ruff lint/format pass (`:26`) and strict mypy or pyright with zero errors (`:53`). The design has no static-analysis gate and the walkthrough runs none. Add both to the technology choices and the verification steps.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:257"
+  },
+  {
+   "i": 25,
+   "severity": "CONCERN",
+   "title": "The \"proportional to t\u00b2\" expectation is wrong for semi-implicit Euler",
+   "description": "From rest under constant acceleration `a`, semi-implicit Euler gives `v_k = k\u00b7a\u00b7dt` and `x_n = a\u00b7dt\u00b2\u00b7n(n+1)/2`. Equivalently, `x = \u00bd\u00b7a\u00b7t\u00b2 + \u00bd\u00b7a\u00b7dt\u00b7t`. The ratio to `\u00bd\u00b7a\u00b7t\u00b2` is `(n+1)/n`, which is 10% high at n = 10. The check as written would fail. Also, once `a\u00b7t` exceeds `max_speed`, the velocity clamps and the t\u00b2 relation fails entirely. Line 301 repeats the \"parabolic\" claim. Specify the closed-form expected value and choose parameters below the clamp.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:287"
+  },
+  {
+   "i": 26,
+   "severity": "NOTE",
+   "title": "The integration subsection is indented four spaces, so it renders as a code block",
+   "description": "The heading \"Integration: Semi-Implicit Euler\" and its prose (lines 205\u2013215) are indented four spaces after a blank line. Markdown renders them as a code block, so the heading is not recognized as a heading. Remove the indentation.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 27,
+   "severity": "NOTE",
+   "title": "Slice status does not match the plan",
+   "description": "The slice says `not_started`. The plan says `in_progress` for (100) (plan :7, :18), and the tasks say \"Slice design approved\" (tasks:7). The plan's status probably refers to the design phase. Make the two agree.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:10"
+  }
+ ]
+}

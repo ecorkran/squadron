@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The four gate commands are really two, so the per-intervention comparison cannot be run",
+   "description": "Step 3 lists four runs: baseline counter-gating, early exit only, subdivision only, and both. The commands themselves come in two identical pairs. The \"baseline\" and \"early exit only\" runs are both `--subdivision-factor 1 --ticks 200`, and the other two are both `--subdivision-factor 3`. Intervention 1 adds the `break` with no switch to turn it off (lines 36\u201346). So after this slice ships, the \"S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS\" run cannot happen, and A2 (\u22655\u00d7 faster than the slice 145 baseline) has nothing measured on the same build to compare against.\n\nThe lighter fix is to drop the counter-gating rows. Take the baseline from the slice 145 CUDA numbers already on record (`145-notes.fused-tick-measurements.md`, 38 TPS), or from a run of the pre-149 commit, and say so in the walkthrough. Do not add a toggle for early exit only to support this measurement. Also, the walkthrough uses a `--subdivision-factor` CLI flag, but the task file sets S through a workload YAML (`mid-flock-50k-s3.yaml`). Pick one so the demo script matches what gets built.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The candidate count for subdivision alone is wrong",
+   "description": "Line 58 says \"With S=3 alone: candidates loaded drops to ~5000.\" A 7\u00d77 scan of cells holding about 555 agents each loads 49 \u00d7 555 \u2248 27,000 candidates. That is (2S+1)\u00b2/S\u00b2 \u00d7 5000, not 5000. The source diagnosis (`148-notes.rediagnosis.md`, Intervention 2) gives ~27,000. With both interventions, line 58's \"~555\" is not the number loaded either: the scan stops after the first ~32 accepted, whatever the cell boundaries are.\n\nSo the design overstates what subdivision gains on its own, by about 5\u00d7. That number is part of why S=3 is the default gate configuration (line 128). Correct the figure. Then state the real reason subdivision helps once early exit is in place. Smaller cells mean fewer of the scanned candidates fall outside the query radius, so the cap is reached in fewer iterations.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The design does not say exactly how `cell_size` is calculated, and the wrong reading drops neighbors",
+   "description": "The design writes `cell_size = query_radius / S` and shows `BenchConfig` holding both `cell_size` and `subdivision_factor` (lines 85\u201387). Line 80 says the harness \"reads [cell_size] from config.\" That leaves two points open:\n- **Which radius:** `query_radius` is a per-profile parameter (slice 145 \u00a7Parameters). Slice 145 sets cell size to `max_query_radius`.\n- **Derived or set:** the design does not say whether `cell_size` is calculated from S or can still be set separately.\n\nThe kernel's \u00b1S scan only covers the full neighborhood when `cell_size \u00d7 S \u2265 max_query_radius`. If someone sets `cell_size` separately, or bases it on a single profile's radius, neighbors are silently lost.\n\nThe task file (T2) already settles this as `cell_size = max_query_radius / subdivision_factor`, calculated in `GpuAgentState.setup()`. The design should say the same in one line: the value is derived and never set on its own. Drop `cell_size` from the `BenchConfig` box in the diagram.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-56, 84-87"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Slice 146 gets no path to the subdivision speedup",
+   "description": "The design puts S in the *bench* configuration (line 50) with a default of S=1, and says 146 is \"unblocked\" because setup()/tick() do not change (line 111). The success criteria present A3's 100 TPS as headroom \"before slice 146 wires the GPU tick into the production engine\" (line 116). But that 100 TPS is measured at S=3 (line 128).\n\nAccording to the plan entry for (146), that slice is what brings Tier 2 to the live world server. As designed, the production path would run at S=1, which leaves the live server at whatever early exit achieves alone. Add one sentence to the interface section saying how S reaches `GpuAgentState` outside the bench `Workload`. That can be a statement that 146 must carry `subdivision_factor` into the engine config, or that the default S changes once it is measured. This is an interface item to record, not new scope for this slice.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The rationale for the S \u2264 8 cap is wrong, and the limit should be one named constant",
+   "description": "Rejecting bad S values with a hard error at config time is right. But the stated reason, that S=8 \"risks pushing \u2026 auxiliary arrays past practical GPU memory\", does not hold. Grid arrays grow with the number of cells. At S=8 in a world of about 756 units that is around 15k cells, which is trivial. The real cost of a large S is the (2S+1)\u00b2 cells each agent scans. Also, the limit appears as `8` both in the validation and inside the error message. The project rules require a value used in comparisons to be defined once, so define it as a single named constant.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The warp-divergence argument assumes agents are ordered by location",
+   "description": "The argument says threads in a warp are \"agents with similar spatial index.\" That is only true if the outer `for i` loop runs in spatially sorted order, not in agent-ID order. The conclusion holds either way. A warp can never take longer than its slowest thread, and with counter-gating every thread already did the full scan. So the `break` cannot be meaningfully slower than the current code. Rest the claim on that bound rather than on an ordering the design does not establish.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27"
+  }
+ ]
+}

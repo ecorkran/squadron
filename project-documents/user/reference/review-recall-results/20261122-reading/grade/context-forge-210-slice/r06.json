@@ -1,0 +1,110 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Copilot backend's source is unspecified, and the example source is one a Copilot-only user won't have",
+   "description": "The file layout says `typescript.instructions.md \u2190 from .claude/rules/typescript.md` and `commit.prompt.md \u2190 from .claude/skills/commit.md` (lines 42, 46). But the Copilot target \"writes exclusively to \u2026 never to `.claude/`\" (line 17). And `cf init --ide copilot` runs only the copilot backend (`init.ts:109-111`), so a Copilot-only user, who is the stated driver (line 23), never gets a `.claude/` directory. If the guide script reads `.claude/`, that user's output is empty or the script errors. If it reads the guide's own source (`project-guides/rules`, `project-guides/agents` in the checked-in copy `project-documents/scripts/setup-ide:49-54`), the layout and translation sections describe the wrong input format. That matters because the guide source uses Cursor-style `globs:`/`alwaysApply` (see `validate_frontmatter`, `setup-ide:112`), not `paths:`. Lines 32 and 71-83 base the whole translation on Claude `paths:` frontmatter. The design must name the source directories and the frontmatter schema the copilot case reads. Until it does, slice-plan criterion 211 (`200-slices\u2026md:211`) can't be implemented reliably.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Skills mapping uses the wrong source layout and leaves translation unspecified",
+   "description": "Skills in this repo are directories, `.claude/skills/<name>/SKILL.md` (e.g. `.claude/skills/analyze/SKILL.md`), not flat files like `.claude/skills/commit.md`. Their frontmatter is `name`, `description`, `disable-model-invocation` (`SKILL.md:1-5`). Copilot prompt files take `name`, `description`, `argument-hint`, `agent`, `model`, `tools` (`200-slices\u2026md:191`; tool guide lines 54, 84). The design doesn't say:\n- how the prompt filename is derived (from the directory name?)\n- which fields map, are dropped (`disable-model-invocation`) or added (`agent`)\n- what happens to supporting files in a skill directory\n\nLine 114 just says \"translate skills \u2192 `.github/prompts/`\". Separately, existing propagation copies only top-level files (`setup-ide.ts:150-153`), so `.claude/skills/<name>/` directories never reach worktrees today. The new copilot block should not be described as \"analogous\" without noting this.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:45-48"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`applyTo` default contradicts the alwaysApply routing, and the plan's \"both forms\" requirement is dropped",
+   "description": "Line 32 says to default to `applyTo: \"**\"` when the source omits `paths`. Line 83 says rules without `paths` are alwaysApply and go into `.github/copilot-instructions.md`, never into split files. So either the `**` default never applies, or there are two routes for the same input. The design must choose one. The slice plan also says the translator \"must handle both forms\" (`200-slices\u2026md:200`), and the design narrows this to `string[]` only. The real files vary in ways a bash/awk translator has to handle: `paths: ` with a trailing space (`typescript.md:3`), one-space item indent (`python.md:4-6`) versus two-space elsewhere, and possibly inline `[\"a\",\"b\"]` lists. Copilot's `applyTo` is split on commas, so a brace glob like `**/*.{ts,tsx}` would be broken apart. The design should state how it rejects or expands those.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The guide-script contract doesn't require the managed marker the safety check depends on",
+   "description": "Silent re-runs (line 65, step 4, and plan criterion 213) only work if the guide script writes `[//]: # (context-forge:managed)` within the first 20 lines of `AGENTS.md` and `.github/copilot-instructions.md`. `isManagedClaudeMd` checks for exactly that (`setup-ide.ts:27-31`). The Files Changed entry for the script (line 114) doesn't list writing the marker. It also doesn't say where the marker goes in `.instructions.md`/`.prompt.md` files: it must come after the YAML frontmatter, or VS Code will stop recognising the frontmatter. The checked-in copy of the script writes no marker at all (`project-documents/scripts/setup-ide:181-184`). Because the script lives in another repo, its required outputs need to be written down here.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Unmanaged collisions and orphaned files under `.github/instructions/` and `.github/prompts/` are unhandled",
+   "description": "Step 4 checks only `.github/copilot-instructions.md` and `AGENTS.md`. Users commonly keep their own files in `.github/prompts/` and `.github/instructions/`. A user-written `testing.instructions.md` or `commit.prompt.md` would be overwritten with no prompt and no backup. That breaks the plan's \"first-run warns before overwriting unmanaged user content\" (`200-slices\u2026md:197`, `:214`). Also, when a rule or skill is removed upstream, its generated file stays forever and keeps being propagated to worktrees. The design names no cleanup step, and only someone deleting files by hand can clear them. It should specify a per-file managed check (or a manifest) and how stale generated files get removed.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:95-100"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Declining the prompt still propagates to worktrees, and propagation overwrites worktree files without checking",
+   "description": "When the user answers no, `setupIdeAction` returns normally (`setup-ide.ts:78-80`). The command action then calls `propagateToWorktrees` anyway (`setup-ide.ts:194-195`). For the copilot target, that copies the root's unmanaged `AGENTS.md` and anything already under `.github/` into every worktree right after the user said no. Propagation also overwrites each worktree's `AGENTS.md` with no managed-marker check. `AGENTS.md` is a common user-written cross-tool file, so this is a real data-loss risk. The sequence (steps 4-6) should say that declining skips step 6, and how existing unmanaged worktree files are handled.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:99-102"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Guide/CLI version skew: the \"clear error\" claim doesn't hold, and existing installations aren't addressed",
+   "description": "Walking through `cf setup-ide copilot` on an existing installation with an older guide:\n1. The CLI accepts `copilot`.\n2. Step 4 may prompt and write `.bak` files.\n3. Only then does the script print \"Unsupported IDE 'copilot'\" (`project-documents/scripts/setup-ide:304-308`).\n4. CF reports \"setup-ide exited with code 1. Check the output above\" (`setup-ide.ts:99-102`), with no hint to run `cf guides update`.\n\nUnder `cf init --ide copilot`, the failure is downgraded to a warning and init still prints \"Your project is ready\" (`init.ts:113-120`). The design should specify a capability check or a targeted hint, the minimum guide version, and the release order between the submodule and the CLI.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-133"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`cf init --ide copilot` still installs Claude-only commands, which the design doesn't acknowledge",
+   "description": "\"No changes to `init.ts`\" means step 3 still runs `installCommandsAction()`. That writes to `~/.claude/commands` (`commandInstaller.ts:92-96`) and prints \"Commands installed\" (`init.ts:101-102`). The CF slash commands, including the onboarding skill from slice 204, are never delivered to Copilot. That falls short of the slice's goal of delivering \"rules, skills, and agent guidance\" to Copilot users (`200-slices\u2026md:184`). The plan's end-to-end criterion lists the copilot flow without a commands step (`:212`). The design should either skip or relabel that step for non-Claude targets, or explicitly defer Copilot delivery of CF commands.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:116-117"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "New helper is redundant, and the design names it inconsistently",
+   "description": "Line 29 says `isManagedCopilot(filePath)`. Line 109 says `isManagedCopilotFiles(projectPath)`, which checks two files. `isManagedClaudeMd(filePath)` (`setup-ide.ts:27-31`) already takes any path and checks the same marker, so it can simply be reused (or renamed to `isManagedFile`). The two-file check is also unclear: if both files are unmanaged, is there one prompt or two? Which files get backed up, and is it `.github/copilot-instructions.md.bak`? Does an existing `.bak` for one file affect the other? Cut the new helper and specify the per-file backup behaviour.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Test plan leaves out the riskiest logic and doesn't match the test setup",
+   "description": "The plan names a high-risk item (\"frontmatter translation correctness\", `200-slices\u2026md:220`) and success criteria for path\u2192`applyTo` translation (`:216`) and manual Copilot verification (`:217`). The design has no test for either: no fixture-based check of the bash translator, and no manual verification step.\n\nThe `propagateToWorktrees` test (line 127) has two problems. The function isn't exported (`setup-ide.ts:127`), and the existing test file mocks only `existsSync`/`copyFileSync`/`readFileSync` (`setup-ide.test.ts:27-41`), while propagation calls `mkdirSync`/`readdirSync`. The test therefore has to go through the command with a worktree fixture and extended mocks, and the design should say so.\n\nLine 129 says \"CI can verify target validation\" for init. But `init.test.ts:41` mocks `setupIdeAction`, so init tests only prove the target string gets passed through (as the existing `--ide cursor` test at `:184` does).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Tool guide isn't referenced, as plan criterion 218 requires",
+   "description": "The slice plan requires the slice design to reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` (`200-slices\u2026md:184`, `:218`) and say whether it becomes a published guide. The design never mentions it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Overview"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Custom-agents mapping is promised but never written",
+   "description": "Line 54 says to \"document the mapping but defer implementation\", and the slice plan assigns \"document mapping\" to this slice (`200-slices\u2026md:192`). The design contains no mapping of `.claude/agents/*.md` to Copilot custom agents: no target path, no frontmatter fields, no list of what doesn't translate.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Help-text work item is a no-op, while the places that do list only `claude` are left alone",
+   "description": "The `setup-ide` argument help is already built from `VALID_TARGETS` (`setup-ide.ts:167`), so line 34 needs no work. Meanwhile:\n- `init --ide` help says only \"(default: claude)\" (`init.ts:44`), and the design rules out touching `init.ts`.\n- `README.md:66,154` and `packages/cli/README.md:122,224` document only `cf setup-ide claude`.\n\nCopilot users won't be able to find the new target. Replace line 34 with these doc and help updates.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "VS Code also reads Claude files, so dual-written projects load rules twice",
+   "description": "The tool guide notes that VS Code reads `CLAUDE.md` and `.claude/rules/` for compatibility (`tool-guides/copilot-vscode/setup-ide.md:18,28,33`). A project that has run both targets, which is the additive model in line 17, will have Copilot load the same rules twice from different sources, with no guaranteed order. That's worth listing under Risks along with how to turn the duplicate source off.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Risks"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Guide-script claims couldn't be verified against the submodule",
+   "description": "`project-documents/ai-project-guide` (declared in `.gitmodules`) isn't checked out in this tree. The only checked-in copy, `project-documents/scripts/setup-ide`, is out of date:\n- it writes no marker\n- it uses `globs:`\n- it emits no `.claude/rules` or `.claude/skills`\n- it already has `cursor` and `windsurf` backends, which partly contradicts line 23's \"add a backend\" framing for future targets\n\nThe submodule-side claims at lines 69, 83 and 114 rest on a script revision the design doesn't identify.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113"
+  }
+ ]
+}

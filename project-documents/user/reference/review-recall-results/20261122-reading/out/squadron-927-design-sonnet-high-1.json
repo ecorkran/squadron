@@ -1,0 +1,346 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D6's degraded-parse premise does not match the parser, and its fix would mislabel every derived-verdict artifact",
+      "description": "D6 describes \"a PASS parsed with `fallback_used=True` (verdict read, findings not)\". The parser cannot produce that state.\n- `parsers.py:1023-1025` sets `fallback_used` in the mismatch branch only for `verdict in (CONCERNS, FAIL) and not findings`.\n- The only other setter is the derived branch (`parsers.py:991-993`). There the verdict comes from findings, so findings are non-empty and `verdict_source` is `DERIVED`.\n- So a PASS with `fallback_used=True` always has findings, and today's `if result.findings:` branch wins.\n\nMaking the notice render \"whenever `fallback_used` is set, after any findings\" (`persistence.py:528`, `review.py:187`) changes every derived-verdict artifact, not only capped ones. It also prints text that is false in that case:\n- The notice reads \"A verdict of PASS was parsed, but no findings could be extracted.\"\n- The terminal reads \"verdict parsed, findings did not.\"\n\nSC7 (line 292) describes a case that does not occur as stated. The design should also account for the existing tests that pin this rendering: `fallback_used` appears 16 times in `tests/review/test_persistence.py` and `tests/cli/test_review_format.py`.\n\nSeparately, `impose_diff_coverage` overwrites `verdict_source` from `DERIVED` to `IMPOSED`. That drops the #97 provenance the slice-919 contract exists to keep. D5 doesn't say whether that is intended.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D4 treats `None` (\"not reported\") as zero, contradicting the design's own convention and the provider code",
+      "description": "D4 uses `(tool_calls_made or 0) - (failed_tool_calls or 0)` and says `None` means \"no tools offered\". Line 216 states the opposite rule: \"`None` means not reported\u2026 `is None` checks, never `or 0`, for counts\". The code shows `None` has two causes:\n- **No tools offered:** `sdk/agent.py:188` and `openai/agent.py:565` stamp tool telemetry only when `_tools_given` is non-empty.\n- **Provider stamps nothing:** the Codex provider reports no telemetry at all.\n\nFor a provider that stamps nothing, the rule cannot know whether a native read happened. It will still cap a truncated PASS. That may be acceptable, but the design should say so and use the right justification.\n\nSC4 also relies on `failed_tool_calls` to cancel out calls. The SDK counter at `sdk/agent.py:178-180` increments only when a top-level stream message is a `ToolResultBlock`. The design does not verify that this fires for real SDK streams; the SDK normally nests result blocks inside a user message. If it never fires, SDK failures read as 0 and \"every read failed\" is not detected on the SDK path. The design should verify or note this, since the unit tests for the cap would hand-set the counts.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A third silent no-diff path is unhandled: `_run_git_diff` returning `None`",
+      "description": "The design names two diff-loss paths: truncation and the total-limit skip. At `review_client.py:420-424`, `_run_git_diff` returns `None` on a non-zero git exit, an `OSError`, or whitespace-only output. In those cases nothing is injected and the model sees no diff. `run_review_with_profile` pre-checks the file list with a separate git call (`_run_git_diff_filenames`, line 110), so the second call can fail independently.\n\nD2 says the key is \"always written\" when a diff was part of the review. D1 and D3 define `DiffInjection` only for the added and skipped-by-budget cases. As written, this case either yields `diff_injection=None`, which reads as \"no diff, no key\", or `diffTruncated: false`. Both claim the model saw everything. This is the same class as #135, so the design should record it as `injected_chars=0` or fail the run.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:117-125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wrong claims about existing call sites",
+      "description": "Step 2 says to \"Update its two `review_client` call sites\". There is one: `review_client.py:154`. `_truncate` has two callers, `_add_injection` (line 376) and `builders/code.py:60`, and the design correctly keeps its signature.\n\nThe listed direct callers also include `test_injection_decision.py`. That file never calls `_inject_file_contents`; line 283 is a comment. It exercises the function through `run_review_with_profile`.\n\nThe real breakage is bigger than listed. `test_content_injection.py` has about 22 call sites that treat the return value as a string. `test_review_client.py:224` patches `_inject_file_contents` with `side_effect=lambda p, *a, **k: p`, and that returns a `str`. Tuple-unpacking it at the call site will raise. An implementer working from the design's list will under-scope step 2.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope is heavier than the slice plan entry requires",
+      "description": "The plan entry (900-slices:440-444) asks for four things:\n- record truncation;\n- cap a truncated, unread PASS;\n- stamp the answering model, with `requestedModel` on difference;\n- decide what counts as \"differs\".\n\nThe design adds mechanisms the requirement does not need. Each of these can be cut or deferred:\n- **Plural `answering_models` plumbing (D12).** It runs through metadata, `TurnCapture` folding, `ReviewResult`, JSON, two Run Digest line variants and a multi-model WARNING. A last-answering-model value plus WARNING on a change meets the requirement. The list can come later if a consumer asks.\n- **New `models/snapshot.py`.** A module for one roughly 10-line predicate, justified by adjacency to `aliases.py`. It can live beside the review code that uses it.\n- **Live capture across four profiles (walkthrough step 6, D9, Risk).** This is a pre-merge task that depends on credentials the operator may not have. It makes the correctness of SC10 conditional on external state. Reduce it to a documented follow-up for profiles that produce a false substitution.\n- **D7 and D13.** These are rationale sections for things the slice does not do. The Excluded list already carries them.\n- **Model checks on every JSON key.** `model_substituted` is derivable from `requested_model` and `answering_models` and duplicates D9 logic, which D10 itself argues consumers shouldn't reimplement.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:67-76"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D10 re-keys metrology judge identity for existing data with no migration or detection",
+      "description": "`metrology/identity.py:329-333` builds `JudgeConfigId(model=str(frontmatter[\"aiModel\"]))`. The design accepts that OpenAI-direct judges move from `gpt-5` to `gpt-5-2025-08-07` \"once\". It does not say what happens to calibration evidence already accumulated under the old id. The code's own docstring (`identity.py:296-301`) records that re-keying \"resets accumulated evidence back to zero\" as the failure that slice 322 designed against.\n\nThe identity also becomes unstable whenever the provider's alias moves to a new snapshot. That is arguably correct, but it is a standing behavior change to a store owned by another slice. The design should state the consequence for existing graduated configs, or keep `aiModel` stable and carry the snapshot elsewhere. Today this is listed under \"Provides to Other Slices\" as a benefit.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough steps that cannot run as written, and one leaves persistent state",
+      "description": "- **Step 6.** It says \"for each profile (sdk, openai, openrouter, local)\", but the only command shown is `sq review slice 927 --model sonnet`. That alias resolves to `claude-sonnet-5` on the sdk profile (`models.toml:45-47`). No command selects the other profiles, so the step as written cannot capture D9's ids for them.\n- **Step 1.** It runs `sq config set review.max_file_size_bytes 20000 --project`, which writes the project config. Steps 2-4 depend on it and only step 5 unsets it. An abort between steps, or a failure in 2-4, leaves the repo's review cap at 20 KB. The design should add a cleanup path or use an environment or per-invocation override.\n- **Step 4.** `sq run review 927` is checked only for \"if the model made no successful tool calls\". Whether the pause appears depends on live model behavior, so it is not a deterministic check of Part B on the pipeline path. SC4's pipeline half is unproven by the walkthrough.",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:315-353"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The PR comment is a rendering surface the design does not cover",
+      "description": "`review/pr_comment.py:38-64` posts `result.verdict` and `result.model` to a GitHub PR. After this slice it will show the capped verdict and the synthetic finding, via `structured_findings`. It will show the answering model without any substitution marker, and it has no truncation line. The data-flow diagram and \"parity is structural\" claim list only three sinks. State whether the comment is intentionally left alone. `result.model` will change meaning there silently.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:78-101"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`judge-findings-addressed` records the requested model in its leg result",
+      "description": "`review/addressed/judge.py:111-134` stores `model=model_id` (the requested id) on `JudgeLegResult`. The leg runs through `run_review_with_profile`, but the design says only that `ActionResult.metadata[\"model\"]` follows the answering model. That leaves a gate judge that still reports the requested id.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:269-280"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SDK model stamping is skipped whenever the result message translates to nothing",
+      "description": "The design stamps answering models \"next to `stop_reason`\". That stamp sits behind `if isinstance(sdk_msg, ResultMessage) and translated:` (`sdk/agent.py:183`). When the result translates to no `Message`, the model is not stamped. The Run Digest line from D11 would then read \"not reported by provider\", which is untrue for the SDK. The design does not address this.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:72"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction, layering and the verdict-cap decision",
+      "description": "- **Cap in `review/`:** the cap is a pure function in `review/`, not in a provider or a gate.\n- **Provider boundary:** providers only stamp metadata and `review_client` stays provider-agnostic.\n- **Verdict policy:** capping PASS to CONCERNS with `verdictSource: imposed` fits the plan entry. It keeps the #5 no-severity-derived-verdicts precedent intact, since the input is a measured fact, and only ever moves PASS down.\n- **Frontmatter additions:** `diffTruncated` and `requestedModel` are additive and optional. They keep the `clean_pass_artifact.md` snapshot byte-identical, and the plan's \"frontmatter fields context-forge reads\" risk is handled.\n- **Ordering constraint:** running `impose_diff_coverage` after the #92 recovery turn and after telemetry assignment matches `run_review_with_profile` (lines 271-278).",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-137"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D6's degraded-parse premise does not match the parser, and its fix would mislabel every derived-verdict artifact",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D4 treats `None` (\"not reported\") as zero, contradicting the design's own convention and the provider code",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A third silent no-diff path is unhandled: `_run_git_diff` returning `None`",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:117-125",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Wrong claims about existing call sites",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope is heavier than the slice plan entry requires",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:67-76",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "D10 re-keys metrology judge identity for existing data with no migration or detection",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "Walkthrough steps that cannot run as written, and one leaves persistent state",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:315-353",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The PR comment is a rendering surface the design does not cover",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:78-101",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`judge-findings-addressed` records the requested model in its leg result",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:269-280",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "SDK model stamping is skipped whenever the result message translates to nothing",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:72",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependency direction, layering and the verdict-cap decision",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-137",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-22T21:35:35.141635",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "chars": 28759,
+      "sha256": "7ae811d9eb376c68c9f107619922a9a5c5db7a1fa0f8debc38f70ba776da891b",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+      "chars": 115112,
+      "sha256": "9d434475b5a0836d60a8273ddb3490fddefc08a1fb91fc29769073f8fb601e9f",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/review_client.py",
+    "src/squadron/review/models.py",
+    "src/squadron/review/turn_capture.py",
+    "src/squadron/review/persistence.py",
+    "src/squadron/pipeline/actions/review.py",
+    "src/squadron/metrology/identity.py",
+    "src/squadron/cli/commands/review.py",
+    "src/squadron/review/pr_comment.py",
+    "src/squadron/review/builders/code.py",
+    "src/squadron/providers/sdk/agent.py",
+    "src/squadron/providers/openai/agent.py",
+    "src/squadron/config/keys.py",
+    "src/squadron/providers/sdk/translation.py",
+    "tests/pipeline/actions/test_review_action.py"
+  ],
+  "searches": [
+    "grep _inject_file_contents|_truncate\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design",
+    "grep aiModel|requestedModel|verdictSource|diffTruncated in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src",
+    "grep run_review_with_profile|parse_review_output\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src",
+    "grep fallback_used|model=|\\.model\\b|_display_terminal|\\*\\*Model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli/commands/review.py",
+    "grep fallback_used in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/review/parsers.py",
+    "grep save_review_result|format_review_markdown|to_dict\\(|\\.verdict\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep model|diff in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli/commands/review_pr.py",
+    "grep stop_reason|_tool_calls_made|def handle_message|_skip_unparseable|AssistantMessage|ResultMessage|tools_given in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk/agent.py",
+    "grep _stamp_tool_telemetry|class TurnResult|chunk\\.|metadata\\[|\"model\"|stop_reason in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/openai/agent.py",
+    "grep max_file_size_bytes|max_total_injection_bytes in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/config",
+    "grep tool_calls_made|tools_given|answering|can_read_files in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers",
+    "list_files src/squadron/providers/**/*.py in .",
+    "grep sonnet|opus|haiku in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data",
+    "grep failed_tool_calls|ToolResultBlock|is_error in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk",
+    "grep snapshot|capture|answer|expected_aimodel|aiModel in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep \\bmodel\\b.*(==|is)|metadata\\[.model.\\]|\\\"model\\\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/pipeline/actions",
+    "grep class TurnResult in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/openai/agent.py",
+    "grep no.tools|no_tools|--output in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli/commands/review.py",
+    "grep def _make_review_result|def _make_context|model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/pipeline/actions/test_review_action.py",
+    "grep Model:|aiModel|result\\.model|\\.model == in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep fallback_used in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep _inject_file_contents|inject_file|patch\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/review/test_injection_decision.py",
+    "grep diff_exclude_patterns in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/templates/code.yaml",
+    "grep _aggregate_verdicts|ensemble|tool_calls_made|model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/review/addressed/judge.py",
+    "list_files src/squadron/data/pipelines/review*.yaml in .",
+    "grep class JudgeConfigId|model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/metrology/models.py"
+  ],
+  "sections_in_document": 41,
+  "sections_not_covered": [
+    "Dependencies",
+    "Architecture",
+    "D1 \u2014 Measure characters; frontmatter carries only `diffTruncated`",
+    "D2 \u2014 `diffTruncated` is present exactly when the review had a diff",
+    "D3 \u2014 A diff dropped by the total-injection limit is a truncation to zero",
+    "D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run",
+    "D5 \u2014 `VerdictSource.IMPOSED`",
+    "D6 \u2014 A synthetic finding must not hide a degraded parse",
+    "D7 \u2014 Diff ordering and `--stat` deferred to #137",
+    "D8 \u2014 Where each provider reads the answering model",
+    "D9 \u2014 What counts as \"the model that was requested\"",
+    "D10 \u2014 `aiModel` is the answering model; `requestedModel` appears only on substitution",
+    "D11 \u2014 Not reported: keep the requested id, say so in the artifact",
+    "D12 \u2014 More than one model answered in one run",
+    "D13 \u2014 Provider-failure artifacts are unchanged",
+    "Implementation Details",
+    "Provides to Other Slices",
+    "Consumes from Other Slices",
+    "Functional Requirements",
+    "Technical Requirements",
+    "Technical Risks"
+  ],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 236,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 43,
+  "prompt_tokens": 1735345,
+  "cached_tokens": 1586874,
+  "cache_write_tokens": 148443,
+  "completion_tokens": 25537,
+  "reasoning_tokens": null,
+  "duration_seconds": 193.8579393341206,
+  "cost_usd": 1.0135834,
+  "cost_basis": "provider"
+}

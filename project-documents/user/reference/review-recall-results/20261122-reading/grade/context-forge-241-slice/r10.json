@@ -1,0 +1,103 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The `arch` (pre-slice-plan) boundary is not designed against the code path it actually lives in",
+   "description": "Line 168 says the `arch` boundary \"follows the identical shape\" as the code example; lines 57 and 128 say the no-active-slice path \"already computes\" it. The code contradicts this in five ways:\n\n- **Not reached by `deriveSliceStatus`.** It returns `no-active-slice` at `packages/core/src/introspection/WorkflowNavigator.ts:453-455` before `detectDocuments` is called. The \"arch exists, no slice plan\" decision is made inside the `getNext()` guard at `:98-166`, not in status derivation.\n- **Pre-empted by `detectFirstRunContext`.** That method runs first (`:113-121`) and returns for Phase 2 (\"Architecture document exists. Advance to Phase 3\", `:413`) and Phase 3 (\"Create a slice plan\", `:424`). Those are the phases where this boundary occurs. The generic branch at `:135-155` is only reached in other phases. The design never mentions `detectFirstRunContext`, so a gate wired at the generic branch would not fire in the normal lifecycle.\n- **No index for discovery.** `detectDocuments(projectPath, sliceIndex: number, reviewType?)` (`parsers/documentDetector.ts:46-50`) needs a numeric index, and here the slice index is `null`. The design never says which index keys `NNN-review.arch.*.md` (presumably `extractSliceIndex(project.fileArch)`).\n- **No workable status carrier.** If `pending-review` is set on `activeSlice` (name `''`, index `null`), the guard at `:98` stops matching. Control falls into the active-slice path, and the reserved branch at `:248` and `buildSummary` (`:550-551`) render an empty slice label. If it is not set on `activeSlice`, TD-3's claim that statuses flow through `getStatus()` fails for this boundary and the reserved branch is unreachable.\n- **Overlap with an active slice.** The state \"active slice complete, arch exists, no slice plan\" (`:272-295`) is not addressed: does it owe `code`, `arch`, or both?\n\nThe plan folded slice 244 in on the premise that this is \"one more case of the same mechanism\" (plan line 27). The design must specify:\n- the insertion point relative to `detectFirstRunContext`;\n- the index source;\n- where the status is carried;\n- the recommendation shape when there is no slice.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:168"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config-read failure is unhandled and breaks the \"gating off \u21d2 identical\" guarantee",
+   "description": "To learn that gating is off, the navigator must call `ConfigManager.get('workflow.review_enabled')`. That call reads the project and user TOML each time (`packages/core/src/config/ConfigManager.ts:98-112`), and `readToml` rethrows anything except `ENOENT` (`:21-31`). Today `cf next` and `cf status` never read config.\n\nAfter this slice, a malformed `.context-forge.toml` or user `config.toml` changes their behavior even with gating off. Two outcomes are possible and the design names neither:\n- **Read outside the try:** the error propagates and the command fails.\n- **Read inside the try:** the swallow-all `catch` in `deriveSliceStatus` (`WorkflowNavigator.ts:465-499`) turns it into `no-active-slice`, and `cf next` says \"pick your first slice\".\n\nThe second outcome is the silent misroute the arch's fail-fast principle forbids (arch line 48). The design should:\n- place the read outside the catch;\n- state that config errors propagate (the CLI `handleError` and MCP `errorResult` already catch);\n- qualify lines 32, 305 and 391 accordingly;\n- add a test.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:108"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Hand-edited invalid config values pass or block silently",
+   "description": "`ConfigManager.get` does not validate; `validateValue` runs only in `set` (`ConfigManager.ts:145`). The design narrows with `=== true`, so `review_enabled = \"true\"` in a hand-edited TOML silently disables gating. An out-of-enum `review_threshold`, `review_unknown_as` or per-gate `threshold` has no defined behavior at all.\n\nArch line 48 requires an invalid threshold or per-gate value to be \"surfaced immediately, not a silent pass or silent block\". `resolveGateConfig` should check type and enum against `CONFIG_KEYS` and throw.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:275"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Gated statuses carry no review type, boundary, verdict or threshold",
+   "description": "TD-3 has `getNext()` \"only route\" from `slice.status`. TD-7 (line 268) requires the rationale to name the review type, verdict and threshold. `SliceStatus` (`introspection/types.ts:255-264`) has no field for any of these, and one `pending-review` value now covers four boundaries.\n\nThe design does not say how the data crosses from `deriveSliceStatus` to the branch. It also leaves a runner to parse the rationale to learn which of four review agents to dispatch. That conflicts with the arch goal that consumers act \"without parsing recommendation strings\" (arch line 32).\n\nAdd an optional structured field to `SliceStatus`, for example `review?: { boundary, reviewType, outcome, verdict?, threshold?, artifact? }`. This is additive and leaves `NextAction` untouched. Also state whether `taskProgress` is kept on gated statuses.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Recommendation vocabulary is left open and diverges from the architecture",
+   "description": "The arch specifies `recommendation: \"review\"` and `\"blocked\"` (arch lines 118, 124) as a stable vocabulary for Amoeba (arch line 173). Line 286 of the design calls them \"the stable strings runners route on\". TD-7 instead gives prose (\"Review required before advancing\", \"Blocked: review verdict does not clear threshold\") and defers \"exact strings\" to implementation.\n\nThe examples are also specific to the code boundary (\"is complete\", \"before advancing\"), yet the same branch serves all four boundaries. The plan entry asks for \"structured rationale\". Fix the exact values and the per-boundary template in the design; 242, 243 and external runners key on them.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:255-268"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`reviewGate.ts` interface is internally inconsistent and not reusable by 242 as described",
+   "description": "- **Who reads config is contradictory.** Line 109 says the navigator calls `this.config?.get(...)` and hands raw values to `reviewGate`. Lines 56 and 191 say `resolveGateConfig(config)` reads them.\n- **Signature cannot do what it claims.** `resolveGateConfig(config)` takes no boundary but must resolve the per-boundary threshold. `ResolvedGate` is never defined. The mapping from `Boundary` (`preSlicePlan`) to the shipped key segments (`pre_slice_plan`, `ConfigKeys.ts:55-105`) is unstated.\n- **Not pure.** `get` is async and returns a `ConfigResult` wrapper (`ConfigManager.ts:91`), so `resolveGateConfig` is async file I/O. TD-1's \"standalone pure module\" and line 172 overstate this.\n- **Dead return value.** `evaluateVerdict` is typed to return `pending` but never does; line 218 has the navigator supply it.\n- **Orchestration stays in the navigator.** The detect \u2192 null-check \u2192 parse \u2192 normalize \u2192 evaluate sequence lives there, so 242 must re-derive it, which TD-1 claims to avoid.\n- **Missing signature.** \"Also exposes the normalized verdict and resolved threshold\" (line 218) has none.\n\nDefine one async entry point, for example `evaluateGate(config, projectPath, index, boundary)`, that returns a result object. Keep the pure matrix beneath it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:188-191"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Arch requirement that the rationale name a parse failure is unmet",
+   "description": "Arch line 149 says: \"The rationale returned to the caller names the parse failure explicitly.\" The design treats the collapse in `parseFrontmatter` as \"exactly the behavior the gate needs\". That parser returns the same empty result for an unreadable file, missing frontmatter and unterminated frontmatter (`parsers/frontmatterParser.ts:10, 16-18, 44-48`).\n\nLine 268 requires only type, verdict and threshold in the rationale. The design should distinguish at least three causes and say so in the rationale: unreadable or no frontmatter (`found === false`), `verdict` absent, and `verdict` unrecognized.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "TD-4's reason for keeping the `review_type` keys is wrong, and the keys keep false descriptions",
+   "description": "- **The keys are not released.** The design says they \"shipped in a released version\". They sit under `## [Unreleased]` in `CHANGELOG.md:16-19`; the last release is 0.8.1.\n- **Removal is not \"a one-line deletion\".** It is four definitions (`ConfigKeys.ts:55, 68, 81, 94`), tests at `packages/core/tests/config/ConfigManager.test.ts:299-325` and `:351-357`, and the changelog line.\n- **Kept keys mislead.** Their descriptions say \"review type required before \u2026 (gate logic added in slice 241)\" (`ConfigKeys.ts:59`). A user who sets one is silently ignored. Line 64 excludes description edits from this slice.\n- **The call is not made.** The decision is handed to \"the PM at implementation\", though plan line 28 says the design decides.\n\nWith no compatibility risk, removal is the lighter option. Otherwise correct the descriptions in this slice.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:228"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cannot be run as written",
+   "description": "- **Step 2 `--project <scratch>`.** `cf config` passes this value straight to `new ConfigManager(opts.project)` as a filesystem path (`packages/cli/src/commands/config.ts:18, 59`). The option's help text says \"Project ID or name\" (`packages/cli/src/options.ts:10`). Passing a name writes `./<name>/.context-forge.toml`, which the navigator never reads. Omitting it writes user scope and gates every project.\n- **No setup.** Nothing creates the scratch project: registration, an arch, a slice plan with an unchecked next entry (needed for step 5's \"Advance\", `WorkflowNavigator.ts:252-262`), and an all-checked task file.\n- **Steps 6 and 7 are out of order.** Step 6 switches to a design-only slice with no command shown. Step 7 then expects \"Blocked \u2026 verdict CONCERNS\", which belongs to the step-5 slice. With the step-6 slice active, the output is still \"Review required\".\n- **Missing boundaries.** No step exercises the `arch` or `tasks` boundary, though both are in scope.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:323-367"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "MCP `workflow_status` description still lists a closed set of four statuses",
+   "description": "The design limits the MCP change to constructor wiring. `packages/mcp-server/src/tools/workflowTools.ts:128` tells agents the status is one of \"(needs-design, needs-tasks, in-implementation, complete)\". Slice 243 covers the README and config reference, not tool descriptions. Runners read this string as the contract, so update it in this slice.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:93"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The documented no-op `score` path is dropped with no owner",
+   "description": "Plan line 29 says score gating is \"a documented no-op code path in v1, not a separate slice\". Arch line 100 says `score` is \"read and stored when present\". The design excludes score entirely and adds no placeholder. Either add the documented no-op in `reviewGate.ts`, where the frontmatter is already parsed, or name the slice that owns it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:66"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Enabling gating turns on all four gates, and earlier gates are not re-checked",
+   "description": "This is sanctioned by plan line 26, but the design should state the consequences:\n- An existing mid-implementation project reports `pending-review` (tasks) as soon as `review_enabled` is set. There is no per-boundary opt-out.\n- A failing `slice` review stops mattering once a task file exists, because only the current boundary is evaluated.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:28"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Gate needs a second `detectDocuments` call, and the zero-task case is unassigned",
+   "description": "The boundary is only known after the untyped call at `WorkflowNavigator.ts:466`, so the typed lookup repeats four directory reads. A task file with zero parsed tasks maps to `needs-tasks` (`:482-484`), but the design defines pre-tasks as \"no task file\". Say which gate applies.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:157"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Restated material can be cut",
+   "description": "The checkbox-trigger rationale appears at line 141, in TD-5 and in plan line 31. Special Considerations (lines 391-395) restates TD-2 and Patterns. Keep one copy of each.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:233-235"
+  }
+ ]
+}

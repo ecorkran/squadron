@@ -1,0 +1,159 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task file was written against a pre-313 baseline; most of the work already exists",
+   "description": "The tree already contains: `BoundsPolicy` with four variants including `SOFT` (config.py:17-23), the `policy` field (config.py:52), the loader and validation (config.py:198-216), the whole `bounds_enforcement.py` module (with WRAP and REFLECT implemented), the `step()` gate and import (simulation.py:10-11, 112-119), the server wiring and startup log (server.py:130, 134-137), `policy: wrap` in both YAMLs (default.yaml:12, test.yaml:12), 20 `test_bounds_enforcement.py` tests, the 313 config tests (test_config.py:172-219), the 313 CHANGELOG entries (CHANGELOG.md:27-33, 42), and the architecture `[x]` at 300-slices.worldserver-foundation.md:43.\n\nStill unbuilt: the Task 3.4 integration tests (no test in `test_simulation.py` references `BoundsPolicy` or `apply_bounds_policy`), the Task 5.2 manual walkthrough, and the commits. The Context Summary (lines 30-40) also still lists `bounds_enforcement.py` and its test file as \"new file\". The task should be rewritten as \"verify present, fill the gaps\" rather than \"create\".",
+   "location": "src/migratory_server/config.py:17"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 1.1 as written would drop `SOFT` and crash WRAP/REFLECT",
+   "description": "Task 1.1 (lines 48-55) says to define a three-variant `BoundsPolicy` before `WorldBoundsConfig`. A second class definition would shadow the existing one without `SOFT`. `apply_bounds_policy` then evaluates `case BoundsPolicy.SOFT:` at line 41. For a WRAP call, the OPEN case fails and the SOFT case raises `AttributeError`, so the first WRAP tick crashes. `config.py:213-219` and `force_builder.py:53` also depend on `SOFT`. Task 1.1 should be removed and replaced with a check that the existing enum is present.",
+   "location": "src/migratory_server/bounds_enforcement.py:38-46"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 1.4 duplicates existing tests with identical names",
+   "description": "Task 1.4 (lines 82-88) asks for seven test methods. The file already defines each one under the same name (`test_bounds_policy_omitted_defaults_open`, `_wrap`, `_reflect`, `_case_insensitive`, `_unknown_raises`, `_non_string_raises`, `_yaml_round_trip`) inside `TestRangeValidation` (class starts at line 139). Same-named methods in one class silently replace each other, so a literal add loses a copy with no error. Line 80 also names a `TestWorldBounds` class, which does not exist. The task should be gap-fill only.",
+   "location": "tests/test_config.py:172-219"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Existing unknown-policy test does not check the listed options",
+   "description": "Slice criterion 3 (slice:360-362) requires a `ConfigError` that lists the valid options. The existing test only matches `simulation.world_bounds.policy`. Task 1.4 line 86 asks for the list, but treats the test as new. The fix is to tighten the existing assertion. The list will now include `soft`.",
+   "location": "tests/test_config.py:197-200"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Round-trip check is narrower than slice criterion 5",
+   "description": "Slice criterion 5 (slice:365-366) requires the reloaded `ServerConfig` to equal the original. Task 1.4 line 88 and the existing test assert only `policy`. The fix is `assert cfg2 == cfg`.",
+   "location": "tests/test_config.py:207-219"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`np.mod` can return exactly `width`, contrary to Task 2.2's claim",
+   "description": "Task 2.2 line 134 says `np.mod` yields values in `[0, width)`. For tiny negative inputs it does not. `np.mod(-1e-15, 100.0)` rounds to `100.0`, because `fmod` gives `-1e-15` and adding 100 rounds up. That violates slice criterion 7 (slice:369-371) and the `< width` assertion Task 3.4 makes at line 229. The fix is a post-mod `np.where(x >= width, 0.0, x)` for each axis, plus a test with a `-1e-15` input.",
+   "location": "src/migratory_server/bounds_enforcement.py:59-60"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 3.1 \"required\" argument conflicts with the existing optional parameter",
+   "description": "Task 3.1 (lines 186-187) says to add a required keyword argument. The tree has `world_bounds: WorldBoundsConfig | None = None` with a fallback to `entity_manager.world_bounds` (simulation.py:64, 72-75). Making it required breaks 20 existing `SimulationManager(...)` calls in `tests/test_simulation.py` that pass no `world_bounds` (lines 137, 147, 164, 184, 201, 224, 242, 262, 292, 334, 374, 427, 443, 471, 486, 501, 518, 535, 550, 565). Task 3.4 line 233 says \"check the file for all call sites\" without naming them. The task should either keep the parameter optional or list those 20 sites and remove the fallback. The slice says \"required\" (slice:272), so the choice needs to be stated.",
+   "location": "src/migratory_server/simulation.py:57-76"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 3.4 reflect-flip test cannot pass as written",
+   "description": "Task 3.4 line 231 steps one agent at `(99, 50)` with velocity `(10, 0)` and asserts `vx < 0`. The `_profile()` helper sets `max_speed=5.0` (line 89). `integrate` clamps velocity to `max_speed` before advancing position (integration.py:38-44 and the clamp at 47-73), so `vx` becomes 5. At the suite's usual `dt=0.05` (e.g. test_simulation.py:297), x moves from 99 to 99.25. No edge is crossed and `vx` stays positive, so the test fails. It passes only with `dt` large enough to cross 100, such as `dt=1.0`.\n\nThe task also never specifies `dt`, the agent-placement method (precedent: test_simulation.py:288 writes `em.state.velocities` directly), or the speed needed for the OPEN drift test at line 228. The fix is to state those values.",
+   "location": "tests/test_simulation.py:86-95"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 5.4 would duplicate existing CHANGELOG entries",
+   "description": "Task 5.4 (lines 318-320) asks for 313 entries under `[Unreleased]`. CHANGELOG.md already has them: `Added` at lines 27-33 and `Fixed` at line 42. Following the task literally duplicates them.",
+   "location": "CHANGELOG.md:27-33"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 5.2 expects \"Spawned 100 entities\", but `config/test.yaml` spawns 160",
+   "description": "Task 5.2 Step 4 (line 302) defers to the slice's expected startup sequence. That sequence says `Spawned 100 entities` (slice:432), and the slice's Configuration Defaults section says \"100 agents\" (slice:321). The populations are 150 (test.yaml:41) and 10 (test.yaml:48), for 160 total, and server.py:109 logs that count. Step 4 also expects a plain-text `Bounds policy: wrap` line, but `logging.format` is `json` in test.yaml, so the line is a JSON record. The walkthrough should expect 160 and describe the JSON form.",
+   "location": "config/test.yaml:41"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 5.2 steps 5\u20137 require a human-observed viewer with no automated check",
+   "description": "Steps 5\u20137 (lines 303-305) need a person watching a Three.js viewer for 30\u201360 seconds and judging \"no drift\". Slice criterion 14 (slice:390-392) is the requirement. The plan offers no scripted substitute. CHANGELOG.md:58 says `protocol.py` provides `deserialize_message()`, which could decode STATE_UPDATE frames from a websocket client and assert the bounds. I did not open `protocol.py` to confirm that. The viewer step can stay as an optional human check.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 5.2 edits the tracked `config/test.yaml` in place, and nothing reverts it",
+   "description": "Steps 6\u20137 (lines 304-305) set `policy: reflect` and `policy: open` in the tracked file. Step 8 restores it by hand. If the run is interrupted, the shipped config stays modified. Task 5.5 (line 324) stages only docs, so nothing detects or reverts the change. The variant runs should use a temp config copy, or 5.5 should check that `test.yaml` still says `wrap`.",
+   "location": "config/test.yaml:12"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes",
+   "description": "The markers at lines 96, 179, 249, 286 and 325 are written `- [ ] **Commit:** ...`. The format requires plain `**Commit**:` lines, never checkboxes, and a checkbox can be ticked as if it were a step. Their placement after passing test runs is fine.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Tasks 4.1 and 4.2 say \"add\" for a key that is already present",
+   "description": "Lines 256 and 272 ask to add `policy: wrap`. Both files already have it (default.yaml:12, test.yaml:12). No pytest test loads `config/test.yaml`; `test_config.py:45` loads only `default.yaml` and checks the port. Slice criterion 12's test.yaml half is therefore checked only by the one-off `python -c` command. Those commands also omit the `source .venv/bin/activate` step the slice uses (slice:407), so they may fail outside the venv.",
+   "location": "config/test.yaml:12"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Task 5.3 is already satisfied",
+   "description": "The `(313)` line is already `[x]` at architecture line 43. The slice frontmatter already says `status: complete` (slice:10), as does the task file frontmatter (task file line 9). Task 5.3 (lines 312-314) is a no-op. A task file marked complete before any task is executed is misleading.",
+   "location": "project-documents/user/architecture/300-slices.worldserver-foundation.md:43"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Context Summary and Notes describe `SOFT` as deferred and the enum as three variants",
+   "description": "Lines 19-20 list only `OPEN / WRAP / REFLECT`, and line 332 says a `SOFT` variant is \"intentionally deferred\". `SOFT` landed in slice 314 (config.py:23, bounds_enforcement.py:41-42, force_builder.py:53-62, CHANGELOG.md:15-26). Lines 329-331 and 333-334 remain accurate.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:19"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Dispatch test omits `SOFT`, and the Task 2.1 origin comment is absent",
+   "description": "Task 2.3 (line 171) parametrizes over three policies. The file's dispatch test covers OPEN, WRAP and REFLECT only, so the SOFT no-op branch (bounds_enforcement.py:41-42) is untested. Task 2.1 line 124 asks for a comment referencing `build_world_bounds`. The module has no such reference; the only origin note is the `_apply_wrap` docstring at lines 53-57.",
+   "location": "tests/test_bounds_enforcement.py:217"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Task 3.5 names files that need no change",
+   "description": "Line 241 says `test_force_builder.py` and `test_clients.py` may need `world_bounds` added. `test_force_builder.py` already passes it (lines 201-207). `test_clients.py` does not construct a `SimulationManager` at all.",
+   "location": "tests/test_force_builder.py:201"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Task 3.2 asks to confirm \"zero import-time overhead\" while its own snippet adds a module-level import",
+   "description": "Line 195 adds a top-level import of `apply_bounds_policy`, and the Notes (line 329) accept that the import is not avoided. Line 209 then asks to confirm zero import-time overhead. That check cannot pass, and it is verified only by inspection. Line 209 should drop \"import-time\".",
+   "location": "src/migratory_server/simulation.py:10"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Stale line references and ordering claims",
+   "description": "Task 1.1 (line 46) places `WorldBoundsConfig` at line 25; it is at config.py:46-53. Task 1.3 (line 69) places `_validate_world_bounds` \"around line 156\"; it is at config.py:180. Task 3.3 (line 218) says to log \"after the `Forces wired` log\"; the log is after the `SimulationManager` construction at server.py:134-137.",
+   "location": "src/migratory_server/config.py:46"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Sizing: 23 tasks and 5 commits for a slice that is mostly built",
+   "description": "Tasks 1.1\u20131.3 change one file (config.py) and one enum, field and loader, and 1.2 is a single-line change. Tasks 3.1\u20133.2 touch one file. The `pytest` run is repeated in 3.5 (line 240), 5.1 (line 292) and 5.2 Step 2 (line 300). Tasks 5.3\u20135.5 are bookkeeping that no slice criterion requires. Merge 1.1\u20131.3 and 3.1\u20133.2, and drop 5.1.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:44"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "`SimulationManager` class docstring not updated",
+   "description": "The docstring lists a three-step cycle with no bounds step. No task updates it.",
+   "location": "src/migratory_server/simulation.py:51-55"
+  }
+ ]
+}

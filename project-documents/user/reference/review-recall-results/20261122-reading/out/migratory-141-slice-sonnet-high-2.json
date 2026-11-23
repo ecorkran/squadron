@@ -1,0 +1,424 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The \"numpy\" backend would run Numba-JIT forces, and the claim that Numba does not exist today is wrong",
+      "description": "The design says NumPy is \"the only backend that exists today\". Slice 118 is already in the code: `src/migratory/engine/forces_jit.py` holds `@njit` kernels, and `src/migratory/engine/_jit_config.py:14` sets `USE_JIT_KERNELS: bool = True`. The `CohesionForce`, `SeparationForce`, `AlignmentForce`, `MomentumForce` and `LeadershipForce` wrappers dispatch on that flag (`flocking.py:82,192,326`, `herding.py:32,175`). Calling `engine.tick.tick()` with the default flag, as the design describes, therefore benchmarks Numba, not NumPy. The report would label those numbers `backend: \"numpy\"`.\n\n- The design never mentions the flag.\n- To get a real NumPy row, the runner must set `_jit_config.USE_JIT_KERNELS` and restore it in `finalize`. That is a process-global side effect, and it interacts with `--all-backends` running in one process (open question at lines 762-766).\n- The \"warmup lets JIT warm\" comment at line 388 shows the author did not realise the default path is JIT.\n- The design should define separate `numpy` (flag off) and `numba` (flag on) backends. Adding `numba` is cheap because it needs no new kernels.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Workload schema uses 3-D coordinates, but the engine is 2-D",
+      "description": "`src/migratory/__init__.py:4` sets `DIMS = 2`. `AgentState.create` allocates `(n, DIMS)` arrays, and the spatial interface documents `(n, 2)`. The sample YAML gives `world_size: [200.0, 200.0, 200.0]` and 3-vector `cluster_centers`. Following the design as written would either fail on load or put the wrong shape into `state.positions`.\n\n- The scaffold in `src/migratory/bench/workload.py:187-191` already enforces 2 entries, so the design and the code in the tree disagree.\n- Density is also never defined. Scope line 70 lists a `density` field and a separate \"formation seed\", but the schema has neither.\n- Density for the three regimes (`dispersed`, `mid-flock`, `packed-herd`) is only implicit in `n`, `world_size` and `cluster_radius`. The doc gives no values for `dispersed` or `packed-herd`.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:364-368"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload setup is under-specified, so the parity hash and force behaviour are ill-defined",
+      "description": "The design says nothing about several inputs that decide whether the benchmark exercises the forces at all.\n\n- **Initial velocities:** unspecified. With zero velocities, `MomentumForce` and `PropulsionForce` return zero (`herding.py:145-151`), and alignment is trivial.\n- **Profile assignment:** how the fractions map to `profile_indices` (contiguous or shuffled) is not stated. Neither is the RNG used for it.\n- **Leadership:** the `leader` profile at 5% only matters if `state.leadership` is set. `AgentState.create` zeroes it (`state.py:71`), and the server never assigns it (`simulation.py` only passes `leadership_weight`). The design does not say how leaders get a non-zero `state.leadership`.\n- **Propulsion:** the `flocker` profile has `propulsion_weight` 0.1, but the sample force list omits `propulsion`. `PropulsionForce` exists and is in the plan's six-force list, and `default.yaml:166-168` notes that agents decay without a driver. The \"five existing BulkForce implementations\" count at line 138 is wrong.\n- **Bounds:** no bounds policy is applied. Over 660 ticks a `packed-herd` or `dispersed` workload will drift away from its named density regime. The doc does not acknowledge this.\n- **Validation:** the loader fails on missing fields only. Nothing checks `n > 0`, fractions summing to 1, or positive tick counts. `aggregate()` already raises `ValueError` on empty input (`runner.py:63`), so `measure_ticks: 0` would surface only mid-run.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:347-404"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Default operating point\" and profile claims do not match `config/default.yaml`",
+      "description": "The design says `mid-flock` is \"roughly equivalent to the live-server default config\" and that profile names map to \"the constructors used in `config/default.yaml`\".\n\n- `config/default.yaml` is 100 agents on a 1000\u00d71000 wrapped world at 20 TPS.\n- `max_neighbors` is commented out there. The design's `flocker` profile in `workload.py` sets `max_neighbors=32`, so `tick()` takes the `all_capped` `query_knn_batch` fast path rather than the uncapped path.\n- The spatial backend in production is `AdaptiveSpatial`, not `KDTreeQuery`. The design never says which production configuration the workload is meant to match.\n- BehavioralProfile instances are not \"constructors in default.yaml\". Profiles are built from `ProfileConfig`.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:350-353, 392-396"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Force and spatial references do not exist as named",
+      "description": "- Line 399 says force names resolve to \"module-level singleton instances (e.g. `flocking.cohesion_force`)\". No such symbol exists. The forces are zero-arg classes, and the server instantiates them per use (`force_builder.py:62`).\n- Line 542 cites `engine.spatial.KDTreeQuery`. The class is `migratory.spatial.kd_tree.KDTreeQuery`. Line 136 gives the vaguer path `migratory.spatial`.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-399, 542"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Numba and Quadrants slice assignments contradict the slice plan",
+      "description": "The design says \"Slice 144 registers `numba`\" and calls Numba \"slice 144 / 118 territory\". Under the slice plan:\n\n- Numba is slice 118, a prerequisite and not future work (plan lines 19, 43).\n- Slice 144 ports Quadrants force kernels (plan line 34).\n- Slice 142 must benchmark its Quadrants cohesion kernel \"against the existing NumPy and Numba implementations\" (plan line 30), with dependencies (141) and (118).\n\nSlice 142 therefore needs a Numba row from the harness. The design's Integration Requirement that 144 adds `numba` leaves 142 without one. The plan also says \"Numba and Quadrants slot in as those backends become available\", and Numba is available now. Deferring it drops plan scope. The design should ship `numba` here, since it costs one small file once the flag toggle exists.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92, 341-345, 589-591"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice-plan scope silently dropped: per-force timings and formation-dependent breakdown",
+      "description": "The plan entry (line 26) assigns \"force totals per force\" and \"Reports include the formation-dependent breakdown noted in the architecture's Profile Principle\". The design collapses forces into one `force_total_ns` and defers per-force timings to slice 142 (\"extend `PhaseTimings` later\"). It offers no cross-workload view tying formation regime to phase mix beyond separate tables.\n\n- Per-force timing is cheap to do properly here, for example by wrapping each force call.\n- The design's later `force_breakdown` field would bump `schema_version` and force a rewrite of the `PhaseTimings` frozen dataclass.\n- The plan also names CSV/JSON output and Metal and CUDA coverage. The design drops CSV without comment.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tick_instrumented` is a full copy of `tick()`, and the effort estimate and boundary definitions are wrong",
+      "description": "The design says duplication is \"~5 lines per phase\". `tick()` (`tick.py:42-132`) has two query branches (`all_capped` knn vs radius), `exclude_self`, `apply_neighbor_cap`, CSR offset construction, the `n == 0` early return, `active_indices` handling and the `record_density` hook. A faithful copy is about 80 lines.\n\n- Phase boundaries are not defined for the code between the stages. The profile-attribute arrays (`tick.py:58-72`) sit before the query, `exclude_self`/`cumsum` could be either `spatial_query` or `csr_assembly`, and `max_speeds` (line 114) sits between forces and integrate. The design never says which bucket each falls in.\n- The risk section says `all_radii = np.array(...)` is inside `force_total`. In `tick()` it is computed at step 3, before the spatial query, so that claim is wrong.\n- The design's own mitigation concedes that phase-boundary drift is \"not detectable mechanically\".\n- A lighter option measures the production `tick()` unmodified. Wrap `spatial.build`, `spatial.query_*` and each force call in thin timing proxies, plus `integrate`. This removes the copy, the drift risk and the bit-equality test. Compare that option against the heavier one before committing.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-272, 496-506, 682-695"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Interface list contradicts itself on whether the harness calls `tick()` or `tick_instrumented()`",
+      "description": "Lines 131-132 and 541 say \"the harness's NumPy runner calls `tick()` directly\" and \"`engine.tick.tick` \u2014 called by the NumPy backend\". The Technical Decisions and Data Flow sections say it calls `tick_instrumented()`. Only the latter is consistent with the timings design. The \"Consumes\" list should drop `tick()` and list the sub-functions that `tick_instrumented` actually imports (`integrate`, `exclude_self`, `apply_neighbor_cap`, `CSRNeighborData`). Those are real dependencies on engine internals.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132, 541"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity hash timing is inconsistent and its reference-value use is under-specified",
+      "description": "- Scope line 81 says the hash is of the \"post-warmup\" state. Line 460 says \"after the measure phase\", and the Data Flow diagram hashes the final result.\n- The NumPy golden is claimed deterministic, but the doc does not state what the hash is over for non-NumPy runs.\n- `TickResult` is a view over live state and its lifetime ends at the next tick (`tick_result.py`). The hash must be taken before any further tick. That is fine, but the design should say so.\n- A parity hash on the numpy and numba paths will differ unless the flag toggle is controlled. That follows from the flag finding above.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:81-83, 460-467, 533-534"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Result-directory reading and report selection are under-specified, with no failure handling",
+      "description": "The Markdown report is \"one table per workload across all backends in `bench/results/`\", with \"one row per backend\", but results accumulate by timestamp.\n\n- The design does not say how it chooses among multiple runs of the same (workload, backend). Nor how it handles results from different git SHAs or platforms, for instance JSON copied from an NVIDIA box, which would be misleading when merged.\n- It says old readers \"must reject unknown `schema_version`\", but gives no behaviour for a results directory holding mixed versions.\n- It gives no handling for a truncated or partial JSON file left by a killed run. The write is not stated to be atomic, so one bad file would break every later report.\n- The `.md` filename convention is unspecified.\n- The timestamp in the filename format is unspecified. ISO `:` characters are problematic on some filesystems, and a same-second collision would overwrite.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450, 530-532, 232-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for new I/O paths are incomplete",
+      "description": "The list covers four cases. It omits:\n\n- `git rev-parse HEAD` failing (no git, not a repo, a source install). The JSON `git_sha` field is required.\n- `tick_once` raising or being interrupted mid-measure, including whether any partial report is written.\n- `finalize` being called after a failed `setup`. The try/finally will run `finalize` on a half-built backend, and the contract does not say that is safe.\n- A dirty working tree. \"Reproducible by repo hash + workload name\" (line 185) is false when the tree has uncommitted changes, and the report does not record it.\n- Unwritable `bench/results/`. The directory exists with `.gitkeep` only in the checked-out tree. A fresh clone elsewhere may lack it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI contract does not match the verification walkthrough, and workload-dir resolution is unspecified",
+      "description": "- The CLI section lists `--workload`, `--backend`, `--all-backends` and `--workload-dir`. The walkthrough uses `--list-backends` and `--list-workloads`, which the spec never defines.\n- Workloads live at repo-root `bench/workloads/`, outside the installed package (`pyproject.toml` finds packages under `src`). The design does not say how `--workload mid-flock` finds the directory when run from another cwd, or whether `--workload` takes a name or a path.\n- `--workload-dir` with `--backend` runs multiple workloads, and nothing says whether it writes one file each.\n- Step 1 expects \"Expected: numpy\" with no mention of the `numba` backend that should now exist.\n- Step 9 compares against \"the architecture's table at N\u22482500\". That table is not in the slice plan, and the architecture document was not supplied for this review, so I could not verify it.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487, 603-613"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unneeded dependency on pytest-benchmark for stub-backend tests",
+      "description": "pytest-benchmark is in `[dependency-groups] dev`, not the main dependencies. The stub-backend tests assert timer accounting against synthetic timings, and benchmark fixtures add nothing to that and invite flaky timing assertions. The only existing use is the single `from_numpy_state` test (`tests/test_tick_result.py:76`). Drop the reuse claim.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:122-124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight structure for a one-backend, one-consumer harness",
+      "description": "There are separate package modules for the registry, two report modules, a parity module and a CLI module. There is also a decorator-based registry with a `finalize` hook and an elaborate `_REGISTRY` that rejects duplicates, and the `force_breakdown` extension is described but not built. Some of this is reasonable to keep because slices 142-145 will register files. These parts can be cut or deferred:\n\n- The Markdown \"all backends in `bench/results/`\" aggregation (see the results finding above).\n- The `force_breakdown` placeholder text.\n- The Interfaces/Provides prose that restates what the slice plan already says.\n- The \"Verification Walkthrough\" step 10 (`cat ... | head -15`), which checks nothing.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:155-172, 298-345"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Claims about the existing test and type-check baseline were not verified",
+      "description": "The design cites \"433 pre-existing pyright errors\" and \"1100 passed, 2 skipped\". I did not run pyright or pytest, so those counts are unconfirmed. Treat them as illustrative until a developer re-measures them.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:575-582"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Existing scaffold already diverges from the design",
+      "description": "`src/migratory/bench/` already contains scaffolding (`runner.py` with `PhaseTimings`, `aggregate` and the `BackendRunner` protocol, and `workload.py`), while the slice status is `not_started`. `bench/results/.gitkeep` and the `.gitignore` entries at lines 172-174 already exist. The scaffold already uses `DIMS = 2` workloads, a six-force registry including `propulsion`, and fixed `_PROFILE_REGISTRY` and `_FORCE_REGISTRY` dicts. The design should be reconciled with it. The \"must be in .gitignore\" item at line 734 is already done.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "src/migratory/bench/workload.py:187-191"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "The \"numpy\" backend would run Numba-JIT forces, and the claim that Numba does not exist today is wrong",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "Workload schema uses 3-D coordinates, but the engine is 2-D",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:364-368",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Workload setup is under-specified, so the parity hash and force behaviour are ill-defined",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:347-404",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "\"Default operating point\" and profile claims do not match `config/default.yaml`",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:350-353, 392-396",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "Force and spatial references do not exist as named",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-399, 542",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Numba and Quadrants slice assignments contradict the slice plan",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92, 341-345, 589-591",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan scope silently dropped: per-force timings and formation-dependent breakdown",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`tick_instrumented` is a full copy of `tick()`, and the effort estimate and boundary definitions are wrong",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-272, 496-506, 682-695",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Interface list contradicts itself on whether the harness calls `tick()` or `tick_instrumented()`",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132, 541",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Parity hash timing is inconsistent and its reference-value use is under-specified",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:81-83, 460-467, 533-534",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Result-directory reading and report selection are under-specified, with no failure handling",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450, 530-532, 232-236",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are incomplete",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "CLI contract does not match the verification walkthrough, and workload-dir resolution is unspecified",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487, 603-613",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Unneeded dependency on pytest-benchmark for stub-backend tests",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:122-124",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight structure for a one-backend, one-consumer harness",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:155-172, 298-345",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "Claims about the existing test and type-check baseline were not verified",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:575-582",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "Existing scaffold already diverges from the design",
+      "location": "src/migratory/bench/workload.py:187-191",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-22T23:52:51.649189",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+      "chars": 30571,
+      "sha256": "10ce150e4c17336a810d204a9657ee39f47dd47e7e7aea4b61f8b9756b664893",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+      "chars": 13684,
+      "sha256": "30d85553dc6a8e1b5afcaff8c62be68411741f76d568b273eb7bab907ed67078",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "pyproject.toml",
+    "src/migratory/engine/tick.py",
+    "src/migratory/bench/runner.py",
+    "src/migratory/bench/workload.py",
+    "src/migratory/engine/tick_result.py",
+    "src/migratory/engine/state.py",
+    "src/migratory/engine/profile.py",
+    "src/migratory/spatial/interface.py",
+    "src/migratory/bench/cli.py",
+    "src/migratory/bench/backends/__init__.py",
+    "src/migratory/__init__.py",
+    "src/migratory/spatial/kd_tree.py",
+    "tools/run_deterministic_trajectory.py",
+    "src/migratory/engine/_jit_config.py",
+    "config/default.yaml",
+    "src/migratory/engine/herding.py",
+    "src/migratory/spatial/__init__.py",
+    "src/migratory_server/force_builder.py"
+  ],
+  "searches": [
+    "list_files src/migratory/**/*.py in .",
+    "list_files tools/*.py in .",
+    "list_files bench/**/* in .",
+    "grep bench|results in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/.gitignore",
+    "grep cohesion_force|^class .*Force|_force\\s*= in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src",
+    "list_files config/*.yaml in .",
+    "list_files tests/**/*bench* in .",
+    "grep _jit_config|jit_enabled|MIGRATORY_JIT|forces_jit in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src",
+    "grep benchmark in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/tests",
+    "grep njit|prange|fastmath|parallel in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/engine/forces_jit.py",
+    "grep leadership\\[|\\.leadership in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory_server",
+    "grep benchmark in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/tests/test_tick_result.py",
+    "grep def \\w*(force_builder|build_forces)|class .*Spatial|AdaptiveSpatial\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src",
+    "grep leadership in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory_server/simulation.py"
+  ],
+  "sections_in_document": 37,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 391866,
+  "cached_tokens": 328721,
+  "cache_write_tokens": 63129,
+  "completion_tokens": 18013,
+  "reasoning_tokens": null,
+  "duration_seconds": 131.82009354187176,
+  "cost_usd": 0.4675863,
+  "cost_basis": "provider"
+}

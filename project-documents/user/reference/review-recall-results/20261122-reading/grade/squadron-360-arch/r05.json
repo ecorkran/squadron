@@ -1,0 +1,124 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Tracking the regenerated graph defeats the staleness check it exists to support",
+   "description": "Working-tree hygiene tracks `knowledge-graph.json` and `meta.json`, and says tracking meta.json \"makes graph staleness visible in review.\" But `meta.json.gitCommitHash` is HEAD at analysis time, and the commit that carries the graph is always later. Once the graph is committed, the Flow step 1 check (\"differs from HEAD, report drift\") fires on every run, always by at least one commit. The prominent warning the doc requires becomes permanent noise. The upstream SessionStart hook (`hooks/hooks.json`) makes the same comparison and, with `autoUpdate` on, orders an unprompted re-analysis (see the auto-update finding). The graph's LLM-written summaries and tour text also change on every regeneration, so tracking it produces large diffs and merge conflicts whenever two branches or worktrees regenerate it. The graph is regenerable upstream output. The durable artifacts are the concept and analysis documents squadron already tracks. Ignore `.understand-anything/` rather than only its trash, record the graph's `project.gitCommitHash` and `analyzedAt` in the generated document's provenance at generation time, and compute drift at read time.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Capability 2's primary path has no permitted source for Problem, Audience, or Approach",
+   "description": "Inputs call the concept optional. When it is absent, the skill \"sources purpose from the initiative plan plus interview,\" which the doc calls \"the tested path.\" But the field schema sources Problem from \"Concept Problem & Motivation,\" Audience from \"Concept Target Users,\" and Approach from \"Concept Solution Approach.\" Interview answers appear in no source column. Translation rules then say \"Every claim traces to an input artifact\" and \"If a benefit is not supported by the concept or initiative plan, it is not asserted.\" On the common retroactive path, three of nine fields are either gap-flagged, which leaves the document mostly gaps, or filled from the interview in breach of the rule. The doc must make interview answers a named input with their own provenance label, or accept gap-flagging for those fields. It cannot have both a tested no-concept path and a derive-only rule.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`scan-result.json` is unaccounted for, and the auto-update path deletes it",
+   "description": "The doc calls `intermediate/scan-result.json` \"deliberately preserved upstream,\" says squadron \"does not touch it,\" and argues that upstream's trash-and-purge design avoids destructive deletes. Two things are wrong. First, the only `.gitignore` entry is `.understand-anything/.trash-*/`. scan-result.json is neither ignored nor in the \"not ignored\" tracked list, so it shows as untracked after every full run. Second, preservation holds only on the full `/understand` path (SKILL.md cleanup step, near line 757). The auto-update path ends with `rm -rf $PROJECT_ROOT/.understand-anything/intermediate` (`hooks/auto-update-prompt.md`, step 4), which deletes scan-result.json and every other intermediate file directly. So the premise that upstream avoids destructive deletes is false for the auto-update path. The doc should state which path it relies on, say whether scan-result.json is tracked or ignored, and drop the guarantee. It should also say whether the `.gitignore` edit, which sits outside `project-documents/`, is committed and under which cadence.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Upstream auto-update hooks fire on squadron's own commits and override the warn-only policy",
+   "description": "When `.understand-anything/config.json` has `autoUpdate: true`, the plugin's hooks do two things. A PostToolUse hook injects an instruction after any Bash call whose input matches `git (commit|merge|cherry-pick|rebase)`. A SessionStart hook, when `meta.json.gitCommitHash` differs from HEAD, tells the agent to update the graph, \"Do not ask the user for confirmation.\" Squadron's planning cadence makes one Bash commit per document, so each planning commit can start a full LLM-driven graph refresh mid-workflow, and that refresh rewrites the files the doc calls tracked. The doc frames staleness as \"warn, let the PM choose\" and never mentions `autoUpdate`. With it on, the PM has no choice, and a capability 1 run can read a graph the hook is rewriting at the same moment. Specify behavior for `autoUpdate: true`, for example refusing to read until the refresh finishes, or snapshotting the graph before reading.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The JSON graph cannot be read by grep, and no query tool is named",
+   "description": "The read discipline says to \"grep for the needed section before reading.\" That works for top-level keys such as `layers` or `tour`. Capability 1 step 3 needs every file-level node's `summary`, `filePath`, and `complexity`, which is a type filter over `nodes[]`. Grep and line-based reads cannot select array records by field value. The plugin's own guide (`agents/knowledge-graph-guide.md`, \"How to Help Users\") uses `jq` for exactly these queries. The doc names no tool, and `jq` is not listed as a dependency. Size is also not small: the plugin's bundled example graph runs past line 2,900 before its `tour` block (`packages/dashboard/public/knowledge-graph.json:2974`). The doc should name the extraction step (jq, or a small script run under an explicit interpreter), check for its availability and fail with an explicit message if it is missing, and set a token budget for the extracted node set.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The external-plugin contract is undefined: the presence gate contradicts \"input, not dependency,\" and nothing is pinned",
+   "description": "Architectural Principles says the graph is \"an input, not a dependency,\" and that squadron never \"shells into the plugin.\" Flow step 1 then gates on \"verify the plugin is installed.\" That is a dependency, and the doc gives no way to check it. The plugin is user-scoped under `~/.claude/plugins`, and the doc never says where to look. If the graph is only data, plugin presence is irrelevant. If the graph were tracked (see the first finding), a collaborator without the plugin would be blocked despite having the data. The plugin's top-level `\"version\": \"1.0.0\"` (`agents/knowledge-graph-guide.md`, line 26) is never read, and no tested version range is named. CLAUDE.md requires explicit failure on unknown values and parser tests on real-format fixtures. The doc plans neither a captured 2.8.1 graph fixture nor a rule for an unrecognized `version`. Decide whether the gate is on the graph file or the plugin, name the detection method, pin a tested range, and fail on an unrecognized version.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#architectural-principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The plugin's domain graph is ignored, which overstates what the interview must ask",
+   "description": "Interview scope says business context and \"who\" cannot come from the graph. The plugin also produces `domain-graph.json` via `/understand-domain`, with `domain` and `flow` nodes and `domainMeta` fields `entities`, `businessRules`, `entryPoint`, and `crossDomainInteractions` (`agents/knowledge-graph-guide.md`, lines 17 and 83\u201388). Some business-context questions are answerable from it, and the design's own rule is that questions the graph answers are never asked. The doc should either use the domain graph, with a rule for when it is absent, or exclude it with a reason. The open question about \"how much the graph can pre-fill\" cannot be settled without this.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Solution Approach is sourced from the tour, which describes existing structure",
+   "description": "Architectural Principles and the Overview say \"a knowledge graph describes structure, not purpose.\" The interview table then sources Solution Approach from \"Graph (layers, tour).\" A tour walks through existing code in an order the plugin's tour-builder chose, so it is current architecture. A concept's Solution Approach states how the problem will be solved, and the graph cannot supply that. Either source Solution Approach from the interview alone, or rename the source to a current-architecture section. A related gap: Initial Technical Direction draws on \"languages, frameworks,\" which the plugin does store (`project.languages` and `project.frameworks`, `knowledge-graph-guide.md` line 27). But the Graph shape section never lists the `project` fields, so the output contract cites a field it does not define.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The index design rests on a naming rule the repo has superseded",
+   "description": "Output Conventions says the convention \"reserves 940-949\" for analysis, that generated documents \"overflow into 950+\" and then \"take remaining slots in the 900 band,\" and that `file-naming-conventions.md` needs no change. The current `project-documents/ai-project-guide/file-naming-conventions.md` (Analysis Files section, in the main checkout) says an analysis document takes its initiative's base index when it serves an initiative, which is preferred. Otherwise it is numbered \"from 900 up to 989\" within `user/analysis/`. The 940\u2013949 range is \"former,\" and existing files keep their names. The \"950+\" heading contradicts both the body and the 989 cap. The \"900 band is heavily used\" worry is moot, because analysis numbers are per folder. The doc also never picks an index for the project-level overview, which serves no initiative and so falls under the 900\u2013989 rule. It never decides between base index 360 and the 900\u2013989 band for the comprehension analysis. Rewrite the section to the current rule and state the allocation procedure: next free index in 900\u2013989 within the folder, with an explicit failure at 989.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Provenance is required but has no slot in the analysis schema, and capability 2 has none",
+   "description": "Flow step 1 requires the staleness warning to appear \"in the generated document's provenance.\" The canonical `analysis` frontmatter defines only `docType`, `project`, `topic`, `dateCreated`, `dateUpdated`, and `status`, and this doc rules out convention changes. So provenance must go in the body, which is not machine-checkable, or in frontmatter, which needs a schema change. The `initiative-plan` schema already defines a `source:` key, which is the convention's existing provenance slot, and the doc never mentions it. Capability 2 specifies no provenance at all. Its concept-absent fallback (\"degrades gracefully ... rather than failing\") is also a silent fallback unless the output records that the concept was absent, which CLAUDE.md prohibits. Specify provenance for both capabilities: source paths, graph `analyzedAt` and `gitCommitHash`, whether the concept was present, and the staleness state.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for either capability",
+   "description": "The doc has no failure section. Unhandled modes include: (1) a malformed or truncated `knowledge-graph.json`, which the skill must validate before drafting; (2) a `gitCommitHash` that is empty or unavailable, for a non-git project or a repo with no commits. The Phase 0 `git rev-parse HEAD` (SKILL.md, line 125) has no failure handling in the doc, so `git rev-list` errors or reports a bogus distance; (3) a `gitCommitHash` absent from local history, from shallow clones, rebased branches, or a graph generated in another worktree; (4) reading the graph while the auto-update hook rewrites it (see above); (5) a partial write across capability 1's concept, analysis, and candidate files, with no marker or rollback. CLAUDE.md and the review rules require each mode to have an observable signal (an explicit error or WARNING-level log) and a test that asserts it. None is specified.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "No rule for overwriting an existing concept or candidate file",
+   "description": "`000-concept.{project}.md` carries a User-Provided Concept section that the project convention says is never rewritten, and this doc writes that file from interview answers. Nothing says what happens when the file already exists, whether hand-written or from an earlier run, or when initiative-plan candidates already exist. Overwrite-free behavior is specified only for analysis documents (\"each run is an independent sample\"). CLAUDE.md requires looking at the target before overwriting. Specify refuse-by-default for existing concept and candidate files, and state that User-Provided Concept is preserved on any regeneration.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Initiative-plan candidates are underspecified, and several other elements are overbuilt",
+   "description": "Outputs lists \"initiative-plan candidates derived from layer boundaries and complexity clustering\" without an output path, docType or frontmatter, a clustering method, an index, a collision rule, or a re-run rule. Initiative base indices are a shared 100\u2013799 space claimed in steps of 10 (`file-naming-conventions.md`), so candidate indices can collide with existing or planned initiatives. The graph's layers are LLM-assigned and file-level, so \"complexity clustering\" needs a definition before it can be built. The doc says an unreviewed generated plan is \"worse than none,\" yet it keeps candidates in scope. Recommend deferring candidates to a follow-up initiative with its own design, so this one ships the concept and the comprehension analysis. Also cut: the 900-band overflow language, which the convention's rule replaces (see above); the emphasis-parameter language in Translation rules, which says \"Emphasis is a generation parameter\" while Resolved Decisions defers the parameter until real use demonstrates the need; and the topic-suffix rule for multiple overviews, which no current requirement needs.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The two capabilities are described as sharing nothing, but (a) feeds (b) and both need the same interview",
+   "description": "The Overview says the capabilities \"share that shape and nothing else.\" But capability 1 produces the concept that capability 2 reads, and capability 2's concept-absent path runs an interview that capability 1 has already run. The doc does not define the sequence (is (a) run before (b)?), who owns the interview, or whether (b)'s fallback interview writes anything back. The likely result is two interviews with the same questions that disagree. The doc also makes squadron's own overview the concept-absent case, so the squadron overview would be built from an interview the concept capability never shares. Make the interview a shared component, and define (b)'s concept input as (a)'s output when that output is present.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#overview"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Adding a skill means three edits to the dispatcher, which the doc accepts as normal",
+   "description": "The dispatcher hard-codes valid skills on line 7, repeats the name in the usage block (lines 11\u201314), and adds a per-skill section from line 18. Delivery calls the three edits for `understand` \"the same shape as the deprecated slice 344\" and accepts them. But the dispatcher already delegates by name (\"Invoke `/analysis:tech-debt-audit`,\" line 22), and the installer copies every `*.md` in a pack prefix (`src/squadron/skills/installer.py`, lines 81\u201388). The valid list could therefore come from the installed pack files. As written, every new analysis skill edits the dispatcher. That is the Open/Closed violation the review rules name, and the \"never scatter comparison values\" rule in CLAUDE.md forbids it. Either make dispatch generic as a prerequisite, or record the three-edit rule as known debt in this doc.",
+   "location": "commands/sq/analysis.md:7-22"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The name \"understand\" describes the upstream action, and capability (b)'s placement contradicts its stated rationale",
+   "description": "The naming rationale is that the two are \"the same concept at different stages,\" but the Relationship section says squadron's capability is \"prescriptive,\" with \"no functional overlap.\" A user who just ran upstream `/understand` and types `/sq:analysis understand` gets planning documents, not comprehension. The namespace prevents a name collision, not confusion. Separately, capability (b) is kept out of the analysis dispatcher because \"nothing about it audits a codebase,\" yet its output is `docType: analysis` in `user/analysis/`. Either choice is workable, but the stated reasons do not fit the output placement.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Neither capability needs a registration step, so dependency [100] is unexplained",
+   "description": "The installer copies command files by glob (`src/squadron/cli/commands/install.py`, lines 53\u201354) and pack prefixes by glob (`src/squadron/skills/installer.py`, lines 81\u201388). So `/sq:overview` and `/sq:analysis understand` need no registration beyond the files themselves. Dependency [100] is described as \"CLI command registration for any command surface,\" without saying what it contributes here. Either name the contribution or drop it. Dependency [340] is needed for the pack mechanism, and both [100] and [340] are `status: complete`, so the external dependencies are available.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#dependencies"
+  }
+ ]
+}

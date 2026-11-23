@@ -1,0 +1,161 @@
+{
+ "case": "context-forge-240-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work says 180 \"Established worktree-scoped config resolution\" and that `workflow.review_*` should resolve at worktree scope \"using the resolution chain 180 introduced\". 180's arch (`180-arch.initiative-context-worktree.md`, \"Project layer\" line 81 and \"What Stays Shared vs. Per-Context\" line 232) keeps configuration project-level and shared; its resolution chain (line 124: flag, CWD match, `default_project`) resolves which project, not which config. `ConfigManager.get` at `6c667b79` reads project config, then user config, then default, with no worktree step. **VALID**: contradicts a sibling document and code. Needs: doc (180 arch) or code (`ConfigManager.ts`).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     11
+    ],
+    "r04": [
+     10
+    ],
+    "r05": [
+     8
+    ],
+    "r06": [
+     5
+    ],
+    "r07": [
+     2,
+     14
+    ],
+    "r08": [
+     8
+    ],
+    "r09": [
+     4
+    ],
+    "r10": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Renumbering of the `getNext()` cascade is assigned to two different slices: Anticipated Slices bullet 1 (discovery and config keys) \"Includes renumbering the `getNext()` priority cascade\", while Technical Considerations says \"The slice implementing the gate logic should renumber the full cascade\". **VALID**: self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     15
+    ],
+    "r04": [
+     12
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [
+     8
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "The `review_unknown_as` value set is inconsistent: the config block gives `\"fail\"`; Technical Considerations uses `review_unknown_as = \"concern\"` (singular, while `review_threshold` uses `\"concerns\"`); the `pending-review` status definition says \"or verdict is UNKNOWN and `review_unknown_as` treats it as pending\", a value the doc never defines. The values are never enumerated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     8
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     6
+    ],
+    "r06": [
+     7
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     4
+    ],
+    "r09": [
+     2
+    ],
+    "r10": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"V1 implements only the four slice-level transitions\", but the four configured gates are `pre-slice-plan` (initiative-level, stated deferred in the same section and in the Overview), `pre-tasks`, `pre-implementation`, `pre-advance`. That is three slice-level transitions in v1. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [
+     0
+    ],
+    "r10": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Technical Considerations: \"`getNext()` uses integer comments (Priority 1-7)\" and renumbering is needed \"to avoid fractional priorities\". `WorkflowNavigator.ts` at `6c667b79` already has a `// Priority 2.5` branch (line 187). **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {
+    "r01": [
+     19
+    ],
+    "r02": [
+     9
+    ],
+    "r03": [
+     15
+    ],
+    "r04": [],
+    "r05": [
+     11
+    ],
+    "r06": [
+     9
+    ],
+    "r07": [
+     16
+    ],
+    "r08": [
+     15
+    ],
+    "r09": [
+     10
+    ],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F2: r03[15] and r05[11] counted as borderline; they say renumbering sits in the foundation slice and suggest moving it to the gate slice, without stating the two sections conflict. r07[16], r08[15], r09[9] only call renumbering churn in slice 1 and were not counted. F1: r03[11], r05[8], r08[8] hedge on whether 180 chain lives elsewhere but state ConfigManager has no worktree step; counted. F4: r03[0], r07[1], r08[0] dispute the four-transitions claim only because one gate is wired, not the three-vs-four count; not counted."
+}

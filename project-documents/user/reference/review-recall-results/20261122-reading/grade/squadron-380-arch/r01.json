@@ -1,0 +1,124 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "No-tools PR review reads file bodies from the operator's checkout",
+   "description": "Lines 84-87 promise that the operator's checkout is untouched and that \"a review without tools needs only the fetched ref.\" The engine does not behave that way. When file bodies are injected (`should_inject_file_bodies` is false for the provider, or no read tool was granted; `review_client.py:144-152`), bodies come from disk:\n- Explicit file-valued inputs use `Path(value)`, which resolves relative paths against the process cwd (`review_client.py:368-372`, `:387`).\n- The `files` glob and project convention files (CLAUDE.md-style) resolve against `inputs[\"cwd\"]` (`review_client.py:405-406`, `:412-417`, `:506-514`).\n\nThe diff itself is computed with `git diff` in `cwd` (`review_client.py:100-101`), so it reflects the PR head while the bodies reflect the checkout's working tree. This is the mismatch that slice 916 was written to fix (`916-slice.review-scope-correctness.md:21`) and that this document names in lines 109-110. Fix by either materializing the scratch worktree for every PR review, or changing injection to read blobs at the head sha. Then state what a no-tools run does when neither is available.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:84-87"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "PR title and body passed as engine inputs are classified as file paths",
+   "description": "Lines 127-129 pass PR metadata \"as additional inputs,\" and lines 177-179 require it to be \"clearly delimited data.\" The injection loop does not honor that. `review_client.py:368-384` treats every input key not in `_SKIP_KEYS` as a candidate path. If `Path(value).is_file()` is true, it reads the file and injects its contents, with no warning unless the key is in `FILE_INPUT_KEYS`. A PR title or body that names an existing file, such as `.env` in the operator's cwd or `/etc/hosts`, would have that file's contents sent to the model provider. This happens whenever bodies are injected (the condition in the previous finding).\n\nSeparately, CPython's `Path.is_file()` re-raises OSErrors outside a small ignore list (ENOENT, ENOTDIR, EBADF, ELOOP). I believe ENAMETOOLONG is not on that list, so a long PR body with no path separators could raise out of the loop. I could not run Python in this session to confirm. Fix: metadata must bypass the path-classification loop entirely, through a separate typed channel or an explicit skip set, with a test using a title that names a real file.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:127-129"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "PR-keyed persistence is undefined and breaks discovery and the frontmatter contract",
+   "description": "Lines 133-136 say a PR review saves \"under a PR-keyed name that satisfies the review frontmatter contract\" and that archiving, digest, and integrity checks \"apply unchanged.\" The document does not define the key or the fields, and the existing code does not support either:\n- **Key:** Filenames are built from an integer index (`review/persistence.py:438`, `:497`; `save_review_file` types it `int`). The identity record \"keys on that record\" (lines 72-75), but that record includes head sha and base ref, which change over time (lines 160-163). It is unclear whether the key is the PR number, the number plus head sha, or something else.\n- **Discovery:** `metrology/discovery.py:46` and `review/addressed/judge.py:5` glob `*-review.*`. `metrology/capture.py:97` and `review/resolution_evidence.py:105` glob `{index}-review.*`. A PR-keyed file either gets ingested into metrology and judge flows or becomes invisible to `sq review resolve`. Either changes existing flows, which line 42-44 forbids. The repo already has a precedent for artifacts that sit outside `*-review.*` (`review/resolution_artifact.py:3-6`). The doc should choose between that precedent and an explicit discovery change.\n- **Frontmatter:** `format_review_markdown` writes `slice:` and `project:` from `slice_info` and falls back to `unknown` and `0` (`persistence.py:206-208`, `:215-216`). PR fields such as pr, base, head, and sha do not exist. Validation is owned by Context Forge (`documents/schema.py:7-9`), so its acceptance of the new fields has to be designed, not assumed.\n\nFix: define the key, the frontmatter fields, and the discovery behavior, with a test that slice-review discovery is unchanged.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133-136"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Base range is not fetched, and \"base moved\" has no detection mechanism",
+   "description": "Lines 124-127 fetch the head and \"compute the base-to-head range with the same merge-base semantics `--diff` uses.\" Nothing fetches the base. The adapter record carries a base ref name but no base sha (lines 72-73). `--diff` uses whatever local `origin/main` points to (`916-slice.review-scope-correctness.md:105`). A stale base therefore produces a diff that includes base-side changes the branch merged in later, which is the stale-base defect the document cites (lines 160-163). Enterprise repos are often shallow or single-branch clones, where the merge-base may be absent; the document does not say whether that fails loudly. \"Base moved since resolution\" appears as a named failure (lines 91-92), but nothing says what is compared. Fix: fetch the base or use the host's base sha, define the range from fetched shas, specify the shallow-clone failure, and define the comparison.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:124-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`sq doctor` checks break the module's pure-check contract",
+   "description": "Lines 198-199 add doctor checks for `gh` presence, authentication, and host reachability. `cli/commands/doctor_checks.py:1` documents the module as \"Pure check functions... no network, no subprocesses,\" and `doctor.py:118` routes git through `run_git` for that reason. Authentication and reachability need a subprocess and a network call. The document does not say where these checks live, how they are timed out, or what `sq doctor` reports offline. For GitHub Enterprise, `gh auth status --hostname` needs a hostname, and the document does not say where that comes from. Fix: place the probe in a separate, timeout-bounded checker, or amend the module contract explicitly.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:198-199"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Sync or async contract and failure semantics are unspecified for the process layer",
+   "description": "The protocol does not say whether its operations are sync or async. The review path is `async def run_review_with_profile` (`review_client.py:60`), and the CLI calls it through `asyncio.run` (`cli/commands/review.py:612`, `:1197`). Blocking `gh` calls made from the async path, such as the `/sq:review pr` transport or the later pipeline input, would stall the event loop. `frontmatter_gate.py:46` shows the async pattern already in use. Failure semantics also conflict with the document's requirements: `run_git` returns `None` silently when git is missing (`review/git_utils.py:60-66`), but lines 91-94 require a named, logged error for each failure. Timeouts are inconsistent across the codebase: `GIT_COMMAND_TIMEOUT_SECONDS = 30` (`git_utils.py:24`) and `_GIT_REMOTE_TIMEOUT_S = 5.0` (`metrology/identity.py:60`). The document sets no timeout for `gh`. Fix: decide sync or async at the protocol, use one process runner with a per-call timeout, and give each failure mode its own typed error.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The `gh` transport is underspecified for GraphQL-only data, version drift, and the fetch refspec",
+   "description": "Lines 184-188 describe `gh` as \"JSON parsing per call,\" but the document also requires unresolved review threads and linked issues (lines 127-129). To my knowledge, thread resolution state and closing-issue references are GraphQL-only and not exposed by `gh pr view --json`, so they need `gh api graphql`. Verify this against the pinned `gh` version. The document names no subcommand or query per operation. `gh` JSON field names and flags also change across versions, and neither the doctor checks nor the document set a minimum version. The fetch refspec `refs/pull/N/head` (lines 164-165) is GitHub-specific. The protocol \"must not leak `gh`-specific shapes\" (lines 186-188) only holds if the adapter returns the refspec as part of its result rather than the review path building it. Fix: name the call per operation, pin a minimum version in doctor, and move the refspec into the adapter's head-fetch result.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:184-188"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Posting omits find and update operations, leaves \"supersedes\" undefined, and ignores size limits",
+   "description": "The protocol lists \"post a comment\" (lines 52-53) but no find, list, or edit operation, even though idempotency requires finding squadron's prior comment by a marker (lines 180-183). Lines 140-141 say a later run \"updates or supersedes,\" without choosing. \"Updates\" needs an edit operation, and \"supersedes\" may need minimize or delete, each with different permissions and visibility. Two more gaps:\n- Line 162-163 says a review posted against a moved head \"must say so,\" but does not say whether posting re-resolves the PR or trusts the stored sha.\n- GitHub caps issue comment bodies at 65,536 characters. Long findings can exceed that, and the document has no truncation or split rule for the rendered comment.\n\nFix: add find and update to the protocol, choose update-in-place, specify the re-resolve at post time, and add a size rule with a test.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:140-141"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`sq pr create` reads \"the latest saved review\" before any PR-keyed review can exist",
+   "description": "Lines 143-148 have `sq pr create` gather \"the latest saved review,\" but a PR does not exist until creation, so a PR-keyed review (lines 133-136) cannot exist yet. The document does not say which review applies to a non-slice branch. Slice branches can use slice reviews by index, but nothing keys a non-slice branch review. Similarly, lines 72-75 say the typed PR record is \"produced once at the boundary,\" but the PR number and URL do not exist before `create`. Fix: define a pre-PR record (branch, base, head sha) and the review lookup for non-slice branches, or state that `create` consumes only slice reviews until PR-keyed persistence exists.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:143-148"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Traceability is asserted but not enforced for the model-written sections",
+   "description": "Lines 62-64 require that \"nothing is asserted that no input supports.\" Yet \"how it was verified\" and \"known gaps\" (lines 143-148) come from a one-shot model call (lines 189-193) with no check against the inputs. The document does not define what counts as verification evidence: slice tasks, a recorded test run, or the review. A model can write \"tests pass\" from a commit message that says \"fix tests.\" Commit messages are third-party text, and the output is posted under the operator's identity (line 58). Fix: extract verification evidence deterministically from named artifacts, render \"not recorded\" when none exists, and keep the model to restating cited inputs with a source reference next to each claim.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:189-193"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Worktree concurrency and cleanup are deferred even though the design depends on them",
+   "description": "Lines 166-168 defer \"concurrency with the operator's own worktrees, disk use, and cleanup on failure\" to \"slice-level questions.\" But the isolation principle depends on the scratch worktree (lines 84-87), and the failure principle requires a test for each failure (lines 91-94). `git worktree add` registers the worktree in the operator's `.git/worktrees`. A killed run leaves a stale registration and a full checkout on disk. The review file is also written into the operator's `project-documents/user/reviews` (lines 133-134), which sits uneasily with \"never mutates the operator's working tree\" (lines 56-58). Fix: name the cleanup owner (`try/finally` plus `git worktree prune` at start), the ref namespace and its garbage collection, and which local writes are permitted.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:164-168"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The sequencing claim contradicts itself, and the dependency is not on the critical path",
+   "description": "Lines 135-136 say archiving, digest, and integrity checks \"apply unchanged,\" but lines 226-227 say PR-keyed persistence \"attaches to the seams 917 changes.\" Both cannot hold. Slice 917 is `status: not_started` (`project-documents/user/slices/917-slice.review-artifact-integrity.md:10`), while 916 is `complete`. Line 211 says persistence is \"sequenced after 916 and 917 land on `main`\" without saying that 917 has not started. Fix: correct lines 135-136, and either schedule persistence after 917 explicitly or ship `sq review pr` without persistence first.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:135-136"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Several pieces could be cut or deferred without weakening the three capabilities",
+   "description": "Cut or deferral candidates:\n1. **Model-written description (lines 143-148, 189-193).** The deterministic parts already meet the \"exact\" goal, and the prose is the least traceable piece (see the traceability finding). Ship the deterministic template first.\n2. **PR threads and linked issues as prompt inputs (lines 127-129, 177-179).** These add GraphQL (see the `gh` transport finding) and the injection surface described in the second FAIL. Defer until a reviewer demonstrably needs them.\n3. **A new \"configured squadron data directory\" for unplanned repositories (lines 169-173).** `cli/commands/review.py:300-313` already points users at `--output file --output-path` for unsaved reviews. Reuse that and report the choice, with no new config.\n4. **The PR-keyed persistence slice (lines 209-211).** Ship `sq review pr` with `--output` first. That also removes the unstarted 917 dependency from the first delivery.\n\nTogether these reduce six slices, a six-operation protocol, a worktree manager, a fetch manager, a posting renderer, and a composition step to what a first \"review a PR\" delivery needs.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:169-173"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "\"One boundary and nothing else\" is overstated",
+   "description": "Lines 18-19 say the three capabilities \"share one new boundary and nothing else,\" and lines 42-44 say existing flows do not change. The design also changes shared persistence (lines 133-136), the doctor (lines 198-199), prompt inputs and review templates (lines 127-129), and the review engine's injection path (the first two FAILs). Name these changes instead of disclaiming them.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:18-19"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Remote-URL parsing duplicates an existing parser",
+   "description": "Lines 156-159 require the adapter to resolve host, owner, and repository, and to fail loudly on zero or multiple remotes. `metrology/identity.py:56-98` already has an scp-style parser (`_SCP_RE`), but it reads only `remote.origin.url`. Reuse that parser, extend it to enumerate remotes, and make it the single URL parser (lines 72-75 say no component re-parses URLs).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The identity record's shape assumes GitHub's two-segment namespace",
+   "description": "The record's `owner` and `repository` fields, and the `owner/repo#n` grammar (lines 156-158), assume a two-segment namespace. GitLab subgroup paths and merge-request IIDs do not fit. The claim that \"a second host is a new implementation, not an edit\" (lines 53-55) therefore holds only if the shared record can change, and persistence and posting key on that record.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:72-73"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The `guide.ai-project.process` reference could not be verified",
+   "description": "I searched the worktree and found no `guide.ai-project.process` file, so the integration-branch rule this design says it must honor (lines 194-197) cannot be checked here. The code's version of the rule is `git.integration_branch` from CF config (`review/git_utils.py:17-19`, `:293-298`, falling back to `main`). The document should name that key.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:235-236"
+  }
+ ]
+}

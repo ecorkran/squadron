@@ -1,0 +1,152 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` example cannot parse",
+   "description": "Task 1 (task file lines 40-41) gives `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` with no `**` bold wrap. The success note (lines 43-45) says bold is required only for the indexed form. `PLAN_UNINDEXED_RE` requires `\\*\\*` after the checkbox, so this line is silently dropped even after Tasks 2\u20133. Task 5's `indexSource: 'fallback'` assertion for this entry cannot pass, and SC2 (slice design lines 266-268) has no working fixture. Bold must be shown for both forms.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 1's fixture extension breaks existing parser assertions that no task updates",
+   "description": "Adding lines to the shared `sample-slice-plan.md` breaks these existing assertions: line 10 (`toHaveLength(5)`), lines 12-20 (`entries[0]` expected to be 101), lines 22-30 (`entries[2]` expected to be 103), and lines 166-167 (positional descriptions). If the unindexed line is bolded, its fallback index is 1 (`unindexedCounter`, slicePlanParser.ts:73), and ascending sort (slicePlanParser.ts:91) moves it to position 0. If it is left unbolded, it is dropped and the length is still wrong. Task 5 (lines 95-98) updates only the totals. The slice design allows a sibling fixture (lines 220-224), and SC7 (lines 280-282) requires the existing fixture tests to pass unchanged. A new fixture file avoids both problems.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:10"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "`ArtifactIntrospector` test asserts `totalSlices` 5 on the edited fixture",
+   "description": "This test reads `sample-slice-plan.md` and expects `totalSlices` of 5. After Task 1 it is 6 or 7. No task names this file. Task 5's command (`pnpm --filter @context-forge/core test -- slicePlanParser`) does not run it, so it would surface only in Task 13's `pnpm -r test`. Add it to Task 5, or move Task 1's lines to a sibling fixture.",
+   "location": "packages/core/tests/introspection/ArtifactIntrospector.test.ts:52"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All commit markers are checkbox items (`- [ ] Commit: ...`) at lines 105, 135, 179, 197, 212 and 224-225. The format rule is plain lines, never checkboxes.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The Task 5 commit lands before the navigator and CLI wiring, so `cf next` and `cf list slices` regress at that commit",
+   "description": "After the Task 5 commit (line 105), Task 4 counts `[~]` entries as resolved, but `resolveEntryStatus` still derives status from the checkbox (lines 719-723) and never reads `entry.status`. Before this change the `[~]` lines were absent from the plan. At the Task 5 commit they render as `\u25cb not started` with `\u2190 next` (slice.ts:124, 130-135), and `cf next` can recommend them. Move the commit to after Task 9 or 10.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:719"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 8's \"only caller\" claim is wrong, and the build breaks",
+   "description": "Task 8 (lines 142-149) says the only caller of `resolveEntryStatus` passes a full `SlicePlanEntry`. Its caller, `resolveEntryStatusSafe`, types `entry` as `Pick<SlicePlanEntry, 'index' | 'isChecked'>` at line 736, and passes it at line 740. Widening the Pick in `resolveEntryStatus` alone makes that call fail type-checking, so `pnpm -r build` fails. Task 8 must also widen line 736.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:736"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 9's initializer edit is dead code with a false rationale",
+   "description": "Task 9 (lines 155-163) says the initializer is \"the fallback used if `detectDocuments` throws\" and that a filesystem error would show `not-started`. The try block is wrapped in `catch { derivedStatus = 'degraded'; }` (slice.ts:125-127), which overwrites the initializer on any throw. The initializer is never read on that path, and the try block always assigns `derivedStatus` before it exits. The edit changes nothing and traces to no success criterion. Drop it.",
+   "location": "packages/cli/src/commands/slice.ts:91"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "A `[~]` entry with an unreadable design or task file bypasses `planLineStatus` and can be offered as next",
+   "description": "Decision 4 (slice design lines 138-141) makes `planLineStatus` the highest-precedence tier, \"regardless of what a stale task file or slice-design frontmatter says.\" In practice the resolution-failure branches run first. slice.ts:122-124 returns `'degraded'` before `deriveEntryStatus` is called. `WorkflowNavigator.ts:711-713` throws on an unrecognized design status before reaching `deriveEntryStatus` at line 719. A degraded entry is not excluded from `isNext` (slice.ts:130-135) or from `findFirstNotCompleteEntry` (WorkflowNavigator.ts:767-769). So a `[~]` line with a bad design file renders `\u26a0 unreadable` and can be marked `\u2190 next` or selected by `cf next`. SC4 (slice design lines 272-273) says it is never marked `\u2190 next`. Tasks 10 and 11 test only the no-doc case.",
+   "location": "packages/cli/src/commands/slice.ts:122-124"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Parser consumers the task file does not enumerate will misreport `[~]` entries",
+   "description": "Tasks 2\u20134 change `parseSlicePlan()` output for every caller. The task file, and Scope in the slice design (lines 209-245), name only `resolveEntryStatus` and `cf list slices`. These consumers re-derive or read status without the new signal:\n- ProjectModelBuilder.ts:445: planned slices use `deriveEntryStatus({ isChecked })`, so a `[~]` slice with no doc shows `not-started` in the model.\n- arch.ts:99 and :114: `cf list arch` renders `\u25cb not started` for `[~]` initiative entries. Initiative plans use the same parser (ConsistencyChecker.ts:164), so Tasks 2\u20134 change these entries too.\n- FutureWorkCollector.ts:77 and :106: `done: e.isChecked` for standalone future-work plans, so a `[~]` item counts as pending.\nThread `planLineStatus` into these, or record them as out of scope with a reason.",
+   "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Consistency rules treat `[~]` as unchecked and raise fixable findings that the fixer cannot apply",
+   "description": "The slice design's Out of scope (lines 233-236) says the checker rules \"consume it unchanged.\" For `[~]` entries they do not, and the task file does not cover it:\n- task-vs-plan (302-316): tasks complete gives a fixable `update-checkbox`. The fix calls `markdownWriter.ts:24`, which throws on `[~]`, so `cf check --fix` reports a fix error.\n- task-vs-plan (338-347): tasks in progress gives a warning to \"leave the slice plan entry unchecked,\" which misreads a deprecated slice.\n- plan-vs-frontmatter (498-512) and initiative-entry-vs-arch (905-919): the same unfixable path.\n- review-gate (649-656) runs `preTasks` for any entry with a design doc. missing-artifact (450-459) emits \"Create a task file\" for a deprecated slice with a design. `checkAll` runs `checkSlice` for every unique entry, checked or not (ConsistencyChecker.ts:121-124).\nAdd test cases for these, or narrow the rules to skip `[~]` entries and say so in Scope.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:302"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "MCP `introspection_slice_plan` recomputes `completedSlices` and bypasses Decision 3",
+   "description": "When `worktreeId` resolves an index range, the tool recomputes `completedSlices` from `isChecked` alone (lines 117-120). After Task 4, the parser counts `[~]` as resolved and this path does not, so MCP and the CLI disagree on the same plan. This tool is not in the slice design's Scope. Task 4 should include it or state that it is intentionally separate.",
+   "location": "packages/mcp-server/src/tools/introspectionTools.ts:117"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 12's regression tests can pass without the parser change",
+   "description": "The existing `plan-status-vs-entries` tests (lines 795-822 and 824-849) mock `parseSlicePlan` and hand-write `completedSlices`. Task 12 adds cases to this style. A mock returning `completedSlices: totalSlices` passes whether or not Task 4 is implemented, so the test does not prove the Decision 3 arithmetic. Build the plan with the real parser in a scratch directory, as `list-derived-status.test.ts` does.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:795"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 12 omits the `arch-status-vs-plans` rule that SC6 names",
+   "description": "SC6 (slice design lines 277-279) requires no false positive for both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 (lines 202-209) covers only the first. The arch rule (ConsistencyChecker.ts:828-848) uses the same `completedSlices === totalSlices` arithmetic, so it needs its own case.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:853"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "SC3's equality property has no real-parser test",
+   "description": "SC3 (slice design lines 269-271) requires that a plan whose entries are all checked or `[~]` gives `completedSlices === totalSlices`. Task 4 states this as its success criterion (lines 82-83). Task 5 asserts 7 and 5 on a fixture that still has unchecked entries 103 and 104, so nothing checks equality. Add a plan where every entry is `[x]` or `[~]` and assert equality.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:42"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The `[X]` regression claim has no fixture line, and the explicit regression test duplicates an existing one",
+   "description": "Task 2 (lines 58-59) and Task 5 (lines 99-102) claim `[X]` is regression-tested. `sample-slice-plan.md` contains only `[x]` and `[ ]`. `[X]` appears only in task-file fixtures (`all-complete-tasks.md:16`). The Task 5 regression test also duplicates the existing test at slicePlanParser.test.ts:8-31. Add an `[X]` line to the new fixture and assert it, and either drop the duplicate or make it cover `[X]`.",
+   "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md:16"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Task 11's assertion is disjunctive, leaving the plan-complete branch of SC5 untested",
+   "description": "Task 11 (lines 186-188) asserts that `getNext()` \"skips past to the next genuine candidate (or reports the plan/initiative complete if none remain).\" SC5 (slice design lines 274-276) names both branches, but this assertion passes either way. Pin one concrete scenario: a plan where `[~]` is the only remaining entry, asserting completion. Keep the next-candidate case as a separate assertion.",
+   "location": "packages/core/tests/introspection/WorkflowNavigator.test.ts:1073"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Task 1's note misattributes an ordering rule to CLAUDE.md and overstates the fixture's realism",
+   "description": "The note says the fixture must come before the parser change \"per the CLAUDE.md lenient-parsing rule.\" CLAUDE.md:39 and :42 require lenient parsing, and a test using real-world input when a parser returns empty on bad input. Neither requires fixture-before-parser ordering. The note also says the \"after\" state is \"proven against real input,\" but the lines are authored. The repo has no real `[~]` plan line: the only match is prose in `900-slices...md:39`, which describes slice 918. The parent architecture asks for \"an actual `[~]` plan line,\" so either note that the fixture is authored in the real format, or find a real example.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:46-50"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Tasks 2\u20134 and 8\u20139 are finer than they need to be",
+   "description": "Tasks 2, 3 and 4 are three edits to one file totalling about ten lines, and their success criteria are checked only by Task 5. Tasks 8 and 9 are one-line wirings checked only by Task 10. Merging each group would keep implementation next to its test. Task 11 has no production change and could fold into Task 10.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:6"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Fallback sequential indices now count `[~]` lines",
+   "description": "`unindexedCounter++` runs for any line that matches `PLAN_UNINDEXED_RE`. Once `[~]` is accepted, a `[~]` unindexed line advances the counter, so later unindexed entries in legacy plans shift by one. Any reference built from the old numbering would point elsewhere. The change is probably right, because the entry is counted in `totalSlices`, but the task file should say so and add a test that pins it.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:73"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "The `deriveEntryStatus` doc comment becomes stale",
+   "description": "The comment at lines 19-29 gives the precedence as \"deprecated/deferred frontmatter > ...\". Task 6 changes the top branch but does not update the comment. Add that to Task 6.",
+   "location": "packages/core/src/introspection/statusDerivation.ts:19"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "The projectState claim that slice 920 is merged is unverified",
+   "description": "I confirmed the `STATUS.Deprecated` claim (types.ts:6, statusDerivation.ts:31, WorkflowNavigator.ts:767-769). I could not confirm the slice 920 merge from the repository with my tools. Check git before relying on it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:7"
+  }
+ ]
+}

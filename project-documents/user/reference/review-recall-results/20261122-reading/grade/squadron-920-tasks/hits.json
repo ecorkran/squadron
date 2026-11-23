@@ -1,0 +1,22 @@
+{
+ "case": "squadron-920-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 15 (live `sq metrology audit run -v`; \"Confirm: the audit runs to completion\") could not be completed as written. At `b5939ca4`, `metrology/audit.py:160` defines `_AUDIT_ALLOWED_TOOLS` with Claude-native names (`Read`, `Glob`, `Grep`, `Bash`, `Task`, `TodoWrite`, `Write`, `Edit`); `providers/sdk/provider.py:66` runs `translate_tool_names` on `allowed_tools`; `providers/sdk/tool_names.py` raises `ProviderError` for any name not in the five canonical keys. The commit that added the translator (`4a6db5c0`) is an ancestor of `b5939ca4`. So the audit fails before any dispatch. Slice closed with the item recorded as blocked and filed as #107. **VALID**: held a task that could not be completed as written. Needs: code (the audit constant, the translator, and `git merge-base` for ordering). Not found by the original review. Note the walkthrough step in the parent design (step 4) has the same dependency.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  }
+ ],
+ "note": "No finding names the audit tool-name translation failure. r01[13], r08[6], r10[14] say Task 15 audit command is invalid (no -v option / missing project path), and r03[7], r06[9], r10[15] say Tasks 14-15 cannot run inside Claude Code; both are different defects in the same task, not counted."
+}

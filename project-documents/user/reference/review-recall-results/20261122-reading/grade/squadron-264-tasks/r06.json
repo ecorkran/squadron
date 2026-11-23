@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 9.4 writes a merge as a task and sub-item",
+   "description": "Task 9.4 merges `264-slice.context-forge-mcp-tool-bridge` into the target. The success criteria also include \"committed/merged\". The squadron root `CLAUDE.md` says: \"never write a merge or push as a task, sub-item, or Success Criteria in a task file.\" It says merging happens only in Phase 7, after the code review passes. As written, an implementer would merge before the review. The worktree's older `CLAUDE.md` copy says the branch merges \"when its implementation is done\", so the two copies conflict. The root rule is the current one. Remove 9.4 and the \"merged\" wording in the Task 9 success criteria, and leave integration to Phase 7. The \"Branch\" note's instruction to read `git.integration_branch` before forking is fine and should stay.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-295"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Protocol/transport-error failure mode has no test",
+   "description": "The slice design lists four rows in its failure-mode table (spawn failure, timeout, server `isError`, protocol/transport error) and says \"Each row above has a test asserting the observable signal.\" Task 4.3 implements the `McpError` / closed-stream path. No task in Task 5 exercises it. Task 5.4 names only timeout, server `isError` and spawn failure for the `caplog` assertions. `test_unknown_tool_name` probably returns a server `isError` result, not an `McpError`. That means the transport-error path and its WARNING are untested.\n\nThe fix is small. Add a `crash` tool to `fake_mcp_server.py` (Task 3.1) that exits the process mid-call. Add a Task 5 test asserting `is_error is True` and a WARNING for it.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:138-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Non-text-block mapping rule is implemented but never tested",
+   "description": "Success criterion 2 requires results to be mapped \"per the Result mapping rules\". Task 4.2 implements \"Non-text blocks noted by type in the content\". Nothing in Task 3's fake server (`echo`, `fail`, `sleep`, `empty`) or Task 5's tests produces a non-text block. This is the \"don't silently drop\" rule the design cites from the slice-909 lesson, and it is the only mapping rule with no test. Add a small `image`/`mixed` tool to the fake server and one assertion. Alternatively, cover it with a unit test that builds a `CallToolResult` directly.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commits are checkbox success criteria after every task, not `**Commit**:` markers",
+   "description": "The task file mandates a commit after every task (\"a task is not done until committed\"). It expresses each commit as a checkbox, for example \"`ruff format` run, then committed: `feat: \u2026`\". Commit markers should be plain `**Commit**:` lines placed at working, tested points. As written:\n- Task 1 commits config keys with no tests, and Task 2 adds them in a second commit.\n- Task 3 commits a bare fixture.\n- Task 4 commits the bridge before its Task 5 tests.\n\nCollapse the nine commits into roughly three `**Commit**:` markers, each at a tested point:\n- After Task 2 (config keys plus tests).\n- After Task 5 (fixture, bridge and bridge tests).\n- After Task 7 or 8 (descriptors, descriptor tests and contract test).\n\nMove the `ruff format` step into the general protocol rather than repeating it in every success criteria list.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 2 is too granular and should merge into Task 1",
+   "description": "Task 2 adds two default-value assertions (a string equality and `60`/`int`) for two config entries that Task 1 adds. This is an effort 1/5 task paired with an effort 1/5 task, and it has its own commit. Merge it into Task 1 as a test-with sub-item and drop the standalone task.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:86-96"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 3 sequencing rationale refers to the wrong tasks",
+   "description": "The line \"tasks 5, 6 both need a real stdio peer\" is inaccurate. Task 6 (`cf_tools`) is tested in Task 7 with a mocked transport and never uses the fake server. The consumers of the fake server are Task 4's smoke check and Task 5. The ordering is correct, only the sentence is wrong.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 7.4 omits that `validate_allowed_tools` takes a `StepConfig`",
+   "description": "Task 7.4 says `validate_allowed_tools` \"accepts `[\"cf_workflow_status\"]`\". The actual signature is `validate_allowed_tools(config: StepConfig, action_type: str) -> list[ValidationError]`. A junior implementer needs a pointer to build a `StepConfig` with `allowed_tools` set, for example by reusing the fixture pattern from the existing tests for this function. Add one clause saying so.",
+   "location": "src/squadron/pipeline/steps/utils.py:32"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Success criterion 6 is only partly closed at slice completion",
+   "description": "Criterion 6 includes a dispatch with a tool-capable non-SDK model calling `cf_build_context` (walkthrough step 4). Task 9.3 marks the slice `status: complete` while explicitly leaving that step open. This is an acknowledged gap and a standard-terminal constraint, so it isn't a task defect. The completion record should say plainly that criterion 6 is met only through the `cf_workflow_status` smoke test.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  }
+ ]
+}

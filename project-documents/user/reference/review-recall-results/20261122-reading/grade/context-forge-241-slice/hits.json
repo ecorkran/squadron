@@ -1,0 +1,22 @@
+{
+ "case": "context-forge-241-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope says to \"Fill the reserved `LIFECYCLE: review-gate` branch in `getNext()`; route each boundary's gated status to `review` / `blocked`\", and the Overview says the four boundaries ship through it, including pre-slice-plan (\"extend the no-active-slice / pre-slice-plan path for the `arch` gate\"). In `WorkflowNavigator.ts` at `fb0f3f50^` that branch (line 248) sits after the `GUARD: no-active-slice` block (line 98), which returns on every path before it. A project at the pre-slice-plan boundary has no active slice, and `deriveSliceStatus` returns `no-active-slice` for an unset `fileSlice` (line 453), so a gated status for the arch boundary can never reach the reserved branch. The design also never says which index looks up the arch review (`detectDocuments(path, sliceIndex, reviewType)` takes a slice index; arch reviews carry the arch index). **VALID**: contradicts code. Needs: code. Corroboration (a lead, not the proof): `d9466c5d` later adds an implementation note that the arch gate had to be evaluated before `detectFirstRunContext`, outside the sketched path.",
+   "hits": {
+    "r01": [0, 6],
+    "r02": [0],
+    "r03": [0, 1],
+    "r04": [0],
+    "r05": [4],
+    "r06": [0],
+    "r07": [0],
+    "r08": [0],
+    "r09": [0],
+    "r10": [0]
+   }
+  }
+ ],
+ "note": "Borderline: r05 i4 raises only the missing arch-review index (one stated part of F1) and not the unreachable routing; counted. r01 i6 covers the arch index plus the missing SliceStatus in the no-active-slice path; counted alongside r01 i0 (shadowed by first-run/no-active-slice returns). r01 i0 and r03 i0 frame the unreachability via detectFirstRunContext rather than the no-active-slice guard; same underlying defect (arch gate cannot reach the gated path), counted."
+}

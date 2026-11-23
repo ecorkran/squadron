@@ -1,0 +1,327 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 4 only sends `SliceDesignValidationError` to exit 2; project-resolution errors are left to exit 1",
+      "description": "Task 4 (line 103) says \"All `SliceDesignValidationError`s go through `handleError(err, 2)`\" and says nothing about other errors. The command also resolves a project first (line 100), and that path throws other types:\n- `resolveProjectWorktree` throws `UserError` for an unknown `--project` (`project.ts:98`) and for no registered project at the cwd (`project.ts:136`).\n- The frontmatter action adds two more `UserError`s for a missing project record or `projectPath` (`validate.ts:157-162`).\n\nAn implementer who writes a typed catch sends these through `handleError`'s default exit code of 1 (`errors.ts:46`). Exit 1 is reserved for \"at least one file fails\", so an agent would read \"project not found\" as \"design failed\".\n\nThe no-arguments case has the same hole: if resolution runs before the empty-list check, `cf validate design` outside a project throws `UserError`, not the usage error.\n\nFix:\n- State a catch-all `handleError(err, 2)`, as the frontmatter subcommand does at `validate.ts:252-256`.\n- State that the empty-list check runs before project resolution.\n- Add a 4T case for an unresolvable project (exit 2, empty stdout), modelled on `validate.test.ts:87-95`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/project.ts:136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3's step order lets `parseFrontmatter` turn an I/O failure into a `FAIL` with exit 1",
+      "description": "`parseFrontmatter` takes a path, reads the file itself and never throws: any read error returns `{ found: false, data: {} }`. Task 3 line 78 calls it first and reports `reason: 'doctype'` when `docType` is not `slice-design`.\n\nSo a read error after the preflight (permissions changed, file removed, a readability check that passed wrongly) surfaces as `FAIL <path>` with the frontmatter message and exit 1. Line 79's \"wrap any unexpected `fs` error\" cannot apply to an error the parser already swallowed. This contradicts slice line 78: \"every I/O failure exits 2, never with some other code.\"\n\nFix: have the file layer read the document text first with its own wrapped `readFile`, and only then call `parseFrontmatter`.\n\nRelated test gap: Task 3T (line 91) covers a missing file and a directory, but not an unreadable file, an unreadable template, or the wrap path. Slice line 171 names the first two. Add one unreadable-file case, skipped when running as root.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox tasks, and two of them are conditional",
+      "description": "Lines 71, 94, 117, 126 and 134 are `- [ ] **Task NC: Commit** \u2014 \u2026` checkboxes, not plain `**Commit**:` lines. Placement of 2C, 3C and 4C is right (each follows its test task). The form causes three problems:\n- **Fallback commits at untested points.** The Phase 6 prompt (`prompt.ai-project.system.md:368`) looks for lines starting with `**Commit**:`. Finding none, it falls back to committing at the end of each task, which puts a commit after Task 2 before Task 2T has run.\n- **Conditional checkboxes block completion.** `CHECKBOX_RE` counts every `- [ ]` line, and `parseTaskFile` infers `Complete` only when all are checked (`taskFileParser.ts:64`). Tasks 5C and 6C are \"only if \u2026 changed files\". When nothing changed, the box either stays open (the file never reaches complete) or is ticked with no commit behind it.\n- **Task 5C can commit an untested code fix under a docs message.** Line 122 allows a code fix plus a new test, but no step re-runs the tests before 5C, and its message is `docs: record slice 214 parity sweep results`.\n\nFix:\n- Replace the five checkbox tasks with plain `**Commit**: \\`message\\`` lines after 2T, 3T, 4T, 5 and 6.\n- Put the \"only if files changed\" condition in the plain line.\n- In Task 5, re-run the affected package's tests after any fix and give a `fix(...)` message for that case.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/taskFileParser.ts:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T points at a test setup that cannot run the real-template cases",
+      "description": "Line 107 says to follow the setup in `validate.test.ts`. That setup does not fit:\n- **Wrong project path.** `sampleProject.projectPath` is `/tmp/test`. The template would resolve to `/tmp/test/project-documents/ai-project-guide/\u2026`, which does not exist, so every \"real slice design\" case exits 2. The real-design cases need `projectPath` set to the repo root.\n- **Wrong mocking model.** That file mocks the core service (`validate.test.ts:18`). The better model is `validate-worktree-scope.test.ts:20-34`, which mocks only `FileProjectStore`.\n- **Worktree fixture has no template.** The existing fixture writes only slice docs (`validate-worktree-scope.test.ts:37-57`). Each fixture root needs its own template copy under the guide path, or the run exits 2 and there is no JSON `template` field to assert.\n- **`--project` alone proves nothing.** Line 114 offers \"`--project` or a worktree checkout fixture\". With `--project`, the worktree still comes from the cwd (`project.ts:104-106`). The test must `chdir` into a registered worktree; drop the `--project` alternative.\n- **Exit and stdout capture.** The worktree-scope file mocks `process.exit` to throw (`validate-worktree-scope.test.ts:126-130`), which the exit-2 cases cannot use as is. \"Empty stdout\" must check both `console.log` and `process.stdout.write`, since `printJson` writes to the latter (`formatter.ts:5`).",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:23-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No CHANGELOG entry for a new user-facing command",
+      "description": "`CHANGELOG.md:8-9` says every notable change is recorded and should answer \"What can I do now that I couldn't do before?\". `[Unreleased]` is empty. Recent task files each carry a \"CHANGELOG entry under Unreleased\" item (934 line 151, 932 line 50, 931 line 424).\n\nTask 6 adds a new command that an external consumer, the guide session, will be pointed at by release version, and it has no such item. Add one line to Task 6, and widen the 6C commit message to cover it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "CHANGELOG.md:16"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Several files that pass the bash script today\" should name the files",
+      "description": "Task 4T line 108 leaves the choice open. Most of the directory does not pass: only 32 of 102 designs contain `### Verification Walkthrough`, and about 17 appear to carry all eleven required headings. Examples are 212, 213, 215, 931 and 934, alongside 214.\n\nNaming three or four also stops an implementer from globbing the directory. `120-slice.plugins-1.md` is gitignored (`.gitignore:34`), so a glob would see different files locally and in CI.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Extra whitespace\" in Task 2T can be read as interior whitespace",
+      "description": "Line 52's normalization trims only; it does not collapse interior runs, which matches the script. A test written with `## Technical  Scope` would fail and invite the implementer to widen the normalization, which line 16 forbids. Say \"whitespace after the `#`s and at the end of the line\".",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/ai-project-guide/scripts/validate-slice-design:42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5 assumes the checkout resolves to a registered project",
+      "description": "The walkthrough commands resolve the project from the cwd, and nothing in Task 5 states that precondition.\n- From an unregistered directory every step exits 2. The sweep would then print `DIFF \u2026 cf=` for every file, which line 122 would have the implementer chase as bugs.\n- From a git worktree that is not a registered cf worktree, the fallback returns the main checkout, so the template is read from the main checkout's guide.\n\nOne precondition line in Task 5 is enough: run from a registered project or worktree, and treat an empty `cf=` as a resolution error, not a parity difference.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/project.ts:119-129"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1's barrel instruction can be unconditional, and the task could merge into Task 2",
+      "description": "`guides/index.ts` lists names explicitly, so the constant must be added there beside `GUIDE_RELATIVE_PATH` (line 24). Line 43's \"confirm \u2026 add it there if\" can simply say so. `node.ts:17` re-exports that barrel wholesale, so nothing else is needed.\n\nTask 1 is one constant. The slice's own Development Approach step 1 pairs it with the validator, so folding it into Task 2 would be reasonable. Not required.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "packages/core/src/guides/index.ts:4-32"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage, sequencing and claims about existing code",
+      "description": "**Coverage.** Every functional criterion (slice lines 167-173) maps to Tasks 2-4 and their tests:\n- Line 171's required \"valid file before a missing one\" test is in both 3T and 4T.\n- Technical requirements (lines 176-183) map to 2T, 3T line 86, 4T line 108 and Task 6.\n- The walkthrough maps to Task 5.\n- No scope creep; the exclusions (`cf check` wiring, env override) are restated at line 16.\n- The slice has no NFR, so no load test or CI wiring is needed.\n\n**Sequencing.** 1 \u2192 2 \u2192 2T \u2192 3 \u2192 3T \u2192 4 \u2192 4T \u2192 5 \u2192 6 respects dependencies, and each test task follows its implementation.\n\n**Claims verified.**\n- `validate.ts` is 258 lines, and the frontmatter subcommand uses the named helpers (lines 248-256).\n- `GUIDE_RELATIVE_PATH` is at `guides/types.ts:313`.\n- The named export sites exist (`index.ts:29-39`, `node.ts:22-29`).\n- The script is 168 lines.\n- The template marks `## Overview` and `### Verification Walkthrough` required.\n- `README.md:355` lists `cf validate` with no subcommands, and `packages/cli/README.md` has no mention of it.\n- Packages are at 0.19.5.\n- `git.integration_branch` exists (`ConfigKeys.ts:146`).\n- No existing source hard-codes the template path.\n\n**Existing code.**\n- No existing test pins core exports or the `validate` subcommand list, so the additions break nothing.\n- The guide is not gitignored and is not a submodule (`.gitmodules` is empty), so real-template tests see it after CI's plain checkout.\n- ESLint's `no-console` rule applies to `packages/core/src` only, which fits a core layer that returns results and a CLI that prints.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:234-258"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 4 only sends `SliceDesignValidationError` to exit 2; project-resolution errors are left to exit 1",
+      "location": "packages/cli/src/utils/project.ts:136",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 3's step order lets `parseFrontmatter` turn an I/O failure into a `FAIL` with exit 1",
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63-65",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks, and two of them are conditional",
+      "location": "packages/core/src/introspection/parsers/taskFileParser.ts:6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 4T points at a test setup that cannot run the real-template cases",
+      "location": "packages/cli/tests/commands/validate.test.ts:23-29",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No CHANGELOG entry for a new user-facing command",
+      "location": "CHANGELOG.md:16",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "\"Several files that pass the bash script today\" should name the files",
+      "location": "project-documents/user/slices",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "\"Extra whitespace\" in Task 2T can be read as interior whitespace",
+      "location": "project-documents/ai-project-guide/scripts/validate-slice-design:42",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 5 assumes the checkout resolves to a registered project",
+      "location": "packages/cli/src/utils/project.ts:119-129",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 1's barrel instruction can be unconditional, and the task could merge into Task 2",
+      "location": "packages/core/src/guides/index.ts:4-32",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage, sequencing and claims about existing code",
+      "location": "packages/cli/src/commands/validate.ts:234-258",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-22T22:31:03.855420",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 61,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "chars": 12695,
+      "sha256": "87155cbb0f5c578fc113faf557788e8caf65ba493cef947ff358e4a0d81207a5",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+      "chars": 14710,
+      "sha256": "bd688be4953dc08270a60ad5582972b1329230b82e11a5314f9d918e23dfc4d8",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/cli/src/commands/validate.ts",
+    "packages/core/src/guides/types.ts",
+    "packages/core/src/node.ts",
+    "packages/core/src/index.ts",
+    "project-documents/ai-project-guide/project-guides/templates/slice-design.md",
+    "project-documents/ai-project-guide/scripts/validate-slice-design",
+    "packages/core/src/introspection/parsers/frontmatterParser.ts",
+    "packages/cli/src/utils/errors.ts",
+    "packages/cli/tests/commands/validate.test.ts",
+    "packages/cli/tests/commands/validate-worktree-scope.test.ts",
+    "packages/core/src/guides/index.ts",
+    "packages/cli/src/utils/project.ts",
+    "packages/cli/src/utils/worktree-overlay.ts",
+    "packages/cli/src/options.ts",
+    ".gitmodules",
+    ".github/workflows/ci.yml",
+    "package.json",
+    ".gitignore",
+    ".context-forge.toml",
+    "packages/cli/src/index.ts",
+    "packages/core/src/config/ConfigKeys.ts",
+    "packages/core/src/schema/frontmatterFileValidator.ts",
+    "project-documents/ai-project-guide/project-guides/guide.ai-project.005-task-breakdown.md",
+    "packages/core/src/introspection/parsers/taskFileParser.ts",
+    "eslint.config.mjs",
+    "packages/cli/tests/commands/help.test.ts",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "searches": [
+    "list_files packages/core/src/schema/* in .",
+    "list_files packages/cli/tests/commands/validate* in .",
+    "list_files project-documents/ai-project-guide/**/*slice-design* in .",
+    "list_files packages/core/src/guides/index.ts in .",
+    "grep templates/slice-design|validate-slice-design|SLICE_DESIGN in .",
+    "grep validate frontmatter|cf validate in .",
+    "list_files .github/workflows/* in .",
+    "list_files {.gitmodules,.gitignore,package.json,packages/cli/README.md,README.md,CHANGELOG.md,eslint.config.*,.context-forge.toml} in .",
+    "grep setJsonMode|isJsonMode in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/src",
+    "grep validate in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/README.md",
+    "grep integration_branch in .",
+    "grep \\*\\*Commit\\*\\*|Task \\d+C: Commit in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents",
+    "grep \"version\" in .",
+    "list_files packages/core/tests/schema/* in .",
+    "list_files project-documents/user/slices/*-slice.*.md in .",
+    "grep \\*\\*Commit\\*\\* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/ai-project-guide",
+    "grep Commit in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/tasks/934-tasks.stable-default-worktree-marker.md",
+    "grep [Cc]ommit in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/ai-project-guide/project-guides/guide.ai-project.005-task-breakdown.md",
+    "list_files project-documents/ai-project-guide/.* in .",
+    "grep ai-project-guide|slice-design\\.md|project-documents in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages",
+    "grep buildCommandCatalog|validate frontmatter|'validate'|README in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages",
+    "grep ^docType: in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/slices",
+    "grep ^### Verification Walkthrough in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/slices",
+    "grep tasks:|'tasks' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/core/src/schema/frontmatterSchema.ts",
+    "grep max-lines|no-console|no-restricted in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/eslint.config.mjs",
+    "grep validate|Unreleased|^## \\[ in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/CHANGELOG.md",
+    "grep ^(# Slice Design:|## Overview|## Value|## Technical Scope|## Dependencies|## Architecture|## Technical Decisions|## Integration Points|## Success Criteria|### Verification Walkthrough|## Implementation Notes) in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/slices",
+    "grep CHANGELOG|DEVLOG|README in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/tasks",
+    "grep console\\.log|process\\.stdout\\.write|printJson in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/src/output/formatter.ts",
+    "grep include|exclude|root in .",
+    "grep PROTECTED_GUIDE_PATHS in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/core/src",
+    "grep \"(build|test|typecheck|lint)\": in .",
+    "grep include|exclude|rootDir in ."
+  ],
+  "sections_in_document": 2,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 62,
+  "prompt_tokens": 638175,
+  "cached_tokens": 536716,
+  "cache_write_tokens": 101441,
+  "completion_tokens": 30702,
+  "reasoning_tokens": null,
+  "duration_seconds": 293.0338085000403,
+  "cost_usd": 2.9599326,
+  "cost_basis": "provider"
+}

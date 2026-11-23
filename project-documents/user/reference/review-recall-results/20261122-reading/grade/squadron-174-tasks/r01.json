@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 13 wires ownership and heartbeat into the wrong function",
+   "description": "Task 13 says to build the owner before `init_run` and wrap the executor call \"in `_run_pipeline_sdk`\". Neither lives there.\n\n- **Where the code is:** `init_run` (line 227), `execute_pipeline` (241) and the `BaseException` \u2192 `finalize` handler (256\u2013264) are all in `_run_pipeline`. `_run_pipeline_sdk` only calls it (line 373). Task 5 already cites `run.py:251` correctly, so the file contradicts itself.\n- **Shared with prompt-only resume:** `_run_pipeline` is also called directly for `ExecutionMode.PROMPT_ONLY` resumes (lines 1201 and 1259). Wiring keyed on `run_id is not None` inside `_run_pipeline` would claim those runs, against the design's \"prompt-only runs are `UNOWNED`\".\n- **Claim placement:** if the claim sits inside the `try`, a refused claim (another live owner) reaches `finalize` and marks the other process's run `failed`. The design's error table says the run \"does not start\". No test covers this.\n\nFix: rewrite Task 13 to say how `_run_pipeline` receives the owner and claim decision from `_run_pipeline_sdk`, and that claim happens before the `try`. Add two cases to Task 14: a prompt-only resume stays ownerless, and a refused claim leaves the state file unchanged.",
+   "location": "src/squadron/cli/commands/run.py:226-267"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2 stops on outcomes the design already decided; Task 16 has no checkable success line",
+   "description": "- **No `ResultMessage` after interrupt:** the design's mitigation says D7's fallback applies (always mark the session unusable) and the design is updated. Task 2 says stop and ask the Project Manager.\n- **State write off the loop thread:** D5 says `StateManager` gains a per-run `threading.Lock`. Task 2 again says stop and ask.\n- **Task 16 (line 243):** \"Success: adjust to the Task 2 spike findings if they differ from the design\" is an instruction, not a verifiable outcome.\n\nFix: replace both stops with the design's branch (record the finding, update the design, proceed on the fallback). Give Task 16 a success line per branch.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 22a's seeding instruction collides with `init_run`'s automatic prune",
+   "description": "Task 22a says to seed \"a few hundred\" run files \"through `StateManager`\" and assert the row count equals the seeded readable count.\n\n- **The collision:** `init_run` calls `self.prune(pipeline_name)`, which keeps only 10 completed or failed runs per pipeline. Naive seeding silently deletes most terminal runs.\n- **The risk:** the count assertion fails, and the easy repair is to lower the expected count, leaving the 1 s bound measured over a few dozen files.\n- **Known workaround:** `tests/pipeline/run_listing_support.py` documents it in its docstring (call `init_run` for all runs before finalizing any).\n\nFix: have Task 22a name that begin-all-then-end pattern, or spread runs over enough pipeline names, and make the file count a named constant. Separately, the design's Special Considerations still says \"There is still no assertion on time in tests\"; Task 22a adds one, so Task 42 should update that sentence.",
+   "location": "src/squadron/pipeline/state.py:264"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit points are written as checkboxes",
+   "description": "All 17 commit points use `- [ ] Commit: ...` (first at line 112, last at 527). The review criteria require `**Commit**:` as plain lines, never checkboxes. Placement is correct: each sits after an implementation-plus-tests pair, neither after every task nor only at the end. Fix: convert each to a plain `**Commit**: \\`...\\`` line.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Tasks 15\u201316 do not say how `_read_turn` signals a foreground expiry",
+   "description": "`_read_turn` raises `_BackgroundIdleTimeout` on any timer expiry. Passing `idle_s` to the foreground read at line 218, as Task 15 says, would raise the background marker outside any handler. The Task 16 drain read has the same problem. One sub-item saying how the expiry kind is selected (a parameter, or mapping at the call site) would remove the guesswork; Task 17's tests would catch a miss.",
+   "location": "src/squadron/pipeline/sdk_session.py:303-306"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Three small omissions",
+   "description": "- **`pipelines list -v`:** `list_pipelines()` takes no options today. Task 27 describes the `-v` output but never names adding the option in `cli/commands/pipelines.py`, unlike Task 25 for `runs list -v`. Task 28's tests would catch it.\n- **Import cycle in Task 4:** `StateManager.observer()` in `state.py` returns `RunStateRecorder` from `run_observer.py`, which imports `ActiveItem` from `state.py`. A function-local import, as `list_runs` already does at `state.py:515`, resolves it.\n- **Walkthrough step 8:** Task 42 runs it \"in a scratch HOME\", but the design's step 8 measures against the real runs directory. A scratch HOME holds only a handful of seeded runs. Task 22a now carries the NFR, so impact is low.",
+   "location": "src/squadron/cli/commands/pipelines.py:17-18"
+  }
+ ]
+}

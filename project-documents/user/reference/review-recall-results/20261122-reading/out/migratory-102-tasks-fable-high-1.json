@@ -1,0 +1,374 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 2.1 breaks `build_profiles`; no task updates the production call site",
+      "description": "`build_profiles` constructs `BehavioralProfile` with exactly six keyword arguments. Once task 2.1 (lines 55-61) adds two required fields, every call with a non-empty profile list raises `TypeError`.\n\nTask 2.2 (lines 63-71) only updates call sites under `tests/`; its catch-all (line 70) searches `tests/` only. The slice is stale here too: it lists only engine files as changed (slice 92-101).\n\nWhat fails at the 2.2 verify (line 71) and the 2.3 commit:\n- `tests/test_simulation.py:27-42` \u2014 `test_single_profile` and `test_multiple_profiles`.\n- `tests/test_server.py:232-262` and `278-285` \u2014 every test using `server_config_with_populations`, via `Server.run()` at `src/migratory_server/server.py:71`.\n- `tests/test_main.py:70` \u2014 the `config/default.yaml` startup test, since that file defines a profile.\n\nA junior implementer can only make the suite green by improvising an unplanned production change. Add a task between 2.1 and 2.2 that:\n- adds `leadership_weight: float = 0.0` and `momentum_weight: float = 0.0` to `ProfileConfig` (`src/migratory_server/config.py:51-60`), mirroring the optional flocking fields;\n- parses and validates them in `_validate_profile` (`config.py:244-296`);\n- passes them through in `build_profiles`;\n- adds matching tests in `tests/test_config.py` and `tests/test_simulation.py`.\n\nAlso widen line 70's search to `src/` and `tests/`. The slice's \"all affected tests are updated within this slice\" (slice 397-398) is unmet without this.",
+      "file_ref": null,
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:18-25"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 1.1 leaves `EntityManager.spawn_population` producing a state whose `leadership` length differs from the agent count",
+      "description": "`spawn_population` bypasses `add_agent` and merges the batch by concatenating `positions`, `velocities`, `accelerations` and `profile_indices` by hand. Task 1.1 (lines 31-38) updates only `__init__`, `create()`, `add_agent()` and `remove_agent()`.\n\nAfter 1.1, a population spawn grows the four arrays to N while `state.leadership` stays at shape `(0,)` from `entities.py:34`. Consequences:\n- **Removal half-completes.** `remove_entity` (`entities.py:161`) calls `remove_agent(index)`. The four existing deletes at `state.py:95-98` succeed, then `np.delete(self.leadership, index)` raises `IndexError`. The ID maps at `entities.py:164-176` are never updated, and nothing in the plan repairs that state.\n- **Leadership drifts out of step.** `spawn_entity` after a population spawn appends one leadership entry to an array N short.\n- **The new force would crash in the server.** `state.leadership[neighbors]` raises on any server-held state.\n\nNo existing test spawns a population and then removes an entity, so line 46's verify stays green and the defect ships silently. Line 45 checks only tests that construct `AgentState`, not production code that merges its arrays.\n\nAdd to Section 1:\n- concatenate `batch.leadership` in `spawn_population`;\n- a test in `tests/test_entities.py` asserting `state.leadership.shape == (count,)` after `spawn_population`, and that `remove_entity` succeeds afterwards.",
+      "file_ref": null,
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "location": "src/migratory_server/entities.py:136-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 3.1/4.1 do not state that `neighbor_lists` is indexed by position in `active_indices`, and the isolation tests would not catch the mistake",
+      "description": "`tick()` builds `neighbor_lists` with one entry per evaluated agent, in `eval_indices` order. The flocking forces therefore iterate `for list_idx, agent_idx in enumerate(eval_indices)` (`src/migratory/engine/flocking.py:30-31`).\n\nTask 4.1 (lines 113-121) says only \"for each active agent \u2026 filter self from neighbors\". Indexing `neighbor_lists[agent_idx]` is the natural misreading.\n\nNothing in the plan would expose it:\n- the 4.2 isolation test (line 131) passes either way if it uses `active=[0]` or a full-length list;\n- the Section 5 tests all run with `active_indices=None`.\n\nState the convention in 4.1, pointing at `flocking.py:25-31` as the pattern. Require the 4.2 isolation test to use a non-zero active index with a length-1 `neighbor_lists`, e.g. `active=[2]`.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "src/migratory/engine/tick.py:48-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2's assertion is satisfied by the initial conditions, not by leadership",
+      "description": "The setup seeds 5 of 50 agents at `[4.0, 0.0]` (line 150). The population's mean velocity therefore starts with an x-component of about +0.4 before any tick. The flocking forces roughly preserve mean velocity.\n\n\"Mean heading has positive x-component\" (line 153) is thus very likely true at tick 0, and true at tick 300 even if `LeadershipForce` returns zeros. The slice criterion is that the mean heading *converges toward* the leaders' initial heading (slice 389-391); this test does not measure convergence.\n\nChange the assertion to a discriminating one, for example:\n- the mean x-velocity of the 45 non-leader agents rises from about 0 to a stated positive margin; or\n- the angle between the mean heading and east is smaller at the end than at the start.\n\nTwo inputs are also unspecified:\n- the velocity range for \"random velocities\" (`tests/test_flocking.py:332` uses `uniform(-2, 2)`);\n- whether \"mean heading\" means mean velocity or the mean of unit vectors.",
+      "file_ref": null,
+      "category": "test-validity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.3's pass condition is a disjunction of two undefined metrics with no margin",
+      "description": "Line 161 accepts \"herding heading variance < flocking heading variance, **or** herding mean eastward component > flocking mean eastward component\". Problems:\n- **Weaker than the slice.** The slice walkthrough expects lower variance *and* eastward bias (slice 474-476).\n- **\"Heading variance\" is undefined.** It could be circular variance of angles or variance of velocity components.\n- **No margin.** \"Statistically measurable\" is reduced to a strict inequality on one seed.\n- **The eastward branch can pass on momentum alone.** If measured on velocity, `MomentumForce` scales the already-positive mean velocity (`force = velocity * momentum_weight`) regardless of leadership.\n\nPick one metric, define it, and require a stated margin. A suitable choice is circular variance of headings over the non-leader agents, herding versus control.",
+      "file_ref": null,
+      "category": "test-validity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:156-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no nested Python loops\" technical requirement has no task or check",
+      "description": "Slice 395-396 requires both forces to be vectorized within each agent's neighborhood. Task 4.1 line 118 writes the computation as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which reads as a per-neighbor loop. Neither 3.1 nor 4.1 states the constraint.\n\nAdd one line to each:\n- 4.1: the weighted average is a single NumPy expression over the neighbor index array, e.g. `(state.velocities[nb] * w[:, None]).sum(axis=0) / w.sum()`.\n- 3.1: no per-component loops; it can be fully vectorized over `eval_indices`.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"80 tests\" baseline is wrong for the command the plan runs",
+      "description": "Line 7 and line 173 say the existing suite is 80 tests. `tests/` holds 229 `def test_` functions across 14 files. 80 is the total for the seven engine-side files alone (flocking 23, forces 11, profile 8, spatial 8, state 16, tick 8, integration 6). The other 149 are server tests, and `python3.12 -m pytest tests/ -v` runs all of them.\n\nThe stale `projectState` is the root of both FAIL findings: the plan does not know the server package exists. Update line 7 and line 173. Note also that `tests/test_integration.py` tests the Euler integrator, not anything Section 5 extends.",
+      "file_ref": null,
+      "category": "incorrect-claim",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox tasks, and commit 2.3 is not at a green point",
+      "description": "Commits are written as numbered checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) rather than plain `**Commit**:` lines. Placement matches slice 523-524 (after state, profile, each force with tests, and integration).\n\nAs written, 2.3 follows a verify that fails (see the first FAIL), and 1.3 commits the latent `spawn_population` defect. Convert to plain marker lines; the two FAIL fixes restore green points.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 and task 5.1 carry redundant or unverifiable steps",
+      "description": "- **6.2 (lines 176-178)** re-confirms `isinstance(..., BulkForce)`, already asserted by tests in 3.2 line 95 and 4.2 line 125, which 6.1 runs. Cut 6.2.\n- **6.3 (lines 180-182)** commits \"any remaining changes\" as `docs:`. After 5.4 there is no code left to commit; a `git commit` with nothing staged exits non-zero. Either name what it commits (task-file check-offs) or drop it.\n- **6.1 line 174**, \"no warnings about missing fields or deprecated patterns\", has no defined check. Drop it or name the pytest flag.\n- **5.1 line 144**, \"confirm forces interact correctly\", has no assertion. Line 143's smoke run is subsumed by 5.2, which runs the same five forces through `tick()`. Merge 5.1 into 5.2, or give line 144 a concrete assertion such as finite velocities and non-leader x-velocity increasing.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2.2's new `TypeError` test collides with an existing test name",
+      "description": "`test_missing_new_field_raises_type_error` already exists from slice 101. Line 65's \"add test for missing new field raises `TypeError`\" invites a second function with the same name, which would silently shadow the first. Name the new test explicitly, e.g. `test_missing_herding_fields_raises_type_error`, passing the six flocking fields only.",
+      "file_ref": null,
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "location": "tests/test_profile.py:47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4.2's known-geometry and uniform-leadership tests lack numeric expectations",
+      "description": "Task 3.2 line 96 gives an exact expected vector; 4.2 does not.\n- **Line 126.** With the slice's inputs (slice 430-445: `leadership_weight=1.0`, agent 2 at rest), the force on agent 2 is exactly `[0.9, 0.1]`. Line 126 omits agent 2's velocity and the profile weight, and asserts only \"biases toward\".\n- **Line 127.** \"Similar to plain velocity averaging\" is exact: with equal non-zero leadership the result equals `(mean(neighbor_velocities) - v) * leadership_weight`.\n\nState both as `assert_allclose` targets.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria trace to tasks; sequencing follows the slice",
+      "description": "- **Criteria.** Each functional criterion at slice 383-391 has a matching test task: lines 95/125, 96/126, 128, 99, 129, 100/131, and 5.2.\n- **Sequencing.** The order state \u2192 profile \u2192 Momentum \u2192 Leadership \u2192 integration \u2192 differentiation matches slice 502-521.\n- **Test-with pattern.** Each implementation task is immediately followed by its test task.\n- **Scope.** No task falls outside the slice.\n- **Formulas.** 3.1 and 4.1 match the slice sketches (slice 293-324), including the epsilon guard from slice 493-496.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-165"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about engine code and test call sites are accurate",
+      "description": "- `AgentState` has the four arrays, `create()`, `add_agent()` and `remove_agent()` as described.\n- `BehavioralProfile` has six required fields (`src/migratory/engine/profile.py:13-18`).\n- No test or source file calls the `AgentState(...)` constructor directly; all use `create()`, as line 45 predicts.\n- Every test file named in 2.2 does construct `BehavioralProfile`. `tests/test_entities.py:27` and `tests/test_simulation.py:65` are not named but fall under line 70's catch-all.\n- `BulkForce` is `runtime_checkable` (`src/migratory/engine/forces.py:27-28`), so the `isinstance` checks work.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/migratory/engine/state.py:22-98"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR restated; no load test or CI wiring required",
+      "description": "The slice states no performance or load requirement, so no `tests/load/` task or CI gate is owed. The repository has no CI configuration or `tests/load/` directory.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "summary": "Task 2.1 breaks `build_profiles`; no task updates the production call site",
+      "location": "src/migratory_server/simulation.py:18-25",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "summary": "Task 1.1 leaves `EntityManager.spawn_population` producing a state whose `leadership` length differs from the agent count",
+      "location": "src/migratory_server/entities.py:136-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Tasks 3.1/4.1 do not state that `neighbor_lists` is indexed by position in `active_indices`, and the isolation tests would not catch the mistake",
+      "location": "src/migratory/engine/tick.py:48-52",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-validity",
+      "raw_category": null,
+      "summary": "Task 5.2's assertion is satisfied by the initial conditions, not by leadership",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-validity",
+      "raw_category": null,
+      "summary": "Task 5.3's pass condition is a disjunction of two undefined metrics with no margin",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:156-162",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "The \"no nested Python loops\" technical requirement has no task or check",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "incorrect-claim",
+      "raw_category": null,
+      "summary": "The \"80 tests\" baseline is wrong for the command the plan runs",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit points are checkbox tasks, and commit 2.3 is not at a green point",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Section 6 and task 5.1 carry redundant or unverifiable steps",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "existing-code-breakage",
+      "raw_category": null,
+      "summary": "Task 2.2's new `TypeError` test collides with an existing test name",
+      "location": "tests/test_profile.py:47",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 4.2's known-geometry and uniform-leadership tests lack numeric expectations",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria trace to tasks; sequencing follows the slice",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-165",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Claims about engine code and test call sites are accurate",
+      "location": "src/migratory/engine/state.py:22-98",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR restated; no load test or CI wiring required",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-22T22:38:57.207007",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+      "chars": 10497,
+      "sha256": "bbc6c04bb2ba5d04c8dbe1f0701aefed858950dbbe41e8c57fed80042048c150",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+      "chars": 21687,
+      "sha256": "b1962640b96e7f773e59b50f99e8438e221d4b5ab5de3ff665754cb801616ef4",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory/engine/state.py",
+    "src/migratory/engine/profile.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory_server/entities.py",
+    "src/migratory_server/config.py",
+    "src/migratory/engine/forces.py",
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/flocking.py",
+    "tests/test_state.py",
+    "tests/conftest.py",
+    "tests/test_profile.py",
+    "tests/test_entities.py",
+    "tests/test_simulation.py",
+    "tests/test_flocking.py",
+    "tests/test_tick.py",
+    "tests/test_forces.py",
+    "src/migratory_server/server.py",
+    "pyproject.toml",
+    "config/default.yaml",
+    "CLAUDE.md",
+    "src/migratory/engine/integration.py",
+    "src/migratory/spatial/brute_force.py",
+    "tests/test_integration.py",
+    "tests/test_server.py"
+  ],
+  "searches": [
+    "list_files src/**/*.py in .",
+    "list_files tests/**/* in .",
+    "list_files * in .",
+    "grep BehavioralProfile\\(|AgentState\\(|add_agent\\(|remove_agent\\( in .",
+    "grep build_profiles|BehavioralProfile|ProfileConfig|leadership|momentum|AgentState in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/src",
+    "grep def test_|^class Test in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/tests",
+    "grep ^\\s*(async )?def test_ in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/tests",
+    "grep profiles|ProfileConfig|build_profiles|default\\.yaml|cohesion_weight in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/tests",
+    "list_files {.github/**,tests/load/**,Makefile,tox.ini,noxfile.py,.gitlab-ci.yml} in .",
+    "grep 102|[Hh]erding|NFR|load test|performance in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/project-documents/user/architecture/100-slices.behavior-engine.md",
+    "grep remove_entity|spawn_population|spawn_entity|leadership in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/tests",
+    "grep 102|[Hh]erding|leadership in /Users/manta/.config/squadron/reading-20261122/wt/migratory-102-tasks/project-documents/user"
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 37,
+  "prompt_tokens": 431390,
+  "cached_tokens": 343426,
+  "cache_write_tokens": 87950,
+  "completion_tokens": 20287,
+  "reasoning_tokens": null,
+  "duration_seconds": 191.45528704114258,
+  "cost_usd": 2.2890375,
+  "cost_basis": "provider"
+}

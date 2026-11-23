@@ -1,0 +1,68 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Logout and login startup have no timeout",
+   "description": "D7 sets timeouts for only three things: `thread.run`, `handle.wait()`, and runtime start plus `account()`. Two other runtime calls have no limit:\n- **`sq auth logout`** spawns the runtime and calls `AsyncCodex.logout()` (lines 82, 84). If the runtime hangs here, the command hangs forever. No failure mode is listed for a logout hang, a failed runtime start, or the transport closing during logout.\n- **`sq auth login`** has a gap before the wait. `codex.login_timeout_s` covers only `handle.wait()`. Runtime spawn, `initialize`, and `login_chatgpt()` / `login_chatgpt_device_code()` all run before it with no limit. A runtime that hangs during startup blocks login with no timeout message.\n\nThis breaks the project rule that every new I/O path lists its hang, timeout and disconnect cases. Fix: add rows for login startup and for logout. Put a limit on both, for example by reusing `codex.account_timeout_s` for runtime start plus `logout()` and for the startup step of login. State the exit code and message for each.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-111"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "After a turn timeout, it is unclear whether the client is reused or reset",
+   "description": "Line 82 says each `CodexAgent` keeps one lazy client and reuses it for every later message. Line 129 says that when the transport closes, `_codex`/`_thread` are cleared so a dead client is not reused. The timeout rows (125, 128) say the turn is cancelled and \"`shutdown()` still runs in `finally`\". That leaves two readings:\n- If `shutdown()` runs in the `finally` of each `handle_message`, it contradicts the reuse on line 82. It also leaves `_codex` pointing at a closed client unless state is cleared, and line 125 does not say it is.\n- If `shutdown()` runs only when the agent is shut down, then after a timeout the next message reuses a thread whose cancelled turn may still be running in the runtime.\n\nFix: give the timeout and cancellation rows the same reset as the transport-closed row (shut down the client and clear `_codex`/`_thread`). Say which `finally` is meant.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The SDK version bound contradicts itself and does not protect a fast-moving 0.x SDK",
+   "description": "D1 sets `openai-codex>=0.159.3,<1`. Special Considerations (line 231) says the upper bound \"is not decided here\" and that the SDK's \"generated surface moves\". Those two statements conflict. Also, for a 0.x package whose API keeps changing, `<1` allows every future 0.x release, so it protects almost nothing. A user who installs `[codex]` later can pull in an SDK where `TurnResult`, `TurnStatus` or the login handles have changed. The real-types test (line 200) only catches this for the version CI happens to install.\n\nFix: pick a bound that matches the stated risk, such as `~=0.159.3` or `<0.160`, with a note on how to raise it. Or justify `<1` explicitly. Then remove the contradiction on line 231.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "A strategy named as generic becomes Codex-specific",
+   "description": "Slice 128 renamed `CodexAuthStrategy` to `OAuthFileStrategy` and the auth type `\"codex\"` to `\"oauth\"`, on the grounds that the name \"describes mechanism, not product\" (128 slice, line 181 and line 225). This design makes `OAuthFileStrategy` implement `InteractiveLogin` by driving `AsyncCodex.login_chatgpt()` (lines 66-67). As a result, any future profile with `auth_type = \"oauth\"` would get the Codex ChatGPT login. That is the hidden product coupling the rename was meant to remove. The design does reject profile-name dispatch, correctly, but it moves the coupling into the auth-type registry instead.\n\nFix: either state that `\"oauth\"`/`OAuthFileStrategy` now means the Codex runtime's file store, and record the narrowing, or put the login on a Codex-specific strategy, for example a subclass registered under its own auth type. Without this, the \"capability, not a profile check\" goal in D3 is only partly met.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The `--timeout` flag duplicates the config key",
+   "description": "`codex.login_timeout_s` already makes the login timeout configurable. A second override through `sq auth login --timeout` adds another surface, another precedence rule and more tests, and no stated requirement asks for it. Consider cutting the flag. Likewise, `codex.account_timeout_s` could be a constant in `config/keys.py` instead of a user setting.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The slice plan entry lists fewer dependencies than the design needs",
+   "description": "The frontmatter correctly adds slice 931 (`applies_effort`, `core/usage.py`, the `ProviderError.telemetry` field). The slice plan entry (`100-slices.orchestration-v2.md:79`) still lists only `[128]`. Update the plan so the ordering is visible there.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Interfaces Required leaves out SDK types the design depends on",
+   "description": "D8 and the failure table use several SDK types that are not in the Interfaces Required list:\n- `TurnResult.status`, `TurnStatus`, `TurnResult.error.message`\n- `CodexError`\n- `TransportClosedError`, `ServerBusyError`, `RetryLimitExceededError`, `CodexRpcError`\n\nListing them would make the real-types drift test's coverage explicit.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:54"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The design hedges a distribution name that is already known",
+   "description": "`pyproject.toml` already declares `name = \"squadron-ai\"`. The \"(or the equivalent for the project's published name)\" on line 25 and \"confirmed \u2026 during implementation\" on line 171 can be removed, so the single hint constant is fixed in the design.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:171"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Whether Codex failures carry usage data is not stated",
+   "description": "Under slice 931's D12, a `ProviderError` leaving `handle_message` carries `telemetry` for the provider-failure artifact. The field is optional and defaults to `None`, so leaving it out is valid. One sentence saying Codex failures carry `telemetry=None` (or the last turn's usage, if any) would make the failure artifact's contents explicit.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102"
+  }
+ ]
+}

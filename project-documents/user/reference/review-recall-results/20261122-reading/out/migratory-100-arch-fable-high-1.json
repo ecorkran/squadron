@@ -1,0 +1,315 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Neighbor-query contract is per-agent and its result shape is never defined, so the vectorized hot loop cannot be built as described",
+      "description": "- **Contradiction:** Line 65 specifies \"for each active agent, queries nearby neighbors\". Line 33 forbids \"object-by-object iteration\" and line 99 forbids \"Python-level per-agent branching\".\n- **Missing decision:** The document never says how variable-length neighbor sets are returned (ragged lists, pair/CSR arrays, padded fixed-K). Line 87 itself says this interface sets the performance ceiling.\n- **Stack impact:** The stack is NumPy plus PyYAML only (`pyproject.toml:10-13`), so a ragged result forces a Python loop.\n- **Evidence in code:** The existing code is what this prose produces.\n  - `src/migratory/engine/tick.py:49-52` issues one `query_radius` call per agent.\n  - Each force in `src/migratory/engine/flocking.py:30,65,114` loops per agent.\n  - Profile lookups are per-agent Python object accesses.\n- **Estimated cost:** At 10K agents with three forces, I estimate hundreds of milliseconds to seconds per tick against a 50 ms budget at 20 Hz.\n- **Knock-on:** The world server's planned thread offload relies on NumPy releasing the GIL (300-arch line 78), which Python-level loops do not do.\n- **Pluggability:** \"Replace the strategy without touching force code\" (line 87) only holds if the result shape is fixed. A sort-based NumPy hash, SciPy `cKDTree` and a GPU grid each naturally emit different shapes.\n- **Fix:**\n  - Define one batch query for all active agents that returns pair or CSR index arrays in canonical order.\n  - Hold profile parameters as a table gathered by `profile_indices`.\n  - Express forces as segment reductions over those pairs.\n  - Do this before slices 102\u2013105 add more forces on the current shape.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "State ownership is contradictory: a stateless pure function versus a register/remove/query API",
+      "description": "- **Stateless vs stateful:** Line 70 says the engine is stateless and \"all state lives in the arrays passed to it\". Line 81 gives it \"query agent state, register/remove agents\", which requires the engine to hold state.\n- **Hidden vs exposed layout:** Line 35 says array layout is hidden behind interfaces. Lines 64\u201368 and 95 pass and serialize the raw arrays, so the layout is the interface.\n- **Copy vs in-place:** Line 68 \"returns the updated state array\" implies a functional copy. Line 99's \"no dynamic allocation\" implies in-place or double-buffered. The code mutates in place and returns `None` (`tick.py:20-24`).\n- **Identity undefined:** The document never says whether an agent is an array index or a stable ID, nor what the removal policy is.\n  - `src/migratory/engine/state.py:93-98` uses `np.delete`, which shifts every later index.\n  - Any stored target, leader or pack reference would break on removal.\n- **Fix:** Decide who allocates, who mutates, how agents are identified, and how removal works (swap-remove, tombstone or alive-mask).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three-column agent state cannot carry the behaviors the document promises",
+      "description": "- **Stated state:** Line 39 defines positions, velocities and profile indices only.\n- **State the behaviors need:**\n  - Territorial agents need a per-agent home-range center (lines 76, 113).\n  - Pack hunting needs a persistent target and pack membership (lines 75, 111).\n  - Herding needs a per-agent leadership or experience attribute (lines 74, 109).\n  - Hunt/rest cycles and fatigue need a per-agent mode or scalar.\n- **Decisions vs forces:** \"Target selection\" (line 111) is a decision with memory. That conflicts with \"forces, not decisions\u2026 rather than state machines\" (line 41) unless discrete mode is defined as state.\n- **Not a profile weight:** \"Low agent count\" (line 75) is a population property the engine does not control.\n- **Missing:** An extensible per-agent column scheme. The document does not say who allocates those columns, given the world server allocates the arrays (300-arch line 70).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism is asserted with no mechanism",
+      "description": "- **Summation order:** Float sums depend on neighbor order, so swapping spatial strategies changes results unless the contract fixes ordering. Slice 105 requires identical output across the swap.\n- **Randomness:** It is never mentioned. A stateless tick needs the RNG as an explicit input. With subset evaluation it must be keyed by (tick, agent) or the stream depends on the schedule.\n- **Update semantics:** Synchronous update (all forces computed from the pre-tick snapshot) is not stated.\n- **Precision:** Line 95 keeps float64 internally and float32 at the serialization boundary. Replay from a snapshot, or \"regions must agree from shared boundary state\" (line 31), then diverges from the original run.\n- **Zero-copy:** The same line asks for a zero-copy path, which a float64-to-float32 conversion is not.\n- **Backends:** CPU and GPU will not agree bitwise.\n- **Fix:** State the determinism level: bitwise for the same build and backend, tolerance-based otherwise.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset-evaluable tick does not deliver variable-rate ticking",
+      "description": "- **Timestep:** Line 64's inputs include no `dt`, and line 93 mandates a fixed timestep. An agent evaluated every 16th tick either moves at 1/16 speed or integrates with 16\u00b7dt.\n- **Stability:** 16\u00b7dt reopens the stability problem line 93 raises, with force weights tuned for dt.\n- **Stale neighbors:** Skipped agents hold stale positions that their neighbors read. The world server expects \"interpolated positions\" (300-arch line 105), but no one is assigned to write them.\n- **Undecided input:** \"Index array or mask\" is left open. They differ on ordering and duplicates.\n- **Cost today:** Every force and the integrator carry two code paths (`forces.py:67-70`, `integration.py:36-44`). The only caller passes no subset (`src/migratory_server/simulation.py:60-66`).",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregates \"through the same neighbor query interface\" will not compose",
+      "description": "- **Shape mismatch:** A neighbor query over SoA state returns indices into the agent arrays. Aggregates are not rows; they carry count and dispersion.\n- **Consequence:** Supporting them changes the query result type and every force, contradicting lines 45 and 87.\n- **Ownership:** The spatial index is \"internal/hidden\" at line 35, yet line 97 has the world server injecting aggregates into it.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment interface is unspecified and \"read-only\" contradicts stigmergy; the tick has no output channel for events",
+      "description": "- **No shape:** A per-agent point query is exactly the Python callback line 99 forbids. A batch-sampling contract is needed.\n- **Writes:** Swarm agents (line 77) must deposit trail markers, which is a write. Line 47 says the interface is read-only.\n- **Outputs:** The tick's only output is the state array (line 68). The world server expects behavior-driven lifecycle events such as predation (300-arch line 88), and there is no channel for them or for deposits.\n- **Dependency direction:** The engine must define the environment protocol itself. The environment layer (500) sits downstream of 300 and 100, and the document does not say so.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inter-profile interaction model is left open and contradicts \"no archetype-specific code paths\"",
+      "description": "- **Contradiction:** Line 29 says a new species is just a new profile. Line 91 says elk\u2013wolf separation is \"qualitatively different\" and adds a combinatorial dimension.\n- **No structure chosen:** The document picks neither a P\u00d7P interaction matrix nor role tags.\n- **Schema growth:** The profile schema is undecided between a flat struct and per-force blocks. The flat form is already forcing every profile to set every field (`src/migratory/engine/profile.py:13-18`).\n- **Radii:** A single query radius per profile cannot serve both cohesion range and flight-response range.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices drop swarm intelligence and migration, which the plan assigns here",
+      "description": "- **Plan scope:** The initiative plan (001, lines 33\u201335) assigns \"all behavioral archetypes\u2026 swarm intelligence\" to initiative 100.\n- **Document promises:** Lines 19, 27 and 77 promise swarm and migration.\n- **Gap:** Neither appears in Anticipated Slices, and the document does not state a deferral.\n- **Fix:** State the deferral and its dependency on the Environment Layer explicitly, as the slice plan already does.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:101-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for what exists: aggregation and GPU constraints from a deferred initiative",
+      "description": "- **Deferred elsewhere:** The plan places multi-resolution, aggregation and GPU in initiative 620, \"deliberately deferred\u2026 need not be designed proactively\" (001, lines 62\u201367, 97\u201399).\n- **Cut the slice:** Move \"Aggregation interface support\" (line 115) and the aggregate clause of line 97 to 620.\n- **Cut the GPU rules:** Reduce line 99 to \"forces are bulk array-in/array-out\". \"No dynamic allocation\" is not satisfiable in NumPy, where every expression allocates temporaries.\n- **Subset parameter:** Either finish its design (see the variable-rate finding) or drop it until a caller exists.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Undecided fundamentals: dimensionality, world bounds, numeric failure",
+      "description": "This is cross-cutting: the content is absent rather than located anywhere.\n\n- **Dimensionality:** 2D versus 3D is never stated.\n  - The prototypes are one of each (lines 55\u201356), and line 47 mentions terrain elevation.\n  - The code mixes a `DIMS` constant with hard-coded `N\u00d72` (`forces.py:31`, `flocking.py:23`).\n- **World bounds:** Behavior at the edge (wrap, reflect, steer away) is undefined. It affects neighbor queries.\n- **Numeric failure:** There is no policy for it, and the project convention is to fail explicitly.\n  - Coincident agents divide by zero in separation (`flocking.py:88-89`).\n  - A NaN then spreads through neighbor means.\n  - There is no force clamp and no non-finite check.\n- **Unrecorded decisions:** Lines 85, 93 and 95 still defer layout, integrator and precision. Slice 100 already chose SoA, semi-implicit Euler and float64, so record them.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale and dangling references",
+      "description": "- **Dead link:** Line 122 links `200-arch.world-server-foundation.md`, which does not exist. The file is `300-arch.worldserver-foundation.md`, and line 21 calls it 300-arch.\n- **Stale current state:** Line 53 says \"No engine exists\". `src/migratory/engine/` exists and slices 100 and 101 are marked complete.\n- **Undefined term:** Line 99 cites \"the BulkForce pattern\", which the document never defines. It is a protocol name from `forces.py:28`.\n- **Slice order:** Lines 105\u2013107 put flocking before the spatial abstraction (\"replace naive queries\"), contradicting line 45. The slice plan already moved the interface into slice 100.\n- **Circular derivation:** The engine's interface requirements come from the world-server document (lines 97, 122), which itself depends on this one. Frontmatter line 9 lists only the concept.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Neighbor-query contract is per-agent and its result shape is never defined, so the vectorized hot loop cannot be built as described",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:65",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "State ownership is contradictory: a stateless pure function versus a register/remove/query API",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Three-column agent state cannot carry the behaviors the document promises",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Determinism is asserted with no mechanism",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Subset-evaluable tick does not deliver variable-rate ticking",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregates \"through the same neighbor query interface\" will not compose",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Environment interface is unspecified and \"read-only\" contradicts stigmergy; the tick has no output channel for events",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Inter-profile interaction model is left open and contradicts \"no archetype-specific code paths\"",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Anticipated Slices drop swarm intelligence and migration, which the plan assigns here",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:101-115",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Overweight for what exists: aggregation and GPU constraints from a deferred initiative",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Undecided fundamentals: dimensionality, world bounds, numeric failure",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Stale and dangling references",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-22T22:36:18.830247",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "chars": 14571,
+      "sha256": "92b6d907f78dbb6c1fd76ea48e61e9fc7a9e18e4448fa3bfbcb6ba69fef15df9",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "pyproject.toml",
+    "project-documents/user/project-guides/000-concept.migratory.md",
+    "project-documents/user/project-guides/001-initiative-plan.migratory.md",
+    "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "project-documents/user/architecture/100-slices.behavior-engine.md",
+    ".claude/rules/python.md",
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/forces.py",
+    "src/migratory/engine/flocking.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory/spatial/interface.py",
+    "src/migratory/engine/state.py",
+    "src/migratory/engine/profile.py",
+    "src/migratory/engine/integration.py",
+    "src/migratory/spatial/brute_force.py"
+  ],
+  "searches": [
+    "list_files project-documents/user/**/*.md in .",
+    "list_files {CLAUDE.md,AGENTS.md,README.md,pyproject.toml,package.json,.claude/**/*,**/CLAUDE.md} in .",
+    "grep 300-arch|BulkForce|behavior engine|behavior-engine in .",
+    "list_files src/**/*.py in .",
+    "grep register|remove|despawn|swap|compact|capacity in /Users/manta/.config/squadron/reading-20261122/wt/migratory-100-arch/src/migratory_server/entities.py"
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 151074,
+  "cached_tokens": 113239,
+  "cache_write_tokens": 37825,
+  "completion_tokens": 19725,
+  "reasoning_tokens": null,
+  "duration_seconds": 196.56257095793262,
+  "cost_usd": 1.4175829000000002,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,96 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The \"tick return type contract\" is the central decision, but it is deferred, and it contradicts the interface-preservation claims",
+   "description": "- The overview (line 18) says this document defines the tick return type contract, and line 80 calls it \"the central architectural decision\". The section only lists options (a), (b) and (c) and says to \"support all three behind an abstraction, with the choice made per-platform\". No interface is specified.\n- The decision is not scheduled until the last 140 slice, \"Quadrants integration and tick pipeline\" (line 109). The wire slices (delta, culling, decimation) need to know whether positions are host or device arrays, and they are scheduled before it.\n- Options (b) and (c) contradict the goals. Line 32 says the server \"should not need to know\" the compute substrate. Line 76 says the external interface is \"preserved at every tier\". Line 80 itself admits option (b) \"leaks the compute substrate into the server\".\n- Supporting all three options behind one abstraction is three implementations of the hardest boundary. It is not a contract.\n- I recommend picking one default now. Option (a) with a host-side snapshot buffer is the obvious candidate. Then state explicitly where the other options would plug in.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The contract is described as a return value, but the existing server shares mutable state arrays under a serialization contract",
+   "description": "- This document says `tick() \u2192 state arrays` is the boundary and that \"the world server calls the same function\".\n- 300-arch (lines 121\u2013123) defines the actual mechanism:\n  - `sim.step` runs in a `max_workers=1` executor.\n  - It mutates `state.positions` and other arrays in place.\n  - Cross-task readers such as the snapshot read in `ClientManager` synchronize through `TickBarrier`.\n  - The consequence is that an overrunning tick \"cannot race the next tick on `state.positions`\".\n- A GPU-resident state breaks the aliasing model. Readers would see device fields, or a snapshot copy taken at some unspecified point.\n- A readback or snapshot per tick also adds to the tick time that `TickBarrier` waits on.\n- The document does not say who owns the host-side copy. It does not say whether it is double-buffered, or whether the snapshot read for new connections still works.\n- 300-arch also names process separation with shared-memory IPC as the next inflection point. Nothing here says whether a GPU-resident engine fits that path.\n- The ownership of mutable state at the engine/server boundary needs to be stated against what 300-arch already defines.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:76"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Wire optimizations are declared backend-independent, but culling and delta encoding at 250k\u20132M effectively need device-side data",
+   "description": "- Line 46 says delta, decimation and culling \"should not be gated on the compute substrate migration\". Line 76 says they are \"layered on top of whatever the engine produces\".\n- At 250k\u20132M agents, frustum culling is an O(N) pass every frame, per client. Delta encoding needs a per-client baseline and a quantize pass. Doing this in NumPy on the host is not free: positions must first leave the GPU.\n- Line 72 hints at the real dependency: \"the tick return type contract determines whether position data exits the GPU at all\". That means the wire layer is coupled to the compute substrate for Tiers 3\u20135.\n- The document never says whether cull and delta kernels live in the engine, the server, or a third component.\n- Per-client state also interacts badly with delta encoding:\n  - Culling changes the visible set per client per frame.\n  - Entering agents need full positions.\n  - Each client needs its own baseline.\n  - Entity IDs must go on the wire for a sparse subset. At 6 B per delta, a 4 B ID erodes the compression.\n- None of this is specified.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:46"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Delta-compression numbers and bandwidth reasoning are inconsistent",
+   "description": "- Line 88 claims int16 deltas give \"~32\u00d7 compression over float32 positions\". int16 vs float32 is 2\u00d7. Three int16 components are 6 B against 12 B.\n- Line 60 says the current wire is \"uncompressed JSON\" and also \"24 bytes \u00d7 3,500 agents\". JSON cannot be a fixed 24 B per agent. 24 B suggests binary pos+vel float32.\n- 300-slices line 31 describes slice 306 as already \"typed array buffers with minimal framing\" with delta encoding as a later option. Tier 2 says \"Binary WebSocket replaces JSON\" (line 68). The baseline description looks stale or wrong.\n- Line 88 says the client \"accumulates deltas onto last-known positions\", but no drift control is specified.\n  - Quantization error accumulates unless the server computes deltas against the client-reconstructed position.\n  - With stream decimation (sim 60, stream 30), the baseline is the last sent frame, not the previous tick.\n  - Periodic keyframes are needed.\n- No bandwidth budget per tier is given, so Tier 4's \"dedicated 10G/25G link\" (line 72) cannot be justified.\n  - Rough numbers: 1M agents \u00d7 12 B \u00d7 60 Hz is about 5.8 Gbps raw. With int16 deltas at 30 Hz it is about 1.4 Gbps. Both fit 10G.\n  - The argument for 25G or server-side H.264 rendering is therefore unsupported.\n  - Conversely, the \"~50k visible at ground level\" assumption (line 70) is weakest in the stated demo, where the camera sits inside a 2M-agent collision.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:88"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "GPU spatial hash is asserted to work, in the dense-herd regime where the project already saw hash grids fail",
+   "description": "- Line 84 says the hash \"works on GPU because the sort and gather are single-kernel operations\". That addresses dispatch overhead. It does not address the failure mode in performance journal Entries 2 and 4, where the hash grid lost in the herd regime because of density clustering.\n- The headline scenario is two 1M-agent populations colliding, which is an extreme density-skew case. Fixed-size cells give highly non-uniform occupancy, warp divergence, and long per-cell scans.\n- cKDTree gives exact k=13 nearest neighbors. A cell-gather over adjacent cells gives a different neighbor set unless cell size and density are handled. Behavioral equivalence with the NumPy reference is therefore not guaranteed.\n- Nothing is said about adaptive cell sizing, hierarchical grids, or a cap on candidates. Nothing says how KNN selection (top-k within the gathered candidates) is done in a kernel. That is the hard part of the kernel, and it is skipped.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Verifiable against the NumPy implementation\" has no defined meaning for float32 GPU, atomics, and chaotic dynamics",
+   "description": "- Line 26 makes regression against the existing forces \"mandatory at each tier transition\", but gives no criterion.\n- The tiers differ in several ways: the neighbor sets (see above), staggering (line 86), float32 on Metal vs the engine's precision choices (100-arch line 98 discusses float64 vs float32), and non-deterministic parallel reduction order.\n- Flocking dynamics are chaotic. Trajectory comparison will diverge within a few hundred ticks.\n- The document needs a two-level definition:\n  - Per-force kernel parity on identical inputs and a fixed CSR, with a stated tolerance.\n  - Statistical or invariant checks for full runs.\n- Without these, each tier's \"mandatory regression test\" is undefined. Line 86 already concedes the behavior changes.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:26"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The BulkForce / SpatialQuery interfaces are NumPy/CSR-based, and \"same interface\" is claimed without showing how device residency survives",
+   "description": "- Lines 30 and 82 say Quadrants sits behind the existing `SpatialQuery` and `BulkForce` interfaces. Those interfaces were designed around NumPy CSR arrays (`reduceat`, broadcasting; see line 55).\n- If the spatial kernel returns a NumPy CSR and each force takes NumPy arrays, every stage round-trips host\u2194device. That is unacceptable on discrete CUDA and defeats the \"full tick on GPU\" claim (line 109).\n- Keeping data on device means the abstraction must change, or become a fused \"tick backend\" rather than per-component protocols. That is closer to \"replace the engine\" than the \"additive, no change\" stated in line 116 (\"optimizes but does not change\").\n- The 100-arch also requires the spatial interface to support partial agent subsets and heterogeneous neighbors (line 100). Nothing here says whether the GPU path preserves that.\n- Also unaddressed: does staggered neighbor caching (119) survive at the GPU tier? A full GPU rebuild is likely cheaper than cache bookkeeping.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:30"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No performance budget connects the 3.5k/57 TPS baseline to the 2M/60 TPS target, and the baseline numbers do not reconcile",
+   "description": "- The listed stage times sum to 9.43 ms, which is about 106 TPS. They come from N=2492. The headline figure is 57 TPS at N=3500.\n- Scaling 9.43 ms linearly to 3500 gives about 13 ms, or about 76 TPS. Roughly 4 ms per tick is therefore unprofiled (serialization, broadcast, loop overhead). That overhead is on the same critical path as the wire work, and the document treats the wire as a separate concern.\n- The 2M/60 TPS target gives about 8 ns per agent for spatial plus forces plus integration plus any readback. No bytes-per-agent or memory-bandwidth estimate is provided.\n- That estimate might be fine on a datacenter CUDA GPU. It almost certainly is not on M3/M4 Max. The document never says which tiers are Metal-feasible. Tier 2 (50k on Metal) is the only Metal target, and it is unvalidated.\n- The \"Quadrants substrate evaluation\" slice (line 106) is the right gate, but it is listed first among five with no go/no-go criteria.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:50"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The risk mitigation covers only 10k, while the GPU path starts at 50k",
+   "description": "- Line 82 mitigates the Quadrants risk with \"the Numba tier provides a working fallback at 10k\".\n- Tier 2 is 50k on Metal. If Quadrants or Metal underperforms, nothing covers 10k\u201350k. There is no evaluation of multi-threaded Numba (`prange`) at 50k, and no decision rule for abandoning Quadrants.\n- Dependency risks that are not listed:\n  - The fork was released as 0.7.2 on the same day this document is dated. It is backed by one company.\n  - Metal limits (no float64, constrained float atomics).\n  - Python version coupling (3.10\u20133.13) against the project's pinned Python and Numba's supported range.\n- The frontmatter says `riskLevel: medium`. That looks low for a 570\u00d7 scale-up built on a young GPU framework and an unvalidated tick contract.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Tiers 4\u20135 hide very large, undesigned scope (server-side rendering, dedicated transport) and conflict with the stated exclusions",
+   "description": "- Tier 4's \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\" is a separate product. It needs a renderer, an encoder, an input channel and a client video path.\n- Lines 20\u201321 exclude viewer and client rendering optimization and network hardware. Yet Tiers 4\u20135 depend on both, and none of those pieces is in the slice list (lines 96\u2013110).\n- Tier 5 (\"all tiers converging\u2026 maximum stretch\") has no mechanism content at all. It is a vision, not a design.\n- Recommendation: mark Tiers 4\u20135 explicitly as exploratory. Keep only Tiers 1\u20133 as committed architecture, and defer design of Tiers 4\u20135 until the Tier 2/3 benchmark data exists.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:72"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The slice ordering contradicts the stated \"algorithmic before constant-factor\" principle",
+   "description": "- Line 42 says staggered neighbor updates (algorithmic) go before Numba JIT (constant-factor).\n- The slice list (lines 97\u201398) puts 118 Numba JIT first and 119 Staggered Neighbor Updates second. Tier 1 (line 66) bundles both.\n- Either the principle or the ordering is wrong. Since the profile shows spatial query at 5.67 ms against 3.14 ms for forces, stagger would arguably win first.\n- The principle that \"each tier's target is determined empirically\" (line 40) also conflicts with a fixed slice order.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:42"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Biome shading and other viewer work does not belong in this architecture",
+   "description": "- Line 92 describes terrain shader work as \"viewer-only\", \"no sim-side cost\" and \"independent of all scaling work\". It is also in the out-of-scope category (viewer/client rendering, line 20).\n- It has no slice and no interface to this initiative. It adds a scheduling constraint (\"ship before or alongside the 50k milestone\") to a document that cannot enforce it. Cut it from this document and track it as a viewer-initiative slice.\n- Similarly, the client-side interpolation required by stream decoupling (line 68) is a client change. It is listed under the world-server slices (line 101) with no client slice owner.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:92"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Slice ownership and numbering across initiatives is incomplete",
+   "description": "- `relatedSlices: [118, 119]` (line 7), but the wire slices owned by 300 and the five 140 slices have no indices.\n- Slices 118 and 119 are claimed as extensions of the 100 plan (lines 96\u201398, 117), though this document is not the plan owner.\n- The frustum culling control channel (line 90) adds a client\u2192server path to a protocol that is currently one-directional. 300-arch's connection and snapshot handling will need to change, and this is not noted anywhere.\n- The ownership statements in line 18 (\"each track is owned by its respective initiative's worktree\") and the initiative-140 slice list overlap and should be reconciled when slices are cut.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:94"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 \u2026` checklist items. A commit checkbox can only be ticked after the commit it describes, which leaves either a dirty tree or a follow-up commit that only checks a box. Task 6's own success line (\"working tree clean after commit\", line 132) cannot hold once 6C is ticked.\n\nFix: replace each with a plain line, for example `**Commit**: feat(core): add slice design heading validator`, at the same five positions. The placement itself is right: each sits after an implementation and test pair, at a working, tested point.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 4T's setup pointer conflicts with its real-design tests",
+   "description": "Line 107 says to follow the setup in `validate.test.ts`. That file mocks the core validator and uses a fake project root (`projectPath: '/tmp/test'`, `packages/cli/tests/commands/validate.test.ts:18-29`). The real-design bullet on line 108 needs the opposite: the real core function, and a project whose resolved root is the repo root so the real template is found. A junior implementer following line 107 either mocks core, which makes the test meaningless against the slice's \"command test running real slice designs\" requirement, or gets exit 2 for a missing template under `/tmp/test`.\n\nTwo fixes, both one line each:\n- **Setup:** point the whole file at the `validate-worktree-scope.test.ts` pattern (real core, only `FileProjectStore` mocked), and state that the mocked project's `projectPath` is the repo root for the real-design cases. Line 114 already cites that file, but only for the worktree bullet.\n- **File selection:** line 108 says \"several files \u2026 that pass the bash script today\" without saying how to pick them. Add a step: run `project-documents/ai-project-guide/scripts/validate-slice-design` over `project-documents/user/slices/*-slice.*.md`, pick a few that print `PASS`, and hard-code those names. Otherwise a wrong pick fails the test before Task 5's sweep exists to explain it, and the implementer may loosen the validator to make it pass.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-108"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 5C's commit message does not fit a code fix",
+   "description": "Task 5 says an unexplained `DIFF` is a bug to fix with an added test, but the only commit message offered is `docs: record slice 214 parity sweep results`. Add a second message for the fix case, such as `fix(core): \u2026`, or say the type follows what changed.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "No test covers an unreadable file or unreadable template",
+   "description": "Task 3 implements the readable check, and Task 3T covers missing file, directory, missing template and no-marker template, but nothing exercises the unreadable case. The slice mandates only the valid-before-missing test, and permission tests are unreliable when CI runs as root, so this is acceptable as written.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  }
+ ]
+}

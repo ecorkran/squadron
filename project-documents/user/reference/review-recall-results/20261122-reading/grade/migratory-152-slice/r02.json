@@ -1,0 +1,68 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit criteria and mode set replace what the slice plan assigns",
+   "description": "The plan entry for (152) sets the exit criteria as \"k-nearest TPS at N=200k within 20% of k-first TPS at the same N\" and \"no regression on k-first path\". The design removes `k_first` entirely (lines 34, 67, 179) and re-bases the gate on a new `radius_only` mode (line 358).\n\n- **Plan criteria become unevaluable.** With `k_first` gone there is no baseline for the first criterion and no path for the second.\n- **`radius_only` is unassigned scope.** The plan entry does not mention a second neighbor mode or a config-contract change.\n- **The original gate looks unreachable, but the design does not say so.** Slice 150 measured an ~88% regression for `k_nearest`; getting within 20% of `k_first` needs roughly 6\u20137\u00d7, while the design cites a 2\u20133\u00d7 bandwidth gain. If that is why the gate changed, record it and amend the plan entry.\n\nEither update the plan entry (criteria, mode set, FRNN deferral) or keep `k_first` and the plan's gate.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No absolute TPS target; the relative gate passes at any throughput",
+   "description": "The architecture's NFR for this path is 60 TPS at each tier (Tier 2: 50k on CUDA; Tier 3: 250k). The slice restates no TPS target.\n\n- **Gate is purely relative.** Criterion 4 is `k_nearest \u2265 0.8 \u00d7 radius_only`, and criterion 3 is \"no pass/fail\". Slice 148 recorded 3 TPS at N=200k; a result of 5 vs 6 TPS would pass and trigger the default flip.\n- **Tier 3 is misquoted.** Line 17 calls N=200k \"the architecture's Tier 3 target\"; the architecture says 250k on production-class hardware.\n- **The default flip is not gated where the server runs.** The gate is CUDA at 200k, but the flip applies to every platform and N. The live config is N\u22484.5k\u201310k, and the architecture makes Metal the default on macOS. Slice 150's own criterion (\u226420% regression at N=10k) is still unmet, and nothing here re-checks `k_nearest` at N=10k or on Metal.\n\nAdd an absolute floor at N=200k and a `k_nearest` check at `mid-flock-10k` as conditions for the flip.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The N=10k \"slice-stop\" sanity gate contradicts the document's own numbers",
+   "description": "Lines 357, 387 and 424 require `radius_only` at N=10k to beat the `k_first` baseline of 213.9 TPS, because \"coherent reads + no-cap is strictly less work than scattered reads + early exit\". By the slice's own figures, `k_first` reads \u226432 neighbors per agent and a full scan evaluates ~1400 candidates. That is ~44\u00d7 more reads at a 2\u20133\u00d7 cheaper cost each, plus accumulation for every in-radius candidate.\n\nThe gate will most likely fail for reasons unrelated to reindex cost, and the document treats that failure as \"the slice should not land\". Replace it with a direct measurement of reindex kernel time against total tick time.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:387"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`k_first` removal is specified two contradictory ways; the gate-fail end state is undefined",
+   "description": "- **Contradiction.** Lines 67 and 199 say `k_first` is rejected with a `ConfigurationError` and \"no silent migration\". Line 433 says it is \"still parsed, with a deprecation warning\" until the final commit.\n- **Silent fallback in between.** Step 2 (line 442) removes the `k_first` branch from the kernel while `k_first` is still the default. The kernel at lines 292\u2013297 routes any non-`radius_only` value to the `else` branch, so `k_first` silently runs as `k_nearest`. That violates the project's no-silent-fallback rule.\n- **No defined outcome if the gate fails.** Line 395 says failure mode (b) is \"not a fix to this slice\". The flip is conditional on the gate (lines 197, 349), so on failure the default stays `k_first` with no kernel implementation behind it.\n\nPick one removal sequence, and state what ships if criterion 4 fails.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The uncapped `max_neighbors <= 0` path is dropped, leaving an out-of-bounds read",
+   "description": "Slice 150 keeps `max_neighbors = 0` (uncapped) as a per-profile behaviour inside the kernel, with its own success criterion and verification step. This design \"promotes\" that sub-branch to the global `radius_only` mode (line 68) and omits it from the `k_nearest` branch.\n\nFor a profile with `max_neighbors <= 0` under `k_nearest`:\n- `heap_size < max_neighbors` is false.\n- `dsq < heap_dsq[0]` is true, because the root is the INF sentinel.\n- `evicted = heap_idx[0] = -1`, so the kernel reads `_px_c[-1]` and de-accumulates garbage.\n\n`max_neighbors` is per-profile and `neighbor_mode` is global, so a mode value cannot stand in for the sub-branch. Either keep the sub-branch or reject `max_neighbors <= 0` under `k_nearest` at config parse.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:297"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The coalescing premise depends on an outer-loop order the design rejects",
+   "description": "The stated benefit is that neighbor reads \"coalesce across warp threads\" (line 21) and that \"adjacent agents' heaps tend to evict slots from the same nearby cell range\" (line 169). Both need warp-adjacent threads to be spatially adjacent.\n\nThe design keeps the outer loop in original spawn order (line 123), so adjacent threads generally scan unrelated cell ranges. What remains is per-thread sequential locality, which is a weaker effect than the cited 2\u20133\u00d7. The Hoetzlein scheme the slice cites iterates in sorted order.\n\nThe reason for rejecting the coherent outer loop is also inconsistent with the rest of the document. Line 165 calls a scattered writeback \"just as bad as the original gather problem\", but that is 4 scattered writes per agent against ~1400 reads. Line 138 accepts an equivalent O(N) scattered gather in the reindex as cheap.\n\nI have not measured this, so treat it as a premise to test: either adopt the coherent outer loop, or benchmark both orders before the gates are run.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:165"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Overweight: a duplicate field, a duplicate mode, and probes beyond the slice's tier",
+   "description": "- **`coherent_to_original` duplicates `_sorted_agent_ids`.** The reindex writes `_coherent_to_original[kk] = _sorted_agent_ids[kk]` (lines 113, 120), so the two fields are identical. It is also the forward permutation, not the \"inverse\" the text calls it. Cut the field, its binding, its write and the permutation assertion, and keep `_sorted_agent_ids[kk] != i`. A true inverse (original \u2192 slot), read once per agent and compared as `kk != self_slot`, would also remove the per-candidate read that Risk 2 worries about.\n- **`radius_only` duplicates the uncapped path.** Line 68 says it is the \"identical accumulation pattern\" to the existing uncapped sub-branch. The reference measurement can be taken with `max_neighbors: 0`, with no new mode value or config change.\n- **500k and 1M probes exceed the plan entry.** Lines 357 and 397\u2013402 need `mid-flock-500k` and `mid-flock-1M` workloads that appear nowhere in scope; only `mid-flock-200k` is listed. Criterion 3 asks for `radius_only` at 1M, but the walkthrough runs `k_nearest` there. The plan entry targets N=200k; defer these.\n- **Reference narrative is repeated.** The 16M-boid comparison and the \"why two modes\" argument appear at lines 25\u201344, 181\u2013185, 189\u2013193, 358, 402 and 458. One short paragraph is enough. The \"hundreds of TPS at 1M\" extrapolation from a WebGPU demo on an M1 Max to Quadrants on CUDA is unsupported.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:120"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Component Structure understates the files touched",
+   "description": "Line 93 says \"No file outside the GPU compute path is touched\". The design also changes `migratory_server.config`, `migratory.bench.workload`, the bench `--neighbor-mode` values, the workload registry and the tests that pin the default. Frontmatter `interfaces: []` likewise omits the `neighbor_mode` contract change.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Upstream status and lifecycle statements do not match the referenced documents",
+   "description": "- **Slice 150 status.** Line 81 says slice 150 is \"shipped on `main`\"; the plan has (150) unchecked and its doc is `in_progress` with the TPS criterion unmet.\n- **Spawn/despawn.** Line 451 says these paths \"re-run `setup()` and reallocate\"; slice 146 describes a re-upload via `sync_from_entity_manager()`. This is harmless if the coherent fields are sized with the originals, but the invariant should be stated correctly.\n- **Metal.** Line 364 calls Metal \"best-effort\"; the architecture calls it a fully supported mode.\n- **Branch name.** Line 439 omits the `slice.` segment the naming convention requires.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  }
+ ]
+}

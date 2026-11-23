@@ -1,0 +1,288 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Collision-case remedy `cf config unset \u2026 --project` deletes the personal value, not the stale shared copy",
+      "description": "The design routes `delete` by the key's scope (line 89), and `migrate-personal` is named \"the one exception\" that touches the other file.\n- For `git.integration_branch`, a personal key, `cf config unset git.integration_branch --project` deletes it from `.context-forge.local.toml`. That is the code path `ConfigManager.delete` takes at `ConfigManager.ts:187-204` once routing is added.\n- The `skipped (personal value already set)` message (line 146) and walkthrough step 9 (line 259) both give this command as the way to clear the stale shared copy.\n- Run as written, step 9 destroys the developer's personal `legacy/value` and leaves the stale shared value in place. Reads then fall back to the stale value, and `cf check` still warns.\n- The design needs a real way to remove a personal key from the shared file. Options are a `migrate-personal --force` or `--discard` flag, or an `unset` behavior for stale shared copies. Walkthrough step 9 must then be rewritten and run against the real behavior.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89, 146, 259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No API for reading or moving keys across files; \"signatures unchanged\" and \"helpers reused as-is\" don't hold",
+      "description": "`migrate-personal` and the checker rule both need raw access to the shared file's personal keys.\n- `get`/`set`/`delete` all route by key scope. Through the public API, `migrate-personal` cannot read a personal key from the shared file: `get` returns the personal value or the fallback with no source split. It also cannot delete from the shared file.\n- `readToml`, `writeToml`, `resolveKey` and `deleteKey` are module-private in `ConfigManager.ts:21-89`. The design says they are \"reused as-is\", but nothing outside that module can call them.\n- `ConsistencyChecker` has only an optional `ConfigManager` (`ConsistencyChecker.ts:45-48`, imported type-only at line 21) and `project.projectPath`. It has no way to enumerate raw shared-file keys.\n- The design therefore needs new `ConfigManager` public methods, for example `listPersonalKeysInSharedFile()`, `moveToPersonal(key)` or an exported TOML helper module. These must be specified: the contract, the return shape, and the `config === undefined` case.\n- Line 49 (\"signatures are unchanged\u2026 no changes beyond Technical Scope\") and line 153 (\"Consumers to update: none\") are inaccurate.\n- `ConsistencyChecker.ts` imports `fs` directly in places, so raw reads in the checker are possible. The design must still pick a mechanism and say which.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49, 93, 142-144"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cf init` gitignore step placement is unspecified and conflicts with the existing `init` flow",
+      "description": "The walkthrough runs `cf init --lite` (line 227) and then expects `.gitignore` to contain the entry (line 239).\n- In `init.ts:85-117`, everything outside project registration is gated by `if (!opts.lite)`. The design does not say the gitignore step sits outside that gate.\n- The early return for a worktree of a registered project (`init.ts:71-74`) skips any later step.\n- Existing installations are not covered. `cf init` is the only place the ignore line is added. A user who upgrades and runs `cf config set git.integration_branch X --project` gets an untracked, un-ignored `.context-forge.local.toml` unless they happen to re-run `cf init`. That recreates the leak the slice exists to prevent.\n- The detection rule only flags personal keys in the shared file. It does not flag a non-ignored local file.\n- Either have the first write to the personal file ensure the ignore entry, or add a `cf check` finding for it. The design should also state which directory's `.gitignore` is used when `projectPath` is not the git root.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159, 227-239"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Checker rule scope and surfacing claim are not verified against `check()` vs `checkAll()`",
+      "description": "The design says the finding \"surfaces automatically through `cf check` and MCP `workflow_check`, since both already run the full suite\".\n- `check()` returns an empty result when no active slice is set (`ConsistencyChecker.ts:59-62`). `cf check --slice N` (`check.ts:217-222`) uses `check()`.\n- The rule is project-level, so it belongs only in `checkAll()`. The design does not say so.\n- `cf check` merges results across worktree views and dedupes (`check.ts:207-213`). Because the rule reads one project-level file, the \"exactly one warning\" criterion (line 217) depends on that dedup. This should be stated.\n- The design claims the rule goes in \"alongside the existing config-hygiene-style checks\". No such checks exist in the file. The only config usage is `resolveGateConfig`.\n- The rule also runs only when `this.config` is present, since the checker's config is optional. The no-config case needs a statement.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure handling for a malformed or unreadable personal file is not enumerated, and `branchGuard` degrades silently",
+      "description": "The failure-modes section covers write failures and `migrate-personal`, but not read failures on the new file.\n- `readToml` rethrows everything except ENOENT, so a hand-edited, corrupt `.context-forge.local.toml` now makes `get('git.integration_branch')` throw.\n- `branchGuard.evaluateBranchGuard` catches all `get` errors and silently falls back to `trunk = 'main'` (`branchGuard.ts:83-95`). A corrupt personal file would therefore quietly disable the integration-branch guard (916), which exists specifically to protect `main`. The design should say whether that is acceptable or whether the guard should surface the error.\n- Since the guard's whole purpose is protecting `main`, this deserves an explicit decision.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP `config_get` surface change is mis-described and the tool descriptions go stale",
+      "description": "The design says `config_get` \"response includes both project config paths\".\n- `configPaths` is returned only in the list branch (key omitted), at `configTools.ts:36-43`. The keyed branch returns only the `ConfigResult`.\n- The design should say whether the new `source: 'project-personal'` on the keyed branch is enough there.\n- The `config_get` description says \"Resolution order: project config \u2192 user config \u2192 default\" (`configTools.ts:15`). The `config_set` description (lines 56-58) also needs updating, since personal-key writes now go to a different file. Neither is listed.\n- The design does not list the `configPaths` response key. A new key such as `projectPersonal` has to be named.\n- `mcp-server/tests/configTools.test.ts:14-22` mocks `@context-forge/core/node` with only `getProjectConfigPath`. The new helper must be added to that mock and exported through `config/index.ts` and `node.ts`. This is a minor fixture update. The \"fixture updates only\" statement should name it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34, 72, 280"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`migrate-personal` option shape and command registration are inconsistent with the existing `config` surface",
+      "description": "The design specifies `-p, --project <id>` (required value). Every other `config` subcommand uses `-p, --project [id]`, with a bare flag meaning \"resolve from CWD\" (`config.ts:68, 110, 140`). Walkthrough step 6 and Technical Scope also refer to the CLI surface as unchanged. The design should reuse `resolveConfigProjectPath` and `resolveScopeAndPath`, with the same optional-value semantics. It should also state that `--global` is not accepted. The parent command description `(get, set, unset)` at `config.ts:64` is not mentioned for update.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:37, 193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: several mechanisms exceed what the slice needs",
+      "description": "- The three-way collision matrix (absent, identical, different), the `failed: <error>` per-key reporting and the idempotency argument form a large migration spec for a single personal key, `git.integration_branch`. The registry has exactly one personal key. The per-key independent processing and partial-failure reporting could be cut to a plain loop that stops on the first error. Because the order is write-then-delete, that is already safe and re-runnable.\n- The design restates the decision rationale for the `.local.` naming and the rejected `[personal]` table at length. The \"Integration Points\" and \"Risk Assessment\" sections largely restate earlier sections.\n- Three of the Technical Requirements restate \"no `any`\" and \"existing tests pass\". Trim these.\n- The design is otherwise within what the plan assigns. The detection rule and `migrate-personal` are both required by plan entry 915's migration/compat requirement, so those should not be deferred.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:136-155, 202-208"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rationale says \"per-worktree\" but the personal file is per-project-root",
+      "description": "`ConfigManager` is constructed with the registered `project.projectPath` (`guides.ts:46, 52`, `check.ts:185`). That is the main checkout, not the worktree directory. The personal file is therefore shared across all worktrees of a project, not per-worktree as line 111 states. Per-worktree integration branches would need per-worktree personal files, which this design does not provide. Correct the rationale, or state that this is intentional.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verified claims",
+      "description": "- The `ConfigResult.source` consumers at `config.ts:86, 100` interpolate the value as a plain string, as claimed.\n- `fixAction.type` is the closed union `'update-checkbox' | 'update-frontmatter'` (`types.ts:240`), as claimed.\n- `CONFIG_KEYS` contains 15 keys, matching the classification table once the four `workflow.review_gates.*.threshold` keys are counted. The table's `workflow.review_gates.*.threshold` wildcard row is acceptable. The registry is typed `Record<string, ConfigKeyDefinition>`, so a missing `scope` is caught by the compiler only on the object literals.\n- No other code reads `.context-forge.toml` directly. Only `ConfigManager` and `configTools.ts` use the path helper.\n- `cf init` writes no `.gitignore` today, as claimed.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49, 144, 181"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Collision-case remedy `cf config unset \u2026 --project` deletes the personal value, not the stale shared copy",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89, 146, 259",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "No API for reading or moving keys across files; \"signatures unchanged\" and \"helpers reused as-is\" don't hold",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49, 93, 142-144",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`cf init` gitignore step placement is unspecified and conflicts with the existing `init` flow",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159, 227-239",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Checker rule scope and surfacing claim are not verified against `check()` vs `checkAll()`",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure handling for a malformed or unreadable personal file is not enumerated, and `branchGuard` degrades silently",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "MCP `config_get` surface change is mis-described and the tool descriptions go stale",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34, 72, 280",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`migrate-personal` option shape and command registration are inconsistent with the existing `config` surface",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:37, 193",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: several mechanisms exceed what the slice needs",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:136-155, 202-208",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Rationale says \"per-worktree\" but the personal file is per-project-root",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:111",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Verified claims",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49, 144, 181",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-22T23:48:25.806097",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+      "chars": 24016,
+      "sha256": "14f6b745aa9ba5b5a123e870fee0b3292811ae333c92f0d4fb782123059b8774",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+      "chars": 18956,
+      "sha256": "1e5b21036b44f5835ce86a8d3247d9e32c81668a54ae0072bb8e3e285d7b68c5",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/config/ConfigManager.ts",
+    "packages/core/src/config/ConfigKeys.ts",
+    "packages/core/src/config/configPaths.ts",
+    "packages/cli/src/commands/config.ts",
+    "packages/mcp-server/src/tools/configTools.ts",
+    "packages/cli/src/commands/init.ts",
+    "packages/core/src/introspection/ConsistencyChecker.ts",
+    "packages/cli/src/commands/check.ts",
+    "packages/core/src/guides/branchGuard.ts",
+    "packages/cli/src/commands/guides.ts"
+  ],
+  "searches": [
+    "list_files packages/core/src/config/*.ts in .",
+    "grep ConfigManager|configPaths|getProjectConfigPath in .",
+    "grep context-forge\\.toml|getProjectConfigPath in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice",
+    "grep ConfigManager|\\.source\\b in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages",
+    "grep this\\.config|fixAction|fixable|projectPath|private rule|async rule|rule: ' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/core/src/introspection/ConsistencyChecker.ts",
+    "grep fixAction|interface ConsistencyFinding|type: ' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/core/src/introspection/types.ts",
+    "grep gitignore|\\.option\\(|lite|registerInit|projectPath in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/cli/src/commands/init.ts",
+    "list_files packages/core/src/{node,index}.ts in .",
+    "grep ConfigManager|ConsistencyChecker|configPaths|project: in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/mcp-server/tests/configTools.test.ts",
+    "grep ConfigKeyDefinition|CONFIG_KEYS|source: ' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages",
+    "grep config|Config in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/core/src/node.ts",
+    "grep config|Config in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-915-slice/packages/core/src/index.ts"
+  ],
+  "sections_in_document": 32,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 401063,
+  "cached_tokens": 346238,
+  "cache_write_tokens": 54807,
+  "completion_tokens": 12861,
+  "reasoning_tokens": null,
+  "duration_seconds": 97.96363712474704,
+  "cost_usd": 0.38430329999999996,
+  "cost_basis": "provider"
+}

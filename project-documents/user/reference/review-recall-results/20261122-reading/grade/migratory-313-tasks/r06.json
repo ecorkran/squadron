@@ -1,0 +1,82 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 3.1 makes `world_bounds` required, which breaks existing callers and may be invalid syntax",
+   "description": "Task 3.1 (lines 186\u2013191) adds a \"new required keyword argument `world_bounds`\" to `SimulationManager.__init__`.\n- It gives no position for the parameter. The signature already ends with defaulted parameters, and Python rejects a required parameter after a defaulted one unless it is keyword-only. Putting it before `environment` breaks positional callers instead.\n- The current code has `world_bounds: WorldBoundsConfig | None = None`, falling back to `entity_manager.world_bounds`. That is a different, softer contract than the plan describes. The slice design (line 272) also says \"required\".\n- About 20 existing `SimulationManager(...)` calls in `tests/test_simulation.py` (lines 137\u2013565) omit `world_bounds`. So do `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`.\n- Task 3.4 tells the implementer to patch the `test_simulation.py` calls. Task 3.5 names `test_force_builder.py` and `test_clients.py`. `test_clients.py` constructs no `SimulationManager`, and `test_repulsor_integration.py` is missing from the list.\n- Pick one contract: required keyword-only with the full call-site list, or optional with the entity-manager fallback. Either removes the churn.",
+   "location": "src/migratory_server/simulation.py:57-66"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.4 reflect-flip test cannot pass with the fixture parameters the repo uses",
+   "description": "Line 231 places an agent at `(99, 50)` with velocity `(10, 0)` and steps once, expecting `vx < 0`.\n- `tick` runs `integrate`, which clamps velocity to the profile `max_speed` (`src/migratory/engine/integration.py:43`). The existing `_profile()` helper and `profile_configs_dict` use `max_speed=5.0`.\n- Existing tests use `dt=0.05`. The agent therefore moves to about 99.25, never crosses 100, and nothing reflects.\n- The task states neither `dt` nor `max_speed`. The 50-step open, wrap and reflect tests (lines 228\u2013230) have the same gap: an outward start velocity may not push 4 agents out of a 100\u00d7100 world in 50 steps at 5 units/s and `dt=0.05`.\n- Specify `dt`, `max_speed` and start positions that guarantee a crossing, or the junior implementer will hit failing tests with no guidance.",
+   "location": "tests/test_simulation.py:86-95"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan states wrong line numbers and a stale three-variant enum and file state",
+   "description": "- Task 1.1 says `WorldBoundsConfig` is at line 25. It is at line 47.\n- Task 1.3 says `_validate_world_bounds()` is around line 156. It is at line 180.\n- Task 1.2 says `policy` is \"the third field (after `height`)\". `soft_bounds` now follows it.\n- Task 2.1 says the `match` has \"three variants\", and the parametrized dispatch test in 2.3 covers \"all three policies\". `BoundsPolicy.SOFT` now exists, and `apply_bounds_policy` has a `SOFT` case (`bounds_enforcement.py:41`).\n- Note line 332 says `SOFT` is \"intentionally deferred\", which is no longer true (CHANGELOG line 15 records slice 314).\n- Task 1.3's `return WorldBoundsConfig(...)` call now also passes `soft_bounds`.\n- The tasks and tests described here already exist in the repo, while every checkbox is `[ ]` and the frontmatter says `status: complete`. The status and checklist contradict each other.",
+   "location": "src/migratory_server/config.py:17-53"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Wrap implementation can return exactly `width`, violating success criterion 7, and no test covers it",
+   "description": "Task 2.2 (lines 130\u2013134) relies on `np.mod(x, width)` producing values in `[0, width)`.\n- For a tiny negative overshoot such as `-1e-17`, floating-point `np.mod` returns exactly `width`, so the result is outside the half-open interval.\n- Success criterion 7 requires `[0, width)`.\n- Task 3.4's `test_wrap_policy_keeps_all_positions_inside` asserts `x < width`, so it could fail intermittently.\n- Task 2.3 has no tiny-negative-overshoot case and Task 2.2 has no guard.\n- Add a case and a step to fold `== width` back to 0.",
+   "location": "src/migratory_server/bounds_enforcement.py:59-60"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Round-trip test is weaker than success criterion 5",
+   "description": "Criterion 5 requires that reloading the emitted YAML \"produces an equal `ServerConfig`\". Task 1.4 (line 88) asserts only that the policy matches. The existing `TestConfigToYaml` (line 782) compares the whole `world_bounds`. Change the assertion to full `ServerConfig` equality.",
+   "location": "tests/test_config.py:207-219"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, and there are more than a 2/5 slice needs",
+   "description": "Tasks 1.5, 2.4, 3.6, 4.3 and 5.5 are separate numbered tasks whose commit lines are checkboxes (`- [ ] **Commit:**`). Commit markers must be plain `**Commit**:` lines, not checkboxes. Five commits for a two-file config change plus one small module is too many.\n- Task 4.3 commits two one-line YAML edits on their own.\n- Tasks 4.1 and 4.2 are two near-identical tasks that should merge, and could fold into Section 3.\n- Fold the commits into plain marker lines after Sections 1\u20133 and the final docs step.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Redundant and low-value verification and test tasks",
+   "description": "- The full `pytest` suite runs in 3.5, 5.1 and again as 5.2 step 2.\n- The parametrized \"dispatches correctly and does not raise\" test (line 171) duplicates the per-policy tests above it and asserts nothing the criteria need.\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` could be one test.\n- Drop 5.1, drop or merge the redundant tests, and merge 4.1 and 4.2.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:238-244, 290-293"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Manual walkthrough edits a tracked config in place and leaves no recovery path",
+   "description": "Task 5.2 steps 6\u20137 (lines 304\u2013306) change `policy:` in the tracked `config/test.yaml` to `reflect`, then `open`. The only undo is step 8, a manual restore.\n- If the run stops after step 6 or 7, `test.yaml` stays on `reflect` or `open`. The Task 5.5 `git add` of \"all updated docs\" could pick it up, and the slice's own criterion 12 requires `wrap` there.\n- Use temporary copies of the config, for example `--config /tmp/...`, so the shipped file is never modified.\n- Step 4 and the slice's step 4 also say \"Spawned 100 entities\", but `test.yaml` spawns 160 (150 + 10).",
+   "location": "config/test.yaml:12"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 3.2 and the Notes contradict each other on import overhead",
+   "description": "Task 3.2 asks the implementer to confirm \"zero import-time ... overhead\", but the same task adds a module-level `import apply_bounds_policy` in `simulation.py`. Line 329 says \"No import of `apply_bounds_policy` is avoided\". Remove the import-time claim. Say only that the `OPEN` path performs no call and no array slicing.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209, 329"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 5.3 and Task 3.5 contain unverifiable or already-done references",
+   "description": "- Line 241 refers to \"slice 309's Task 3.2\" fix pattern. That cannot be checked from this file.\n- Task 5.3 sets `status: complete` in both documents, but both already say `complete`.\n- Line 314 asks to tick the `(313)` line in `300-slices.worldserver-foundation.md`. The long matching lines (43, 45) were not displayed, so whether it is already checked is unconfirmed.\n- Task 5.4's CHANGELOG entries already exist (CHANGELOG lines 27, 28, 42). The task would duplicate them. Reword it to \"verify or amend\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241, 314"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Success criterion coverage map",
+   "description": "- Criteria 1\u20132 map to Tasks 1.1, 1.2. Criteria 3\u20134 map to 1.3, 1.4. Criterion 5 maps to 1.4, only partially (see above). Criteria 6\u20139 map to 2.1\u20132.3.\n- Criterion 10 maps to 3.2 and 3.4. Criterion 11 maps to 3.4. Criterion 12 maps to 4.1, 4.2. Criterion 13 maps to 3.5. Criterion 14 maps to 5.2.\n- The log line in 3.3 traces to walkthrough step 4.\n- The slice states no NFRs, so no load test or CI gating task is required.",
+   "location": "project-documents/user/slices/313-slice.world-bounds-policy.md:355-392"
+  }
+ ]
+}

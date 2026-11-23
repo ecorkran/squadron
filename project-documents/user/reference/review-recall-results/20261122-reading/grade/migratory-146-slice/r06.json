@@ -1,0 +1,103 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "GPU path never writes state back to EntityManager \u2014 snapshots and spawn sync use stale data",
+   "description": "On the CPU path, `tick()` mutates `entity_manager.state` in place. On the GPU path, `GpuAgentState` fields are the source of truth and `TickResult` holds downloaded copies, so `entity_manager.state.positions` and `velocities` are never updated. Two consumers read that state:\n- **Snapshots:** `make_snapshot_builder` (`src/migratory_server/clients.py:360-362`) builds a `TickResult` from `em.state`. Every client that connects after tick 0 would receive the initial spawn positions, not the live ones.\n- **Spawn/despawn sync:** `sync_from_entity_manager()` (lines 89-90, 178-179) re-uploads CPU state to the GPU. That state is stale, so every agent teleports back to its initial position whenever the count changes.\n\nThe design needs a decision. Either write the downloaded result back into `entity_manager.state` each tick, or make the snapshot builder and sync read from the driver. Neither is specified.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "f32/f64 contract is described incorrectly; f32 `TickResult` would corrupt the wire format",
+   "description": "Line 150 says `export_positions()` and `export_velocities()` return f64 (\"Quadrants upcasts on download\"). The code says otherwise:\n- `GpuAgentState.export_positions` and `export_velocities` return f32 (`src/migratory/bench/backends/quadrants_fused_state.py:228-253`).\n- `TickResult.from_quadrants_fields` passes the arrays through without conversion (`src/migratory/engine/tick_result.py:149-153`).\n- `protocol.serialize_state_update` and `serialize_snapshot` call `.tobytes()` on whatever dtype they get (`src/migratory_server/protocol.py:185-187, 210-213`), and the documented layout is f64 (`9 + count*32`). f32 arrays would produce half-width payloads that clients decode incorrectly.\n\nSuccess criterion A3 (\"same dtype contract, zero downstream changes\") therefore does not hold. The design must add an explicit f64 upcast, with its per-tick cost, or change the wire code.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Bounds sync-back mechanism does not match what `apply_bounds_policy` does",
+   "description": "There are three mismatches with `src/migratory_server/bounds_enforcement.py`:\n- **REFLECT:** it clamps positions and also flips velocities (lines 63-91). The design uploads positions only (`upload_positions`, `notify_positions_modified(positions)`). The GPU keeps the outward velocity, so agents are pinned to the wall and re-clamped every tick instead of reflecting. A velocity upload is missing.\n- **SOFT:** `apply_bounds_policy(SOFT)` is a no-op (lines 41-42). SOFT is implemented by `WorldBoundsRepulsor`, a force appended by `build_forces` (`src/migratory_server/force_builder.py:69-78`). The fused kernel has no repulsor. The design's \"SOFT sync-back\" does nothing, and A4's claim that soft keeps agents in bounds is unmet. The design neither names this gap nor puts the repulsor into the fused kernel.\n- **Call site:** the `step()` listing at lines 171-199 omits the `notify_positions_modified()` call that line 213 requires.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Production forces the fused kernel cannot compute are silently dropped",
+   "description": "`build_forces` can add `FlightForce` and `PursuitForce` (when `interactions` is configured) and `WorldBoundsRepulsor` (SOFT). `SimulationManager` also takes `forces` and `environment`. The fused kernel hard-codes 7 forces. `server.py` would still build and log those forces, while the GPU driver ignores them. Because the default is `quadrants`, existing configs that use interactions or soft bounds would change behavior with no error. The design should either reject or fall back to CPU with a warning when `interactions` or SOFT is configured, or state the limitation explicitly. It should also state that `dt`, profile weights and leadership are frozen at setup (`lead_active` is precomputed).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:20-22, 119-125"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Fields are sized to initial N, so spawn/despawn sync cannot work as designed",
+   "description": "`GpuAgentState.setup` allocates every per-agent field with `dense(qd.i, n)`, where `n` is the count at setup (`quadrants_fused_state.py:179-195`). Quadrants fields cannot be resized. `sync_from_entity_manager()` after a spawn has no capacity to hold the new agents. The design needs to allocate `entity_capacity` and pass the active count into the kernels, or tear down and rebuild the fields. It does neither, and it does not say what happens when `setup()` runs with zero agents.\n\n`count_changed_since_last_tick()` has a second hole. It compares counts only, so a spawn plus a despawn between ticks goes undetected. `remove_agent` also shifts indices, which the design does not discuss. The helper is a stateful query, and the design does not say who updates the \"previous count\" or what the first tick compares against. `EntityManager` has no runtime spawn or despawn caller today (spawning happens only at startup in `server.py:472-473`), so the design should explain why this scope belongs in the slice.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:89-90, 148, 201"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Moving `GpuAgentState` breaks importers the design does not list, and does not remove the bench dependency",
+   "description": "The design says only `quadrants_fused_backend.py` needs an import update. These files also import `migratory.bench.backends.quadrants_fused_state`:\n- `src/migratory/bench/backends/quadrants_fused_kernels.py:33`\n- `scripts/148_measure_cell_occupancy.py:28`\n- `tests/bench/test_quadrants_fused.py`\n- `tests/bench/test_quadrants_fused_kernels.py`\n\nThat contradicts A5 (\"all bench tests pass without modification\") and line 301 (\"bench backends not changed\"). The move also does not eliminate the production\u2192bench dependency (line 383):\n- `agent_state.py` imports `_build_initial_state` from `bench.backends.numpy_backend` and `Workload` from `bench.workload`.\n- The driver must import `build_spatial_hash` and `fused_force_integrate_kernel` from `bench/backends/quadrants_fused_kernels.py`, and the design leaves those in bench.\n\nEither move the kernels and state together and leave a re-export shim, or accept and state the dependency direction. Also note that `_bind_state_fields` (`quadrants_fused_kernels.py:124-147`) rebinds module globals per launch. The driver must go through `run_fused_tick` or call `_bind_state_fields` before `fused_force_integrate_kernel`. The design's `step()` sketch (lines 119-123) does neither explicitly.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301, 332, 383"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Arch selection does not detect GPU absence, so A7's fallback is unreachable and contradicts the Open Notes",
+   "description": "`_select_arch()` keys only on `platform.system()`. A Linux host without an NVIDIA GPU returns `qd.cuda`, and A7 (\"no Metal and no CUDA \u2192 qd.cpu with warning\") never triggers there. Only unusual platforms such as Windows reach the fallback branch. Open Notes line 382 says `qd.init()` raising on an absent CUDA driver is fatal at startup, which contradicts A7. The design needs a real capability probe (try `qd.init`, catch the failure, retry with `qd.cpu`) or has to restrict A7 to non-Linux/Darwin.\n\nOther problems in this area:\n- Lines 98 and 34 call this an \"update\", but the bench `_select_arch` (`quadrants_fused_backend.py:46-62`) stays and the bench harness is out of scope. The design therefore creates a second diverging copy and does not say which module owns it.\n- The `arch` property is declared as returning a string, but `_select_arch` returns the `qd.*` object. The mapping is not specified.\n- The CPU-fallback warning text says to \"Set backend: cpu\", but `backend: cpu` selects the NumPy/Numba path, not `qd.cpu`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117, 336, 382"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Default `backend: quadrants` changes behavior of the existing server test suite and CI",
+   "description": "Existing tests load configs without a `compute:` block and run the server (`tests/test_server.py` alone has ~68 `Server(`, `.run(` or `load(` references). With the default `quadrants`, each would call `qd.init` in the pytest process, which Open Notes line 382 calls undefined behavior on the second call. The design does not say how existing tests stay on the CPU path, for example by changing the default or by a test fixture. The `tests/bench` tests already isolate Quadrants in subprocesses, and `tests/load/test_quadrants_fused_tps.py` does the same. The design's new tests (items 5\u20138, calling `setup()` repeatedly \"against the real substrate\") do not follow that pattern, and \"tests/server/\" does not exist.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:33, 56-68, 307, 382"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Test plan and regression commands reference nonexistent paths and are internally inconsistent",
+   "description": "- `tests/server/` does not exist. Server tests live flat under `tests/`, so `pytest tests/server/ tests/bench/` (line 375) errors on a missing directory or skips the server tests.\n- Line 307 says \"All tests are CPU-only\", then labels tests GPU-required, then describes Metal and CUDA runs.\n- Config errors in this codebase are `ConfigError`, not `ValueError` (`config.py:17`, used throughout the validators). Tests 3\u20134, the A1 text and the walkthrough all say `ValueError`, so tests written to the design would fail.\n- A4 claims all four `BoundsPolicy` variants are verified for 100 ticks. The tests cover only WRAP, and for one step.\n- Test 6 only checks \"does not raise\", not that agent state survived the resync, which is the staleness bug above.\n- `tests/load/test_gpu_server_tps.py` is only a name. An existing `tests/load/test_quadrants_fused_tps.py` already gates 60 TPS at 50k on the same kernel. The design does not say what a `SimulationManager`-level test adds. Without a measured per-tick download and bounds cost, \u226560 at 50k is unsupported.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:299, 305-320, 375"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Per-tick transfer cost and TPS NFR are not accounted for",
+   "description": "- `step()` downloads positions, velocities and profile indices every tick (lines 119-123). The parent plan says \"single position download\". Profile indices never change at runtime (docstring at `quadrants_fused_state.py:259`), so downloading them each tick is wasteful.\n- The wrap sync-back adds an upload each tick. Line 384's \"~200 KB at N=50k\" is wrong: 50k \u00d7 2 \u00d7 4 B = 400 KB as f32, 800 KB as f64.\n- The design restates a 60 TPS target for the test (line 320), but the budget for download, f64 upcast, `apply_bounds_policy` and broadcast is not broken down. The parent architecture's Tier 2 path assumes wire work in plan 300, which this slice defers.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:119-125, 207, 320, 384"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Startup/threading hazards for GPU lifecycle are not handled",
+   "description": "- **Threading:** `sim.step` runs on a dedicated `ThreadPoolExecutor` worker (`server.py:456, 582`). `qd.init` and field allocation would run on the event-loop thread, and kernels would launch from the worker thread. The design does not state whether Quadrants and CUDA contexts tolerate that thread hop.\n- **JIT warm-up:** the CPU path has `_warm_force_kernels` to avoid a first-tick compile stall. The fused kernel compiles on first launch, so tick 0 would stall. The design does not add a warm-up or say how it avoids mutating state.\n- **Shutdown:** line 254 says to add `gpu_driver.finalize()` to \"the existing server teardown path\". `Server._shutdown` runs registered hooks, and the server body (lines 618-627) has no teardown that calls `simulation_manager` cleanup. `gpu_driver` is also a local in the sketch, so it needs to be stored on `Server` and registered as a shutdown hook. Because `qd.reset()` runs there, the in-flight tick must be done first (it is, since the executor shuts down with `wait=True`, but this should be stated).\n- **Replay mode:** `run()` returns early to `_run_replay`, so `finalize()` must not assume setup ran.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:229-254, 382"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Config surface: parser integration is under-specified and `cpu` option naming is ambiguous",
+   "description": "- The parsing pattern for optional sections is a `_validate_*` function plus an explicit `data.get(...)` block (`config.py:849, 1328-1334, 1372`). The design only says \"parse `simulation.compute`\" and does not mention `ConfigError`, a type check on `subdivision_factor`, or the wire format of old simulation logs.\n- `ComputeConfig` uses `@dataclass(frozen=True, slots=True)`, whereas the neighboring configs use `@dataclass(frozen=True)`. `SimulationConfig` uses a plain default instance (`spatial: SpatialConfig = SpatialConfig()`), while the design uses `field(default_factory=...)`.\n- The walkthrough step 1 for the Mac path says to add the block \"under `simulation:`\", while Files Changed says `config/default.yaml` gets a commented block. The two are inconsistent about whether the block is live.\n- The \"CPU default (no GPU)\" walkthrough (lines 358-362) says that removing the `compute:` block gives the CPU path. That is wrong, since the default is `quadrants`.\n- `qd.init` failure happens in `Server.run` after the init hooks. The \"before binding the WebSocket port\" claim holds for config errors only if validation happens in `load()`, which is the case. For GPU init failure, the design says the exception propagates, but it does not say whether the fallback should apply.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:45-68, 290, 298"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Proportionality: two sync mechanisms and extra surface beyond what the slice needs",
+   "description": "Things that can be cut or deferred:\n- The separate `notify_positions_modified` plus `_positions_dirty`/`_pending_positions` state machine. It is a second sync channel next to `sync_from_entity_manager`. A single \"driver owns state; `step` takes an optional modified-state argument\", or doing the bounds work in the same call, would remove it. It would also give the REFLECT velocity upload a natural home.\n- The SOFT sync-back, which is a no-op in `apply_bounds_policy`.\n- The statement of `finalize()` being callable \"if `setup()` was never completed\" and the `arch` property as separate surface. Neither is needed beyond a log line.\n- Re-stating the full interface twice (lines 74-94 and 215-225), and re-describing `QuadrantsFusedTickRunner` phases.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:89-92, 213-227, 252"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "\"Same three phases\" lists four; minor doc inconsistencies",
+   "description": "Line 119 says \"three phases\" and lists four items. Line 20 says \"slices 142\u2013149 prove the GPU tick works\", though 146 itself is in that range. Line 125's `step()` signature takes `tick_number`, which nothing uses. The doc also says the slice 148 `test_quadrants_fused_tps.py` exists as a gate for 60 TPS, so the A6 gate partly duplicates it.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:119-123"
+  }
+ ]
+}

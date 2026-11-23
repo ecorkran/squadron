@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The density signal is post-cap in the actual `tick.py`, which breaks the main scenario",
+   "description": "The design says the signal is `filtered_counts` \"post-`exclude_self`, pre-cap\" (lines 27, 116, 409). It also puts `spatial.record_density(filtered_counts)` as step 8, after the cap step (lines 158-159, 251). In `src/migratory/engine/tick.py:66-77` the cap branch rebinds the same names (`filtered_flat, filtered_counts = apply_neighbor_cap(...)`). By step 8, `filtered_counts` is the capped array whenever any profile sets `max_neighbors`. The design's own live scenario is Entry 5's `k=1` config. There, the mean is at most 1, which is below `t - h = 8`. The dispatcher would pick grid permanently, including the clustered steady state where Entry 4 showed brute wins by roughly 30%. The Slice 112 \"orthogonality\" claim and the \"Non-Risks\" bullet (lines 408-409) are false as designed. The design has to capture the pre-cap counts, for example `record_density` right after `exclude_self`, or a separate variable. It also needs a test that runs with `max_neighbors` set and asserts the signal is uncapped. The plan entry (arch lines 49) has the same intent, so this is a defect in the design, not in the plan.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Several statements about `test.yaml` and the existing server are wrong",
+   "description": "- Lines 376 and 369 describe `test.yaml` as 2500 entities with `max_neighbors=1` and soft bounds. The actual `config/test.yaml` has 950 + 50 = 1000 entities, no `max_neighbors`, and soft bounds with `falloff_distance: 0.1`. Entry 5's 2500-entity, `k=1` config is not checked in. Walkthrough steps 4 and 5 cannot run as written, and their \"~16\u201317 TPS\" baseline doesn't apply to this file.\n- Line 217 says `server.py` used a `max(world.width, world.height)` fallback in slice 105 and that this logic \"moves from `server.py`\". `server.py:127` is plain `BruteForceQuery()`. Slice 105 was deferred, and no cell-size logic exists to move. `_derive_cell_size` is new code.\n- Lines 66-68 pass `ServerConfig.simulation.world_bounds` as `HashGridQuery`'s `world_bounds`. That is a `WorldBoundsConfig(width, height, policy, soft_bounds)` (`config.py:47`). `HashGridQuery` takes an `(x_min, y_min, x_max, y_max)` tuple and unpacks it (`hash_grid.py:47`). The design needs a conversion, for example `(0, 0, width, height)` to match `build_world_bounds`, or the call raises a `TypeError`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The wiring snippet doesn't match the class signature",
+   "description": "`AdaptiveSpatial.__init__` (lines 83-90) takes `threshold_mean_neighbors` and `hysteresis_band`. The wiring at line 238 calls it with `threshold=` and `hysteresis=`. Separately, `initial_backend` is a constructor parameter and the Overview (line 37) lists it as tunable. But `SpatialConfig` (lines 171-176) has no such field, and `_build_spatial` hardcodes `\"brute\"`. Line 301 (\"Make it configurable\") and the risk at line 400 (\"operator sets `initial_backend: grid`\") assume YAML exposure that doesn't exist. The design has to pick one: add the field and its validation, or drop the claims.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:238"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Test strategy assumes tests run against the server's backend, but they construct `BruteForceQuery()` directly",
+   "description": "- Line 352 says tests that previously ran against `BruteForceQuery()` now run against `AdaptiveSpatial`. They don't: `test_simulation.py` (about 20 sites), `test_flocking.py`, `test_herding.py`, `test_force_builder.py` and `test_repulsor_integration.py` instantiate it themselves. Changing the default config affects only `Server.run()` paths, mainly `test_server.py`.\n- Line 432 says `test_server_tick.py` and `test_integration.py` run \"under all three backends\". Neither references a spatial backend at all (no matches in either file).\n- The `MIGRATORY_SPATIAL_BACKEND` env var in walkthrough step 2 doesn't exist, and line 359 leaves the mechanism as an \"implementation detail\". Without a defined mechanism, the \"652 tests pass under each backend\" criterion (line 335) is vacuous or requires editing about 30 test sites. The design has to name the mechanism and the call sites it touches.\n- `tests/test_server.py` has empty-profile server configs (lines 50, 519, 603). Under the new default these go through `_build_spatial` with `profiles=[]`. The empty-profile fallback should be an explicit unit test.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:352"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity between grid-backed and brute-backed runs isn't achievable",
+   "description": "Line 421 asserts bit-exact position equality against brute-force-only. Three things prevent that:\n- Brute uses the `|a|\u00b2+|b|\u00b2-2a\u00b7b` identity (`brute_force.py:125-129`) and grid uses direct differences (`hash_grid.py:286-289`). Pairs at the radius boundary can classify differently.\n- Grid emits each row in cell order and brute emits it in index order. The force `reduceat` sums therefore accumulate in a different floating-point order.\n- `apply_neighbor_cap` tie-breaking is documented as unstable.\n\nThe unit-test wording (line 431, compare neighbor sets) is right. The integration parity criterion should be an allclose tolerance, or the test should keep the same backend selection on both sides. Line 359 says \"identical modulo documented determinism caveats\". That conflicts with \"bit-exact\", and it contradicts the Functional Requirement at line 329.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Edge cases in `record_density` are unspecified",
+   "description": "- Line 25 uses `float(counts.sum()) / len(counts)`. `tick()` returns early only for `n == 0`. An empty `active_indices` yields `eval_indices` of length 0, so `exclude_self` returns an empty array and the division is by zero. The design needs an explicit guard: skip the update and keep the current backend.\n- The signal is computed over active agents only. Under the subset-evaluable tick (the foundation in arch line 17), the dispatch signal reflects the active subset while the grid still indexes all agents. Say whether that is intended.\n- If `tick()` raises mid-pipeline, `record_density` isn't called. The next tick then uses the same backend, which is benign. The design's one-build-per-tick contract (line 404) should still state it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The dispatch signal is a weak proxy for grid cost and conflicts with the doc's own cost model",
+   "description": "Grid cost scales with candidates in the 3\u00d73 cell neighborhood, which depends on `cell_size = max(query_radius)` across profiles. With mixed radii (`test.yaml` has 35 and 15), small-radius agents have far more candidates than neighbors. The mean neighbor count is within-radius, so the proxy is skewed by the profile mix. The default threshold derivation (lines 208-211) uses uniform N=3100 at radius 35 and never accounts for this. It also mixes self-excluded neighbor counts with an analytic uniform expectation, so it is off by at most 1 (minor). The reasoning for rejecting `max(cell_counts)` as noisy (line 126) isn't backed by data, whereas Entry 4 recommended it. Defaults of 10.0 and 2.0 are explicitly \"unproven\" (line 213) and there is no fallback plan. This is acceptable if the sweep in step 4 is the deliverable, but the claims about the signal should be softened.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116-127"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Dense-grid memory and per-tick cost with small radii",
+   "description": "`HashGridQuery` allocates a dense `n_cells` grid and runs `bincount(minlength=n_cells)` and a `cell_starts` allocation per build (`hash_grid.py:124-127`). `cell_size = max(query_radius)` can be small relative to a large world, for example radius 1 on a 10,000\u00d710,000 world, which is 10\u2078 cells. `backend: grid` and `adaptive` have no validation or guard for this. Adaptive mode allocates the grid at construction even if brute is always selected. Add a bound on `n_cells` or a lazy construction, and a failure mode in `SpatialConfig` validation.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Slice-mandated and success-criteria items with no mechanism",
+   "description": "- Walkthrough step 5 relies on `grid_selected`/`brute_selected` counts in the \"dispatcher's log output\". The design specifies no logging, counters or switch events, so the step can't be observed. If the switch count and last mean are wanted, add a minimal read-only stats attribute, or drop the claim.\n- Switch events should be observable for the flip-flop risk (line 398), since the mitigation is \"operator can widen the band\".\n- Step 7 does not provide a runnable heredoc (`... simulation.spatial.backend: kdtree`). Config validation also needs type checks (`_require_type`, mapping check) consistent with `_validate_simulation`, and the design never says `_validate_simulation` calls `_validate_spatial` (config.py:590-598). Unknown keys inside `spatial:` are not addressed, though other sections also ignore them.\n- Cache-warmth cost on a brute\u2192grid switch (line 439) is deferred to the perf entry. The success criterion on line 380 (\"no dispatcher-induced spike\") can't be satisfied if the first grid build is a measured spike. The two statements conflict.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Overweight sections that restate other material",
+   "description": "The design is larger than a wrapper plus three config fields needs. Cuts:\n- \"Data Flow (Unchanged for Consumers)\" (240-254) repeats the Tick Integration diagram (145-160).\n- \"Default Threshold Choice\" and Technical Decisions on hysteresis-vs-moving-average, per-agent dispatch, and brute-as-initial restate the perf journal and the plan.\n- \"Single backend per tick vs per-agent\" and the exclusions list cover options this slice doesn't have.\n- `initial_backend` as a constructor argument with no config use is configuration nothing uses (see the wiring finding).\n- The Risk \"regression during the first tick\" and the \"Brute build is a no-op\" risk are speculative.\n- \"Provides to Other Slices\" claims \"future slices (e.g. LOD) can subscribe via `record_*` hook\", which is scope speculation.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:240-254"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Layering: the engine tick duck-types onto a spatial-layer hook",
+   "description": "The slice argues for a wrapper to keep `tick.py` dependent only on `SpatialQuery` (line 262). Then it adds `hasattr(spatial, \"record_density\")` in `tick.py`, a hidden, untyped, optional dependency on a method outside the protocol. That reintroduces the coupling the wrapper was chosen to avoid, and a typo'd or renamed method silently disables dispatch. Alternatives that keep the engine boundary clean: the dispatcher derives density from `query_radius_batch`'s own raw `counts` (which is exactly the pre-cap signal and avoids the cap bug above), or the protocol gains an optional hook. The raw-counts approach would also drop the `tick.py` change entirely and make the \"only change to the tick hot path\" criterion moot. This alternative isn't considered. Note the raw counts include self-matches, so the threshold should account for the +1.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "`SimulationConfig` / round-trip and logging consequences aren't addressed",
+   "description": "Adding `spatial` to `SimulationConfig` changes `config_to_yaml` output (`dataclasses.asdict`, `config.py:739`) and therefore the sim-log header (`logging_sim.py:69`). The design doesn't mention the round-trip tests in `test_config.py` (lines 216, 310, 325, 766-811) or `test_logging_sim.py`. They should keep passing, but the design should state it and add a round-trip case for `spatial`. Also, the operator-facing `config/default.yaml` isn't listed as updated, and the \"omitting the section ... default changes from brute to adaptive\" is a behavior change for every existing installation. The CHANGELOG entry should flag it as such.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:178-185"
+  }
+ ]
+}

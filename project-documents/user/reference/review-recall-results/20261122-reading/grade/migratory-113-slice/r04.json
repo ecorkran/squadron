@@ -1,0 +1,208 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Density signal reads post-cap counts, so brute is unreachable under `max_neighbors`",
+   "description": "`tick.py` rebinds `filtered_counts` to the capped output (line 71). `apply_neighbor_cap` returns per-row counts \u2264 k (`src/migratory/engine/neighbors.py:80-109`). The design's step 8 passes that rebound array at the end of the tick (113-slice:158-159, data flow :251). Yet the design states the signal is pre-cap (:116, :27, :322, :409).\nConsequence: if every profile sets `max_neighbors` = k, then m \u2264 k. Switching to brute needs m > t+h = 12 with defaults, so any k \u2264 12 never selects brute. The plan's archetypes (100-slices:46: k = 3, 4, 7, 10) all qualify. The walkthrough config (`max_neighbors=1`, :376) pins grid from tick 1, since m \u2264 1 < t\u2212h = 8. That is the regime the journal measured as ~30% slower than brute (journal Entry 4 addendum, lines 1011\u20131013; 100-slices:35). Journal Entry 5 says the signal must be raw density (journal 1146\u20131155), so the design contradicts its own source.\nFix: take the density before line 69, or compute it inside `AdaptiveSpatial.query_radius_batch` from the pre-cap counts it returns (see the boundary finding). Add a test with `max_neighbors=1` and dense positions that asserts brute is selected.",
+   "location": "src/migratory/engine/tick.py:69-77"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Walkthrough's stated test config does not match `config/test.yaml`",
+   "description": "The design says step 5 uses `test.yaml` with \"2500 entities, `max_neighbors=1`\" (113-slice:376). The committed file has 950 + 50 = 1000 entities (lines 44, 51) and no `max_neighbors` on any profile (lines 23\u201341). The journal's Entry 5 config (N=1950 + 550, capped) is not committed. The ~16\u201317 TPS expectation (:379) belongs to that uncommitted config.\nFix: commit a named config and state its contents in the design.",
+   "location": "config/test.yaml:43-56"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Bit-exact and \"identical\" parity cannot hold across backends",
+   "description": "Brute rows are in ascending agent index (`brute_force.py:141-145`, `np.nonzero` over columns). Grid rows are in 3\u00d73 cell-slot order, not ascending: candidates are gathered slot by slot, then masked in that order. The CSR force kernels reduce each row, so summation order changes and results differ at the last bit, and trajectories diverge over ticks. Brute also uses the identity distance by default (`brute_force.py:125-129`), while grid uses direct differences (`hash_grid.py:178-180`). Pairs near the radius can therefore be classified differently.\nThe design requires bit-exact positions over N ticks (113-slice:421) and \"identical\" CSR output (:329). Its own testing strategy concedes order differs (:431). Verification step 2 cites \"documented determinism caveats\" (:359) that are documented nowhere. The \"identical tick-1 behavior\" claim (:298) holds only for tick 1.\nFix: either sort grid rows ascending and unify the distance formula (this touches `HashGridQuery`, which the design excludes at :48), or restate the contract as per-tick set equality plus a stated trajectory tolerance, and drop the bit-exact test.",
+   "location": "src/migratory/spatial/hash_grid.py:268-293"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"existing end-to-end tests\" named for the integration plan are not end-to-end",
+   "description": "The design names `test_server_tick.py`, `test_integration.py` and `test_simulation.py` as end-to-end tick tests to parametrize (113-slice:432). `test_integration.py` tests only `integrate()` (imports at line 6). `test_server_tick.py` tests `TickLoop` and `TickMetrics` timing (import at line 11) and never touches spatial. `test_simulation.py` builds `BruteForceQuery()` directly about 20 times (lines 150\u2013578). None of them reaches the `server.py` construction site, so a fixture over backend values would not exercise the wiring.\nFix: add a test of `_build_spatial` and a Server-level test that checks the constructed backend type.",
+   "location": "tests/test_integration.py:6"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 1 claims the suite runs against the adaptive backend; most tests bypass it",
+   "description": "Step 1 says tests \"that previously ran against `BruteForceQuery()` now run against `AdaptiveSpatial`\" (113-slice:352). Only the `server.py` construction site changes. Eight test files (`test_spatial`, `test_simulation`, `test_tick`, `test_herding`, `test_flocking`, `test_force_builder`, `test_repulsor_integration`, `test_hash_grid`) construct `BruteForceQuery()` directly. Only the `Server.run` tests reach the default backend.\nFix: state which tests exercise the backend selection, and route the backend choice through a fixture or config.",
+   "location": "tests/test_simulation.py:150"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`MIGRATORY_SPATIAL_BACKEND` is not defined anywhere, so step 2 silently tests nothing",
+   "description": "No code or test reads this variable (grep of `src/` and `tests/` finds none). Step 2 would run adaptive three times and report \"pass\", and it would pass for the wrong reason. The design calls the mechanism an \"implementation detail\" (:359), but the success criterion depends on it.\nFix: delete step 2 (config already pins the backend), or define a concrete mechanism such as a pytest option, and assert the backend type inside each run.",
+   "location": "113-slice:356-359"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Step 1 excludes the only subprocess test of the default-config server path",
+   "description": "Step 1 runs with `--ignore=tests/test_main.py` (113-slice:350), with no rationale. `test_main.py` is the only test that starts `python -m migratory_server` with `config/default.yaml`, which is exactly the path whose default changes to adaptive.\nFix: drop the `--ignore`, or justify it and add a replacement check.",
+   "location": "tests/test_main.py:69-74"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Step 7's config file cannot run as written",
+   "description": "The heredoc contains a literal `...` line and a dotted key (`simulation.spatial.backend: kdtree`). YAML does not nest dotted keys, and the file has no `server` or `logging` section. Loading fails with \"Missing required field: server\" (`src/migratory_server/config.py:698-700`), not the spatial error the step expects.\nFix: write a complete valid config (for example, a copy of `config/test.yaml` with the bad `spatial` section).",
+   "location": "113-slice:387-389"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`_build_spatial` passes keyword names the class does not accept",
+   "description": "Line 238 calls `AdaptiveSpatial(grid=..., brute=..., threshold=..., hysteresis=..., initial_backend=\"brute\")`. The class signature (lines 83\u201390) takes `threshold_mean_neighbors` and `hysteresis_band`. A literal implementation raises `TypeError` in the default (adaptive) mode.\nFix: align the names across the signature, `SpatialConfig` (`grid_threshold_mean_neighbors`), and the wiring.",
+   "location": "113-slice:238"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is in scope but not in the config surface",
+   "description": "Included (:37), the Decisions section (:301) and the risks (:400) describe `initial_backend` as configurable. `SpatialConfig` (:171\u2013176), the YAML surface (:189\u2013196), validation (:198\u2013204) and success criteria (:333\u2013335) omit it.\nFix: either add the field with validation, or drop it from scope. Dropping it is the simpler choice, since brute-first is the oracle.",
+   "location": "113-slice:301"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "`HashGridQuery` needs a 4-tuple, but the design passes the config dataclass",
+   "description": "`HashGridQuery` unpacks `world_bounds` as `(x_min, y_min, x_max, y_max)`. `ServerConfig.simulation.world_bounds` is a `WorldBoundsConfig` with `width`, `height`, `policy` and `soft_bounds` (`config.py:46-53`). The design says it \"provides the grid's `world_bounds`\" (113-slice:68) and passes it as-is (:230, :237). The existing converter `build_world_bounds` returns `WorldBounds` with origin/extent, not a tuple (`simulation.py:15-22`).\nFix: specify the conversion `(0.0, 0.0, width, height)` inside `_build_spatial`.",
+   "location": "src/migratory/spatial/hash_grid.py:47"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The `_derive_cell_size` logic does not exist in `server.py`",
+   "description": "The design says the cell-size logic \"moves from `server.py`\" and that the empty-profile fallback is \"the same fallback `server.py` used in slice 105,\" which \"slice 105 already proved\" (113-slice:217\u2013219). `server.py:127` is `spatial=BruteForceQuery()`, and `cell_size` appears nowhere in `src/migratory_server/`. The journal says the server wiring was reverted (journal line 942). Slice 105's fallback exists only as a spec (105-slice:270\u2013271) and was never shipped.\nFix: describe the helper as new code, cite slice 105 as a spec rather than proof, and remove \"already proved\".",
+   "location": "src/migratory_server/server.py:127"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "`SpatialConfig` validation omits type checks, and uncaught errors escape `main()`",
+   "description": "The design lists range checks only. The existing convention is `_require_type`, which also rejects bools (`config.py:151-161`). `main()` catches only `ConfigError` (`src/migratory_server/__main__.py:36-41`). A string value such as `hysteresis_band: \"x\"` would reach `<= 0` and raise an uncaught `TypeError` with a traceback instead of exit 1. A bool would be accepted as 1.0. The design also does not say where `_validate_spatial` is called from.\nFix: specify `_require_type` for `backend` (str), `grid_threshold_mean_neighbors` (float) and `hysteresis_band` (float), and state the call site in `_validate_simulation`.",
+   "location": "113-slice:198-204"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "`hysteresis_band \u2265 threshold` makes brute\u2192grid unreachable",
+   "description": "Validation accepts any `hysteresis_band >= 0` (:202). The brute\u2192grid rule is `m < t \u2212 h` (:133). If h \u2265 t, then t\u2212h \u2264 0 and m \u2265 0 can never satisfy it, so a dispatcher that starts on brute stays there forever.\nFix: validate `hysteresis_band < grid_threshold_mean_neighbors`, and add a unit test for the boundary.",
+   "location": "113-slice:202"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "`record_density` divides by zero on an empty active subset",
+   "description": "The formula `float(counts.sum()) / len(counts)` (113-slice:25, :116\u2013121) raises `ZeroDivisionError` when `len(counts) == 0`. The engine's `tick()` accepts `active_indices` and uses it directly as `eval_indices` (`tick.py:43-46`), so an empty array is valid input. `SimulationManager` never passes an active set (`simulation.py:105-111`), so this is latent. Variable-rate ticking in the world server (300-arch) would reach it.\nFix: guard `n_active == 0` as a no-op, and add a test.",
+   "location": "src/migratory/engine/tick.py:43-46"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The dispatcher holds cross-tick state that changes output bits, which the architecture's determinism and statelessness principles do not account for",
+   "description": "`AdaptiveSpatial` holds `_mean_neighbors` and the selected backend across ticks (:110, :136\u2013143). That state changes which floating-point path produces the next tick. It is not in the state arrays. The architecture requires that the same state and inputs produce the same outputs (100-arch.behavior-engine.md:34) and that the engine be stateless between ticks, with all state in arrays passed in (:73). A restored snapshot would build a fresh dispatcher on brute and diverge. The design does not mention snapshots or how a resumed run reproduces the decision sequence.\nFix: document dispatcher state as part of the spatial object, and define its reset and snapshot rule.",
+   "location": "113-slice:110"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "The engine `tick.py` hook couples the engine to a dispatcher concern, and the density can be computed inside the wrapper",
+   "description": "The design adds a `hasattr(spatial, \"record_density\")` duck-type check to the engine tick (:158) and justifies it (:162). The architecture requires that internal strategy choices stay hidden behind the query interface (100-arch.behavior-engine.md:38). `AdaptiveSpatial.query_radius_batch` already sees the pre-cap `counts` it returns (self-matches included, so subtract `n_active` or use `len(flat) \u2212 n_active`). Computing the signal there removes the `tick.py` edit, the `hasattr` guard, and the failure in the first finding. The engine would then depend only on `SpatialQuery`.\nFix: move the density recording into the wrapper.",
+   "location": "113-slice:147-164"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "The dispatcher is typed to two concrete classes, so the \"KD-tree slots in with no protocol change\" claim is overstated",
+   "description": "The constructor takes `HashGridQuery` and `BruteForceQuery` concretely, and the switching rule is two-state. The design says future KD-tree or GPU backends \"slot into `AdaptiveSpatial` alongside grid and brute with no protocol change\" (:313). A third backend would need a new signature and a new switching rule. The architecture wants strategies replaceable without touching consumers (100-arch.behavior-engine.md:38, :90).\nFix: accept `SpatialQuery` instances, or narrow the claim to two backends.",
+   "location": "113-slice:83-90"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "The default threshold rationale is arithmetically inconsistent",
+   "description": "The design computes \u2248132 mean neighbors for N=3100 uniform over 300\u00d7300 at r\u224835 (:210). Then it says the expansion phase, \"spread uniformly across the whole world\" at \"the same N,\" drops below 10 (:211). Those cannot both hold. Getting below 10 at that density needs about 235 agents. The design's own cost model also undercuts the rule. With cell = r, a query gathers about 9\u00b7r\u00b2\u00b7density \u2248 380 candidates against about 132 neighbors, versus 3100 for brute, so grid does less work than brute at m \u2248 132. The rule would pick brute there. The 300\u00d7300 world for the journal's N=3100 run is also unverified, since the addendum does not record the world size.\nFix: remove the crossover claims, or support them by measurement before stating the default.",
+   "location": "113-slice:208-211"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "Journal attribution is wrong",
+   "description": "The design says the Entry 4 addendum \"identif[ies] [mean neighbors] as the correct cost proxy\" (:122). The addendum proposes `max(cell_counts)` and a `max_cell / n` rule (journal 1042\u20131046). The design quotes \"the single fullest cell\" (:126), and that phrase does not appear in the journal. The mean-neighbors signal is Entry 5's proposal (journal 1146\u20131155).\nFix: cite Entry 5 for the signal and the addendum for the max-cell alternative, and drop the quotation marks.",
+   "location": "113-slice:122-126"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "Verification step 5 depends on observability the spec does not define",
+   "description": "Step 5 counts `grid_selected` in \"the dispatcher's log output\" (:377), and step 4 reports the ratio of grid to brute ticks (:369). The `AdaptiveSpatial` spec (:77\u2013112) defines no counters, properties or logging.\nFix: specify a per-tick selected-backend counter exposed as a property, and an INFO log on each switch, following the existing `logger` pattern in `server.py`.",
+   "location": "113-slice:377"
+  },
+  {
+   "i": 21,
+   "severity": "CONCERN",
+   "title": "Risk mitigation cites a band sweep the walkthrough does not contain",
+   "description": "The flip-flop mitigation says \"The walkthrough step 4 sweep includes band sensitivity.\" Step 4 sweeps only the threshold, at 2, 5, 10, 20, 50 (:368\u2013370). The harness at `/tmp/bench_adaptive.py` is \"constructed during implementation\" (:369) and is not a committed artifact, so the step cannot be reproduced from a clean start.\nFix: add the band sweep to step 4 and commit the harness, or remove the claim.",
+   "location": "113-slice:398"
+  },
+  {
+   "i": 22,
+   "severity": "CONCERN",
+   "title": "\"Live\" tuning in the plan is restart-only in the design",
+   "description": "The plan says the operator can \"tweak the crossover live while experimenting\" (100-slices:49). The design offers YAML values read once at startup (:314, :398 \"without redeploying code\"). The exclusion at :51 covers learned thresholds, not live tuning.\nFix: state explicitly that restart-time YAML is the accepted meaning of \"live,\" or add a runtime reload path.",
+   "location": "113-slice:314"
+  },
+  {
+   "i": 23,
+   "severity": "CONCERN",
+   "title": "No NFR is restated, and the brute path hits the memory wall at the stated scale",
+   "description": "The parent architecture states \"tens of thousands of agents at full behavioral fidelity on a single CPU\" (100-arch.behavior-engine.md:36). The world-server architecture gives an operating range of 10K\u201350K on one CPU (300-arch:97) and a tick budget of `1/tick_rate` with overrun warnings (300-arch:69, :93). The design restates none of these. Its performance criteria are relative (\"\u2265 brute-only average,\" :380) and never state the budget (50 ms at the 20 TPS in `test.yaml`). Brute's batch allocates (n_active \u00d7 n) float64 matrices (`brute_force.py:125-129`), about 0.8 GB per matrix at N=10K. That is the path the dispatcher picks in dense regimes, and the design only tests N=2000\u20133000.\nFix: restate the tick budget and scale target, and either benchmark at 10K or defer that claim explicitly.",
+   "location": "113-slice:339-340"
+  },
+  {
+   "i": 24,
+   "severity": "CONCERN",
+   "title": "Verification and tooling are heavier than the slice needs",
+   "description": "The cuttable items are: the env-var pinning (step 2, above); `initial_backend` (above); the `hasattr` hook (if the boundary fix is taken); the uncommitted `/tmp` sweep harness (step 4); and the 6000-tick interactive live run with sim logging enabled (step 5, `test.yaml:19-22`). The \"Provides\" bullets (:311\u2013315) are speculative. The plan rates this slice at effort 3/5 (100-slices:49). Keep the unit, parity and config tests as the gates, and move the benchmark sweep and live run to the journal task.",
+   "location": "113-slice:368-380"
+  },
+  {
+   "i": 25,
+   "severity": "CONCERN",
+   "title": "Hidden dependency on slice 112",
+   "description": "The frontmatter lists three dependencies. The density signal depends on slice 112's rebinding of `filtered_counts` in `tick.py` (lines 69\u201377), and the design's claims about 112 (:27, :322) rely on it. Slice 112 is complete (100-slices:46) but is not listed.\nFix: list 112 if the signal stays in `tick.py`, or move the signal into the wrapper and drop the dependency.",
+   "location": "113-slice:6"
+  },
+  {
+   "i": 26,
+   "severity": "NOTE",
+   "title": "`record_density` is not O(1), and its cost is not a BLAS reduction",
+   "description": "`counts.sum()` is an O(n_active) NumPy reduction, not BLAS. `len(filtered_flat)` (equal to `total_edges`, as :116 notes) is O(1).",
+   "location": "113-slice:340"
+  },
+  {
+   "i": 27,
+   "severity": "NOTE",
+   "title": "Brute's `build()` is not a no-op",
+   "description": "The design says brute's build \"does nothing today\" (113-slice:108, :404). `build` copies the full positions array every tick. The skipped copy is small, but the \"purely cosmetic\" conclusion depends on this claim.",
+   "location": "src/migratory/spatial/brute_force.py:51-53"
+  },
+  {
+   "i": 28,
+   "severity": "NOTE",
+   "title": "Speculative \"Provides\" bullets conflict with `interfaces: []`",
+   "description": "The frontmatter declares no interfaces (:7), but \"Provides to Other Slices\" names a future LOD `record_*` hook (:315). The plan says no integration slices are needed (100-slices:56). Either declare the interface or drop the speculative bullets.",
+   "location": "113-slice:7"
+  }
+ ]
+}

@@ -1,0 +1,75 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"numpy\" backend would measure Numba-JIT forces; the Numba row is assigned to a later slice than the one that needs it",
+   "description": "The design calls NumPy \"the only backend that exists today\" (lines 25-28). It moves the Numba runner out of scope (line 92) and gives it to slice 144 (lines 341-345, 589-591). But slice 118 is marked complete in `100-slices.behavior-engine.md`. Per `118-slice.numba-force-jit.md:380-392`, it turned the five `BulkForce` bodies into wrappers that call the JIT kernels, controlled by `USE_JIT_KERNELS = True` as the production default. Slice 118 also says the `_call_numpy` reference paths may be deleted in a later cleanup (lines 394-396).\n\nWhat follows:\n- The `numpy` backend as designed calls the engine forces with nothing that turns JIT off. Every `force_total` it records is a Numba number filed under the name `numpy`. That breaks the harness's stated purpose of answering \"on which backend.\" The workload comment \"lets caches/JIT warm\" (line 388) suggests the design already half-expects this.\n- Slice 142 depends on 141 and 118, and it must benchmark against \"the existing NumPy and Numba implementations.\" Slice 144 comes after 142, so the Numba row would not exist when 142 needs it.\n- Step 9 of the walkthrough (lines 661-668) checks results against the architecture's Entry 8 budget. That budget was measured before slice 118, so after 118 the `force_total` shape will not match.\n\nFix: register both `numpy` and `numba` backends in this slice. Use the existing `USE_JIT_KERNELS` flag, set in `setup` and restored in `finalize`, because it is a module-global and `--all-backends` runs in one process. Note that the NumPy backend depends on the `_call_numpy` paths staying in place. Base step 9 on Entry 9 (after 118) instead of Entry 8.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The per-force timing breakdown assigned by the slice plan is deferred, which breaks the \"one file, zero changes\" promise to slice 142",
+   "description": "The slice plan entry for (141) asks for timings broken down by phase, including \"force totals per force.\" The design keeps `force_total` as one number and hands per-force timing to slice 142. Slice 142 would then have to change `PhaseTimings`, bump the JSON `schema_version`, and change the Markdown renderer. That contradicts the integration requirement that 142 adds \"one file \u2026 and zero changes elsewhere in the harness\" (lines 586-588).\n\nThe instrumented tick already wraps each `BulkForce` call, so recording a per-force `dict[str, int]` costs about the same as summing the calls. Deliver it in this slice, in schema v1.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The parity hash cannot serve the consumers it is designed for",
+   "description": "The hash is meant to \"detect divergence\" across backends (lines 80-83). Slice 145 is supposed to use it as the reference (lines 533-534). Two problems:\n- The slice plan defines 145's parity check as \"within a documented tolerance for non-deterministic GPU reductions.\"\n- Slice 118 already compares Numba with NumPy using `atol=1e-12, rtol=1e-9`, not exact equality.\n\nA SHA-256 digest has no tolerance band. Any ULP-level difference changes it entirely. So the claim that \"a downstream consumer interprets it within the documented tolerance band\" (lines 471-473) cannot work. The hash only proves that the same backend is deterministic run to run, which the trajectory tool from slice 140 already covers. (The open question at lines 748-755 itself calls that tool the parity oracle.)\n\nThere is also an internal contradiction: line 81 hashes \"post-warmup\" state, while line 461 hashes state \"after the measure phase.\"\n\nEither cut the parity hash and the 145 integration claim, or replace it with a dump of the final `positions`/`velocities` arrays (for example `.npz`) that a consumer can compare with `np.allclose`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented` copies the whole tick body, and the doc both understates this and contradicts itself on what the backend calls",
+   "description": "The design says the duplication is \"~5 lines per phase\" (line 266). But a parallel `tick_instrumented()` placed in `bench/` has to reproduce the whole algorithm of `tick()`, which conflicts with the project's DRY rule. Elsewhere the doc says \"the harness's NumPy runner calls `tick()` directly\" (lines 131-132, 541), which contradicts Decision B and lines 496-506.\n\nThe drift test (lines 688-695) catches algorithm changes but, as the doc admits, not changes to phase boundaries.\n\nSay plainly that the full body is copied. If `tick()` receives the spatial query and force list as parameters, consider a lighter option: pass timing wrappers around those collaborators to the real `tick()`. That gives spatial and force timings without copying anything. Integration and CSR assembly can be taken from the total if needed.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-267"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The doc puts profile-attribute indexing time in two different places",
+   "description": "Lines 287-290 count \"profile-attribute fancy indexing\" as overhead (`total` minus the sum of phases). The risk section (lines 697-703) says the per-tick `all_radii = np.array(...)` setup is inside `force_total`. The report is meant to tell readers that a large overhead is \"a real signal, not a bug,\" so where this time is counted has to be fixed before implementation. Pick one bracket and state it once.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:287-290"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "How the Markdown report combines runs is undefined",
+   "description": "The Markdown report is \"one table per workload across all backends in `bench/results/`\" (line 440). That directory collects timestamped runs from different git SHAs and platforms. The doc does not say which file per backend is chosen (the latest? only matching SHA or platform?). Mixing them silently would produce a misleading comparison, against the project's no-silent-fallback rule. It also conflicts with \"stateless across runs\" (line 225). \"Sortable on TPS\" (line 80) means nothing for a static Markdown table.\n\nRender only the results from the current invocation (`--all-backends` already produces every row in one run). Leave cross-run comparison to the comparison tool, which is already out of scope.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure modes leave out the `git rev-parse` call, a dirty working tree, and errors during the measure loop",
+   "description": "Reproducibility depends on `git_sha` (lines 232-236, 592-595), but the failure-mode list does not say what happens when `git rev-parse HEAD` fails (no git, not a checkout). Under the no-silent-fallback rule, that needs a defined error or a clearly placeholder value.\n\nThe common case of \"did my change help?\" is benchmarking uncommitted code. HEAD then does not identify the code that was measured, so record a dirty flag (`git status --porcelain`).\n\nOnly exceptions in `setup` are covered. A `tick_once` exception partway through measurement, and failure to create or write to `bench/results/`, also need stated handling, including whether `finalize` runs.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Profile and force name resolution conflicts with itself and bypasses the existing `force_builder` registry",
+   "description": "Profile names are said to resolve against \"migratory.engine.profile presets\" (line 371) and also against a new hand-written registry in `bench/workload.py` that copies the constructors from `config/default.yaml` (lines 392-394). The copy can drift from the live configuration.\n\nForce names resolve to \"module-level singleton instances\" (lines 398-399). But the engine already builds forces through `force_builder` (slices 113/114; 118 keeps `BulkForce` classes as \"the public surface used by `force_builder.py`\").\n\nResolve forces through `force_builder` and profiles through the existing profile configuration path. Also, the harness engages only five forces and leaves out `PropulsionForce`, which slice 144 counts among the forces to port. If the live default config uses propulsion, `mid-flock` is not \"equivalent to the live-server default\" (lines 353-355).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-400"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The walkthrough uses CLI flags the CLI section does not define",
+   "description": "Steps 1-2 use `--list-backends` and `--list-workloads`, which are not in the CLI section. The doc also does not say where `--workload mid-flock` is looked up: `bench/workloads/` relative to the current directory, or to the repo root. The package lives under `src/`, so this needs a stated rule.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:479-483"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The pytest-benchmark dependency is unnecessary",
+   "description": "The stub-backend tests check accounting against synthetic timings, which needs no benchmarking fixture. Leave pytest-benchmark out of the harness tests.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:122-124"
+  }
+ ]
+}

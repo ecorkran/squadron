@@ -1,0 +1,61 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "T7 precedence list contradicts the \"tightening is not floor-gated\" requirement",
+   "description": "The numbered precedence puts `n < floor` \u2192 `INSUFFICIENT_EVIDENCE` first and `not versioned` second. TIGHTEN is fourth, and the task then says a below-floor, low-match cell must still reach TIGHTEN. Taken literally, the list makes TIGHTEN unreachable below the floor. The long parenthetical in item 4 and the bullet after it contradict the list rather than clarify it.\n\nThe unversioned case is also undefined for a low match rate. The design table says \"unversioned \u2192 INSUFFICIENT_EVIDENCE\" without saying whether TIGHTEN can fire. Replace the list with an unambiguous rule, for example \"TIGHTEN if `match_rate <= tighten_rate` (version- and floor-independent); else INSUFFICIENT_EVIDENCE if `n < floor` or unversioned; else GRADUATE or HOLD.\" Then add the unversioned and low-match case to T8. Also decide whether TIGHTEN wins when `tighten_rate >= graduate_rate`, or validate the config at read time.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T13 cannot signal a lapsed graduation, and depends on a 320 surface that appears not to exist",
+   "description": "The signature `select_residual_offers(...) -> list[OfferTarget]` cannot distinguish \"lapsed\" from \"exhausted\". T13 defers the mechanism (\"return enough information \u2026 or have the CLI re-derive it\"). T14 then asserts on \"whatever signal T13 produces\", and T15 prints a lapse line that needs that signal. Three tasks depend on an interface that is never fixed. Specify a concrete return type, such as a result object holding offers plus per-graduation status (`offered`, `exhausted`, `lapsed`).\n\nT13 also says to \"reuse 320's existing result-discovery surface\". A grep of `src/squadron/metrology` found no such function; `derive_judge_config_id` and `MetrologyStore.list_samples` are the only candidates. The fallback (\"scope to store-recorded samples only \u2026 ask the Project Manager\") would make unsampled-result detection impossible, which breaks the non-empty-offers guarantee. Settle this now: state that T13 adds a review-file scan, and say where it lives.\n\nLapse semantics also need stating. `derive_judge_config_id` (identity.py:326-340) hashes the current template at read time. After a prompt edit, re-derived old review files therefore carry the new identity, and nothing matches the stale graduation. Say explicitly that lapse means \"zero results derive to the graduated identity while the template's current identity differs\".",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-206"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T13 does not define how `rate` becomes a count",
+   "description": "\"Select a `rate` fraction\" does not say how to round, whether selection is random or deterministic, or how `rate` is validated. The design commits that a graduated config with unsampled results always yields a non-empty offer set. Floor rounding breaks that, for example at `rate=0.1` over 3 results. T14 only tests `rate=0.5` over 4, which hides the problem. Specify ceil with a minimum of 1 when any unsampled results exist. Specify deterministic ordering (for example, oldest first) so tests are stable. Specify a fail-fast error for a rate outside (0, 1]. Add a small-rate case to T14.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:202-206"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T11 gives no mechanism for the idempotent update that T15 requires",
+   "description": "`MetrologyStore.write_sample` (store.py:131-142) writes `{sample_id}.json` and returns that id. T11's `write_graduation` \"returns a generated record id\". Called twice for the same identity, it would create two records. T15 and T16 require \"one record, not two\" on re-graduate. T11 has no upsert, deterministic id (for example, a hash of the `JudgeConfigId` plus level), or replace-by-id path. T12 does not test one either.\n\nOther T11 problems:\n- It extracts a shared skip-tolerance helper from `list_samples`, which changes 320 code that the slice otherwise treats as untouched. Either drop the extraction (small duplication is acceptable) or note it as a scoped refactor.\n- It says \"extend `MetrologyStore`\" but never names `store.py` as a file to edit.\n- `models.py` will import `GraduatedConfig` from `calibration_models.py` (T3), which imports 321's `report_models`. Flag the circular-import risk and say where `GraduatedConfig` should live.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:171-181"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T2 fixtures do not match the signature of the function under test",
+   "description": "`_template_content_hash(template_name: str)` (identity.py:298) takes a name and resolves the template through `get_template`. It does not take a `ReviewTemplate`. T1's success line (\"two templates differing only in\u2026\") and T2's \"two `ReviewTemplate` fixtures \u2026 \u2192 `_template_content_hash` returns the same value\" are not directly executable. State how fixtures are registered, for example by monkeypatching `squadron.review.templates.get_template`, and how a review file is built for the `derive_judge_config_id` end-to-end case. Check `tests/metrology/test_identity.py`, which exists, for an existing pattern to reuse. Drop the \"or add if 320 didn't create\" hedge.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:45-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two failure-mode and success-criterion items are claimed as covered but have no task",
+   "description": "- **Malformed `judge:` block.** The coverage check says this is \"inherited from `resolve_thresholds`, exercised in T8\". T8 contains no such test, and T7 gives no behavior for it. The design requires \"flag the target; WARNING; not silently defaulted\", and `ThresholdTarget` has no field that could carry a flag. Add the field or the behavior to T3 and T7, and a test to T8.\n- **Runtime-drawn-model limitation.** The success criterion says it is \"stated where the recommendation is produced \u2026 including `--json`\". T9's `model_dimension_note` covers only the template-plus-model, config-time pairing. It omits the 180-pool runtime-draw caveat. T10 asserts only that the note is non-empty. Add the caveat text to T9. Add an assertion on its content to T10 and a `--json` assertion to T16.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147,287"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers sit after every task, including untested implementation points",
+   "description": "All 17 tasks end with a commit line. Eight implementation tasks (T1, T3, T5, T7, T9, T11, T13, T15) commit before their tests exist, so these are not working, tested points. The marker is also written `**Commit:**` rather than the plain `**Commit**:` line. Keep markers only after each implementation-plus-test pair, or after major milestones. For example: after T2 (hash fix), after T6 (models and config), after T10 (recommendation core), after T14 (graduation core), after T16 (CLI), and T17. Drop the rest.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39,69,97,125,153,181,208,236"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task and test-file count is heavy for a 3/5-effort slice",
+   "description": "The breakdown has 17 tasks, three new source modules, and six new test files. Several test tasks check framework behavior instead of a success criterion:\n- T4 round-trips every Pydantic model and checks that a field is \"always present\".\n- T6 checks that a `.squadron.toml` override is honored, which the config machinery already guarantees.\n\nSuggested trims:\n- Merge T5 and T6 into one task (three config keys plus a short test).\n- Cut T4 to the version-scoping assertion and the `current=None` case, and fold it into T3.\n- Fold T8's and T10's content into a single `test_calibration.py`.\n- Likewise fold T12's and T14's content into one graduation test file.\n\nThat reduces the breakdown to roughly 11-12 tasks without losing any criterion.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:73-82,86-108"
+  }
+ ]
+}

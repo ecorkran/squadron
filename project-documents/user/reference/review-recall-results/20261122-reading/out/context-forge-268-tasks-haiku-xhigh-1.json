@@ -1,0 +1,468 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "3.2a commit is red: brownfield and Comprehension assertions survive until 3.3 and 3.6",
+      "description": "Task 3.2a (lines 99\u2013101) requires `pnpm --filter @context-forge/core test` to pass after 3.1\u20133.2. It cannot. `adoptionBuild.integration.test.ts:102` asserts `toContain(FACTS_HEADING)` on a brownfield build, and 3.2 removes that rendering. `pipeline-integration.test.ts:184` asserts `Comprehension: ${COMPREHENSION}`, which 3.1 removes. That test is not edited until 3.3 (line 107). `packages/mcp-server/tests/integration/adoptionParity.test.ts:116` asserts the same Comprehension line and probe text and survives until 3.6, so the workspace is red at the commit that line 101 presents as a working point. Fix: move the deletion of the brownfield and comprehension cases (the `probeReturning` block, pipeline-integration lines 129\u2013189, and the adoption-build expectations) into 3.1\u20133.2, or merge 3.2a into 3.7.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:102"
+    },
+    {
+      "severity": "FAIL",
+      "title": "3.3 omits `adoptionBuild.integration.test.ts`, so the 3.7 gate (`pnpm -r test`) cannot pass",
+      "description": "3.3 (lines 103\u2013110) lists every core test that calls the factory except this file. Line 68 calls `createContextPipeline(dir, { adoptionStateWrites: stateWrites, squadronProbe: fakeProbe })`. After 3.3 the factory ignores the second argument, so `expectBrownfield` (lines 99\u2013103) fails. The file is deleted only in 4.1 (line 144), which comes after the 3.7 commit (lines 132\u2013134). That gate requires all four commands to pass. `pnpm typecheck` will not catch this because `packages/core/tsconfig.json:20` includes only `src/**/*`. Fix: delete this file in 3.3 (5.1 covers brownfield behavior) and remove it from 4.1's list.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "FAIL",
+      "title": "5.1 points the MCP runs at the committed fixture, not the brownfield checkout",
+      "description": "5.1 (lines 176\u2013180) copies `fixtures/integration-project`, installs the brownfield prompt and a source file, then runs `context_build` and `template_preview` in-process. The MCP tools resolve the project from the `CONTEXT_FORGE_DATA_DIR` store. The only helper for that, `setupFixtureEnv` (lines 75\u201381), writes `projectPath` as `FIXTURE_PROJECT_PATH` (line 19, the committed fixture). `patchAndWriteProjectsJson` (lines 113\u2013117) takes no path. As written, every MCP run reads the committed fixture, which has no brownfield source. The snapshot, `sq`-marker and concept-prompt assertions would pass without exercising Phase 0 brownfield. Fix: write a projects.json whose `projectPath` is the temp checkout, and assert before any run that the checkout's outcome is `brownfield` (using `measureSourceVolume` and `decideOutcome`).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Whatever adoption.state holds\" is tested only with `in_progress`",
+      "description": "The success criterion (design line 189) says a Phase 0 build \"writes nothing, whatever adoption.state holds.\" 5.1 (lines 179\u2013180) and 6.3 step 2 (line 204) use only `in_progress`. Nothing covers `complete`, `declined`, or a malformed value. A malformed value makes `readAdoptionState` throw `AdoptionError` (`adoptionState.ts:17\u201322`), so the cut must leave the build not calling it at all. Only a malformed-value case shows that. Fix: loop the CLI runs over `complete`, `declined`, and one invalid string.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionState.ts:15"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The golden set misses the one Phase 0 path where the resolver makes a live decision: already-planned",
+      "description": "The criterion (design line 190) covers \"Greenfield, already-planned and later-phase builds.\" 2.2 (lines 72\u201373) captures greenfield at Phase 0, which has no artifacts, and planned at Phase 4. The resolver returns at line 167 for any non-concept instruction, so Phase 4 never reaches it. The only Phase 0 path the cut changes for a non-brownfield project is planning artifacts leading to `already-planned` (lines 58\u201359), and no golden covers it. D6 (design line 140) says \"exactly two cases.\" Either add a third golden (planned fixture with `CONCEPT_PHASE`) and amend D6, or record in the task file that Phase 4 is accepted as the already-planned evidence.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Golden Case 2 never sets a development phase",
+      "description": "2.2 line 73 says \"planned at Phase 4 ... with instruction design.\" Phase 4 is `'Phase 4: Slice Design'` (`projectSchema.ts:61`), and `design` is a prompt key, not a phase. Nothing sets `developmentPhase` for either case. `ContextIntegrator.ts:218` then substitutes `WARNING: MISSING DEVELOPMENT PHASE`, so the captured file does not show the phase D6 describes. Fix: set `developmentPhase` explicitly in both cases.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/src/schema/projectSchema.ts:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The purity CLI path is a re-implementation, so `build.ts` is never exercised",
+      "description": "5.1 lines 179 and 182 say \"CLI path (pipeline plus integrator, as build.ts does it).\" The test repeats the call instead of running the command. The guide checks (`build.ts:82`, `:88`) and the real call site are outside the test. \"CLI and MCP outputs match\" therefore compares a replica against MCP. The only real `cf build` run is the manual 6.3 step. Fix: run the `build` action in-process through `registerBuildCommand` with real core (no mocks), or spawn `packages/cli/dist/index.js build` against the checkout.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/build.ts:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "3.6 names a \"probe case\" that does not exist",
+      "description": "3.6 (line 128) says to delete \"the adoption and probe cases\" in `contextTools.test.ts`. The file has no probe or squadron case. Its adoption cases are \"lets the build persist adoption state\" (lines 176\u2013183, asserting the two-argument call at line 182) and \"never writes adoption state\" (lines 371\u2013378, asserting at line 377). Fix: name those two cases and drop \"probe.\"",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/contextTools.test.ts:176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "3.6 leaves `generateContext`'s `options` plumbing unnamed",
+      "description": "3.6 (line 125) removes the `ContextToolOptions` type and `registerContextTools`'s `options`. `generateContext` also takes `options?: ContextToolOptions` (line 69), spreads it into `createContextPipeline` (line 100), and both callers pass it (lines 214 and 281). None of that is named. The mcp typecheck would flag it only after the type is gone. Fix: name the parameter, the spread, and both pass-throughs.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`integrationSetup.ts` keeps a `ContextToolOptions`-typed signature that no gate typechecks",
+      "description": "3.6 (line 126) says \"drop the squadronProbe option and its doc comment.\" The file also imports `ContextToolOptions` (line 9), types `createIntegrationClient(options?: ContextToolOptions)` (line 38), and passes `options` to `registerContextTools` (line 41). `packages/mcp-server/tsconfig.json:20` includes only `src/**/*`, so typecheck will not catch a leftover. `mcpIntegration.test.ts:50` calls the function with no arguments, so removing the parameter is safe. The same gap applies to `packages/core/tests/services/ContextIntegrator.test.ts:4\u20135`: 3.3 never removes its `BROWNFIELD_ADOPTION_INSTRUCTION` import, and only the 4.2 grep catches it.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough 6.3 does not set up the scratch project",
+      "description": "Design step 1 (design line 205) needs the scratch repo \"registered with `cf init` and in Phase 0.\" 6.3 line 204 says only \"a scratch brownfield repo under /tmp.\" `packages/cli/src/commands/init.ts` exists, so the step is available. 6.3 also says to run \"steps 1\u20135 ... using `node packages/cli/dist/index.js`,\" but design steps 3\u20135 are a test run and a grep. Fix: list the init and phase commands, and say which design steps are manual.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "5.1 is overloaded for effort 3",
+      "description": "5.1 (lines 175\u2013186) holds a fake `sq` with PATH handling, a snapshot helper, four CLI and MCP run variants, a parity check, an explicit-key check and a mutation check. Split it: (a) harness, covering the fake sq, snapshot, data-dir setup with a brownfield precondition assertion, and the CLI loop; (b) MCP runs, parity and the explicit-key case. Its failure mode is silent, so the split also makes review easier.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, and one sits at a red point",
+      "description": "Commit markers are written as checkbox items (lines 79, 101, 134, 148, 155, 163, 169, 186, 206). The convention is plain `**Commit**:` lines. The 3.2a marker (line 101) sits at a red point (see the first FAIL). Fix: convert to plain lines, and keep markers only at green points: after 2.2, after the seam commit, after 4.1\u20134.4, after 5.1, and after 6.3.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Between 3.4 and 3.6, cli typecheck also fails, which contradicts line 87",
+      "description": "Line 87 says \"Between 3.4 and 3.6, only mcp-server typecheck is expected to fail.\" After 3.4 rebuilds core, `packages/cli/src/commands/build.ts:84` passes two arguments to a one-argument function, so cli fails until 3.5. Reword as \"cli fails until 3.5; mcp-server until 3.6.\"",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "3.5's \"delete the adoption assertions\" would delete a whole case",
+      "description": "The only adoption reference in `build.test.ts` is line 227, inside the case \"calls createContextPipeline with project path\" (lines 220\u2013227). Read literally, \"delete the adoptionStateWrites/adoption assertions\" removes the case. It should be kept with the one-argument expectation.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/build.test.ts:220"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 6.2 grep cannot \"print nothing\" as written",
+      "description": "6.2 (lines 198, 201) requires the grep to print nothing, then names the `COMPREHENSION_PROFILE_VARIABLE` exception. That line matches, so the check prints one line. Reword to \"prints only the exception line.\"",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/src/detection/comprehensionAnalysis.ts:15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale comments in kept code are not covered by any task",
+      "description": "`presentPaths.ts:1` reads \"Presence-only facts for the Adoption Facts section (slice 261, D5).\" `ContextIntegrator.ts:9` says \"contracts.ts only (never adoption/index.ts),\" describing an import 3.3 removes. 4.2 fixes only the contracts header and `node.ts`. Add these to 6.2.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/detection/presentPaths.ts:1"
+    },
+    {
+      "severity": "PASS",
+      "title": "Export list, consumer claims and guide-warning test names check out",
+      "description": "Task 4.4's export list (line 166) matches `detection/index.ts:7\u201317` exactly. The design's \"no production consumer\" claims hold: `readHistory`, `findComprehensionAnalysis` and `decideOutcome` are referenced only by the resolver being deleted and by their own modules. `adoptionNavigation.ts` imports `readAdoptionState`, `findPlanningArtifacts` and `pathPresent`, as the design says. Both guide-warning test names in 6.1 (line 195) exist, at `cli/tests/commands/build.test.ts:91` and `mcp-server/tests/contextTools.test.ts:162`.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/src/detection/index.ts:7"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "3.2a commit is red: brownfield and Comprehension assertions survive until 3.3 and 3.6",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:102",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "3.3 omits `adoptionBuild.integration.test.ts`, so the 3.7 gate (`pnpm -r test`) cannot pass",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "5.1 points the MCP runs at the committed fixture, not the brownfield checkout",
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:75",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "\"Whatever adoption.state holds\" is tested only with `in_progress`",
+      "location": "packages/core/src/adoption/adoptionState.ts:15",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The golden set misses the one Phase 0 path where the resolver makes a live decision: already-planned",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:58",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Golden Case 2 never sets a development phase",
+      "location": "packages/core/src/schema/projectSchema.ts:61",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The purity CLI path is a re-implementation, so `build.ts` is never exercised",
+      "location": "packages/cli/src/commands/build.ts:84",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "3.6 names a \"probe case\" that does not exist",
+      "location": "packages/mcp-server/tests/contextTools.test.ts:176",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "3.6 leaves `generateContext`'s `options` plumbing unnamed",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:69",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "`integrationSetup.ts` keeps a `ContextToolOptions`-typed signature that no gate typechecks",
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Walkthrough 6.3 does not set up the scratch project",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "5.1 is overloaded for effort 3",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, and one sits at a red point",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Between 3.4 and 3.6, cli typecheck also fails, which contradicts line 87",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "3.5's \"delete the adoption assertions\" would delete a whole case",
+      "location": "packages/cli/tests/commands/build.test.ts:220",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The 6.2 grep cannot \"print nothing\" as written",
+      "location": "packages/core/src/detection/comprehensionAnalysis.ts:15",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Stale comments in kept code are not covered by any task",
+      "location": "packages/core/src/detection/presentPaths.ts:1",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Export list, consumer claims and guide-warning test names check out",
+      "location": "packages/core/src/detection/index.ts:7",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-22T21:12:29.556692",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 58,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "chars": 20907,
+      "sha256": "b465ca485cca47dd155ecc65bc383271f157b057dab483020ef56fdc20e519de",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/268-slice.pure-cf-build.md",
+      "chars": 20651,
+      "sha256": "a47372ed69ec8d4116c88f57e4a80ef865a186eac0690cd58551ac0489176c1c",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/services/ContextIntegrator.ts",
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/core/src/adoption/adoptionResolver.ts",
+    "packages/core/src/adoption/contracts.ts",
+    "packages/core/src/adoption/index.ts",
+    "packages/core/src/detection/index.ts",
+    "packages/core/src/services/index.ts",
+    "packages/core/src/adoption/adoptionOutcome.ts",
+    "packages/core/src/adoption/adoptionState.ts",
+    "packages/core/src/node.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/mcp-server/tests/helpers/integrationSetup.ts",
+    "packages/core/tests/adoption/adoptionBuild.integration.test.ts",
+    "packages/core/tests/docs-map/outOfTreeLinks.test.ts",
+    "packages/core/src/services/constants.ts"
+  ],
+  "searches": [
+    "grep createContextPipeline|adoptionStateWrites|resolveAdoptionFn|AdoptionStateWrites|ContextToolOptions|squadronProbe|SquadronProbe|runSquadronProbe|AdoptionResolver|createAdoptionResolver|BROWNFIELD_ADOPTION_INSTRUCTION|AdoptionSelection in .",
+    "grep adoptionFacts|fileComprehension|Comprehension:|Adoption Facts|adoption-completed|writeAdoptionState|adoptionCompletion|adoptionFacts in .",
+    "list_files packages/**/{squadronProbe,adoption,adoptionResolver,adoptionFacts,adoptionCompletion,adoptionState,adoptionOutcome,contracts,history,comprehensionAnalysis,pipeline-integration,ContextIntegrator,CoreServiceFactory,SectionBuilder,ContextTemplateEngine,adoptionParity,contextTools,pureBuild,integration\u2026 in .",
+    "grep createContextPipeline|adoptionStateWrites|resolveAdoptionFn|AdoptionStateWrites|ContextToolOptions|squadronProbe|SquadronProbe|runSquadronProbe|AdoptionResolver|createAdoptionResolver|BROWNFIELD_ADOPTION_INSTRUCTION|AdoptionSelection|ProbeOutcome|probeReturning|classifyProbeRun|SQUADRON_PROBE|ProbeR\u2026 in .",
+    "grep adoptionFacts|fileComprehension|Comprehension:|Adoption Facts|adoption-completed|writeAdoptionState|adoptionCompletion|persistAdoptionComplete|findRecordedPlan in .",
+    "grep adoptionFacts|fileComprehension|Comprehension:|Adoption Facts|adoption-completed|writeAdoptionState|adoptionCompletion|persistAdoptionComplete|findRecordedPlan|squadron|Squadron|Probe|adoptionStateWrites|createContextPipeline|options in packages/core/src/detection/presentPaths.ts packages/core/src/adoption/index.ts packages/core/src/services/index.ts packages/core/src/detection/index.ts packages/core/src/node.ts packages/core/src/introspection/adoptionNavigation.ts packages/cli/tests/commands/worktree-overlay.test.ts packages/core/\u2026",
+    "grep ^import|from '\\.\\./|decideOutcome|readHistory|findComprehensionAnalysis|adoptionFacts|Adoption Facts|fileComprehension|Comprehension|writeAdoptionState|adoptionCompletion|findRecordedPlan in packages/core/src/introspection/adoptionNavigation.ts",
+    "grep adoptionFacts|Adoption Facts|fileComprehension|Comprehension|writeAdoptionState|adoptionCompletion|findRecordedPlan|squadron|Squadron|probe|Probe|resolver|adoption in packages/core/src/detection/presentPaths.ts",
+    "grep from '\\.\\./(adoption|detection)|from '\\./(adoption|detection)|adoptionFacts|fileComprehension|Comprehension|Adoption Facts|AdoptionError|resolveAdoption|squadron in packages/core/src/services",
+    "grep Comprehension|Adoption Facts|adoptionFacts|fileComprehension|createContextPipeline\\(|squadronProbe|probeReturning|adoptionStateWrites|brownfield-adoption|BROWNFIELD in packages/core/tests/pipeline-integration.test.ts",
+    "grep Comprehension|Adoption Facts|adoptionFacts|fileComprehension|createContextPipeline|squadron|SquadronProbe|adoptionStateWrites|resolveAdoptionFn|BROWNFIELD|from ' in packages/core/tests/adoption/adoptionBuild.integration.test.ts",
+    "grep Comprehension|Adoption Facts|adoptionFacts|fileComprehension|createContextPipeline|adoptionStateWrites|resolveAdoptionFn|new ContextIntegrator|BROWNFIELD|AdoptionResolver|squadron|Probe in packages/core/tests/services/ContextIntegrator.test.ts",
+    "grep Comprehension|Adoption Facts|adoptionFacts|fileComprehension|createContextPipeline|adoptionStateWrites|squadron|Probe|from ' in packages/core/tests/services/CoreServiceFactory.test.ts",
+    "grep \"(typecheck|lint|test|build)\"|\"include\"|\"exclude\"|noUnused in .",
+    "grep registerContextTools|squadronProbe|adoptionStateWrites|createBrownfieldCheckout|CONCEPT_PHASE|FACTS_HEADING|BROWNFIELD_PROMPT|brownfield|Brownfield in .",
+    "grep createContextPipeline|adoptionStateWrites|adoption|Adoption|brownfield|Brownfield|guide-minimum|writes the warning|toHaveBeenCalledWith in .",
+    "grep ^\\s*(it|describe|it\\.each)\\(|createContextPipeline|adoptionStateWrites|guideWarning|guide-minimum|second text item|unchanged prompt in packages/mcp-server/tests/contextTools.test.ts",
+    "grep ^\\s*(it|describe|it\\.each)\\(|createContextPipeline|adoption|Adoption|brownfield|Brownfield|squadron|Probe|guide|Guide in packages/cli/tests/integration/build.integration.test.ts",
+    "grep createContextPipeline|adoption|Adoption|toHaveBeenCalledWith in packages/cli/tests/commands/worktree-overlay.test.ts",
+    "grep FACTS_HEADING|Comprehension|toContain\\(FACTS|Adoption Facts in packages/core/tests/adoption/adoptionBuild.integration.test.ts",
+    "grep Adoption Facts|FACTS|Comprehension|toContain|adoptionStateWrites|squadronProbe|fakeProbe in packages/mcp-server/tests/integration/adoptionParity.test.ts",
+    "grep fileComprehension|COMPREHENSION_PROFILE_VARIABLE in packages/core/src/detection/comprehensionAnalysis.ts",
+    "grep createAdoptionResolver|SquadronProbe|decideOutcome|findPlanningArtifacts|measureSourceVolume|^import|it\\(|describe\\( in packages/core/tests/docs-map/outOfTreeLinks.test.ts",
+    "grep Comprehension|it\\(|it\\.each|describe\\( in packages/core/tests/services/SectionBuilder.test.ts",
+    "grep Adoption Facts|adoptionFacts|it\\(|it\\.each|describe\\(|placed|section in packages/core/tests/services/ContextTemplateEngine.test.ts",
+    "grep probe|Probe|squadron|sq  in packages/mcp-server/tests/contextTools.test.ts",
+    "grep CONCEPT_PHASE|PHASE_NAMES|'design'|design|Phase 4|\\b4\\b.*(slice|design|architecture|planning)|export function resolvePhaseValue in packages/core/src/schema/projectSchema.ts",
+    "grep We are adopting an existing codebase|^#+ .*|^\\[.*\\]|design|Concept|brownfield-adoption|^## |^###  in packages/core/tests/fixtures/brownfield-guide/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+    "list_files packages/cli/src/commands/{init,config}*.ts in .",
+    "list_files packages/core/tests/fixtures/{squadron-probe,brownfield-guide,pure-build-golden}/**/* in .",
+    "grep CONTEXT_FORGE_DATA_DIR|projects\\.json|FileProjectStore|beforeAll|beforeEach|createContextPipeline\\( in packages/core/tests/pipeline-integration.test.ts",
+    "list_files packages/mcp-server/tests/fixtures/integration-project/**/*.{toml,md,json} in .",
+    "grep integration_branch|'adoption\\.state'|adoption\\.state in .",
+    "grep export async function ensureCheckout|async ensureCheckout|action: 'none'|return \\{ action|existsSync|writeFile|mkdir|submodule|clone in packages/core/src/guides/GuideManager.ts",
+    "grep PROMPT_FILE_RELATIVE_PATH =|STATEMENTS_FILE_RELATIVE_PATH = in packages/core/src/services/constants.ts",
+    "grep createIntegrationClient\\(|squadron-probe in .",
+    "grep 'git\\.integration_branch'|integration_branch:|integration_branch' in .",
+    "grep readHistory|findComprehensionAnalysis|decideOutcome|COMPREHENSION_PROFILE_VARIABLE|measureSourceVolume|findPlanningArtifacts|AdoptionError in .",
+    "grep ^import|from ' in packages/core/tests/helpers/adoptionFixtures.ts",
+    "grep ConfigManager|homedir|CONTEXT_FORGE_DATA_DIR|user|getUserConfig|config\\.toml in packages/core/src/services/permissivenessResolver.ts",
+    "grep homedir|CONTEXT_FORGE_(CONFIG|DATA)_DIR|xdg|config\\.toml|userConfigPath|getUserConfigPath in .",
+    "grep generateContext\\(|from '\\.\\./src/tools/contextTools|from '\\.\\./\\.\\./src/tools/contextTools in ."
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 59,
+  "prompt_tokens": 1732914,
+  "cached_tokens": 1569904,
+  "cache_write_tokens": 162974,
+  "completion_tokens": 121384,
+  "reasoning_tokens": null,
+  "duration_seconds": 483.35546933300793,
+  "cost_usd": 0.38248952,
+  "cost_basis": "provider"
+}

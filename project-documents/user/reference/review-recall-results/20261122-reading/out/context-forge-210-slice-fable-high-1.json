@@ -1,0 +1,454 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Compilation source is unresolved, and reading from `.claude/` cannot work on a Copilot-only project",
+      "description": "The file layout says outputs come \"from `.claude/rules/typescript.md`\" and \"from `.claude/skills/commit.md`\", while line 114 names no source at all. `.claude/` is the output of the claude target. On the plan's fresh-directory flow (`cf init --ide copilot`, plan line 212) it does not exist, and line 17 forbids the copilot target from creating it. The code comment at `packages/cli/src/commands/setup-ide.ts:111-121` says the script compiles from the guides submodule source. The design must name the guide-side source directory and drop the `.claude/` wording, or the driving user (no Claude at all) gets empty output.",
+      "file_ref": null,
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:42-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skills layout claim is wrong and skill\u2192prompt frontmatter translation is not specified",
+      "description": "The design assumes flat `.claude/skills/commit.md` files. The repo's actual layout is a directory per skill: `.claude/skills/analyze/SKILL.md`, with frontmatter `name`, `description`, `disable-model-invocation`. The design does not say:\n- how a skill directory (possibly with supporting files) becomes one `*.prompt.md`;\n- how the output filename is derived;\n- how frontmatter maps to the prompt fields the plan lists at line 191 (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), or what happens to `disable-model-invocation`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:46-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing CLAUDE.md safety block is not target-gated and will fire for `copilot`",
+      "description": "The `CLAUDE.md` check, prompt and `.bak` backup run for every target today, which was harmless with one target. The design (line 110) only says \"add copilot safety check (parallel to claude's block)\". As written, `cf setup-ide copilot` in a project with an unmanaged `CLAUDE.md` will:\n- warn \"CLAUDE.md already exists and will be overwritten\";\n- abort the whole Copilot setup if the user answers N;\n- otherwise write `CLAUDE.md.bak`.\n\nThat contradicts lines 17 and 55 (\"never to `.claude/` or `CLAUDE.md`\", \"additive only\"). The design must state that the Claude block becomes `target === 'claude'` only, and add a test for it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:66-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unmanaged-file protection covers two of four outputs; prompt and backup semantics are unspecified",
+      "description": "Step 4 checks only `.github/copilot-instructions.md` and `AGENTS.md`. Hand-written `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md` that collide by name are overwritten with no prompt and no backup. Existing Copilot users are the people most likely to have such files. Plan line 197 asks for the marker convention \"for Copilot target files\" and line 214 for a prompt on \"existing unmanaged files\".\n\nAlso unspecified:\n- one prompt or two when both top-level files are unmanaged;\n- the backup filenames;\n- the `.bak`-already-exists case (the Claude path silently skips the backup at `setup-ide.ts:83-88`, so the second overwrite is unrecoverable);\n- the mixed case where one file is managed and the other is not.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Declining the prompt still propagates to worktrees",
+      "description": "On \"N\", `setupIdeAction` prints \"Aborted.\" and returns normally (`:78-81`). The command handler then calls `propagateToWorktrees` unconditionally. With the copilot block added, a user who declines to overwrite their own root `AGENTS.md` and `.github/` files gets those unmanaged files copied over every registered worktree's copies. The design's sequence (lines 98-102) does not say what a decline does. It needs an explicit \"abort skips propagation\" signal, such as a boolean return.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:194-195"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Marker helper is named and typed two different ways, and duplicates an existing generic function",
+      "description": "Line 29 specifies `isManagedCopilot(filePath)`; line 109 specifies `isManagedCopilotFiles(projectPath)`. These differ in name, parameter and implied return shape. Neither is needed: `isManagedClaudeMd(filePath)` at `setup-ide.ts:27-31` is already file-agnostic (it reads 20 lines and matches the marker). Cut the new helper, rename the existing one (for example `hasManagedMarker`), and call it per file. The project's own `CLAUDE.md:17` says \"Do not duplicate logic.\"",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guide-script backend is one bullet with no automated test",
+      "description": "The script carries most of the slice: compilation, three translations and marker emission. Its entire specification is line 114. Missing items:\n- how `alwaysApply` is detected;\n- output naming;\n- where the marker sits relative to the YAML frontmatter that must open `.instructions.md` and `.prompt.md` files (line 65 says \"first 20 lines\");\n- whether `description` and `name` are carried over.\n\nEvery item in Test Coverage (lines 123-129) is CLI-side with `execFileSync` mocked. Plan success criteria 211 (files generated) and 216 (path\u2192applyTo correct) therefore have no test anywhere.\n\nThe script claims could not be verified because `project-documents/ai-project-guide/` is empty in this worktree. The only in-tree copy, `project-documents/scripts/setup-ide`, emits no marker and validates `globs`, not `paths` (lines 97-118, 181-184). It is evidently stale, since the root `CLAUDE.md:3` has the marker.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-repo rollout and the old-guide failure path are named as a risk but not handled",
+      "description": "Files Changed lists a file in a different repository (`.gitmodules:3`). The design gives no landing order, no submodule pointer bump, and no minimum-guide check.\n\nWalking it as an operator on an existing installation with a pinned older guide:\n1. `cf setup-ide copilot` first prompts and writes `.bak` backups.\n2. The script then rejects the target. The in-tree copy does this at `project-documents/scripts/setup-ide:301-310` with \"Unsupported IDE\", exit 1.\n3. The CLI reports only \"setup-ide exited with code 1\" (`setup-ide.ts:99-102`), with no pointer to `cf guides update`.\n\nVia `cf init --ide copilot` the failure is downgraded to a warning and followed by \"Your project is ready\" (`init.ts:113-120`). The \"clear error\" on line 133 is not what the code produces. Specify the remediation message, and run the script-support check before the backup step.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`applyTo` translation leaves the alwaysApply rule and the plan's \"both forms\" undefined",
+      "description": "Line 83 says absent `paths` defaults to `applyTo: \"**\"`, and then says such files are not emitted as instruction files. Either the default is dead, or \"absent paths\" and \"alwaysApply\" are separate signals. The design does not say which, or where a rule with neither goes.\n\nPlan line 200 requires the translator to \"handle both forms\"; only the block-list form is shown. Also unaddressed:\n- inline arrays (`paths: [\"a\",\"b\"]`);\n- the trailing space after `paths:` in real files (`.claude/rules/typescript.md:3`);\n- globs containing commas (`**/*.{ts,tsx}`), which a comma-joined `applyTo` would split.\n\nThese matter because the translator is bash/awk, not a YAML parser.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Same always-on content is written to two (or three) files Copilot loads together",
+      "description": "The decision is justified as a \"single compiled file\", but it then writes identical content to `AGENTS.md`. The referenced tool guide states both are always-on in workspace chat (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md:18`, `:26`). It also states VS Code reads `CLAUDE.md` and `.claude/rules` (`:18`, `:33`). A dual-target project therefore sends the compiled rules up to three times, plus duplicated scoped rules.\n\nThe plan requires both files to exist (lines 189, 211) but words the content as \"`copilot-instructions.md` (or `AGENTS.md`)\" (line 201). The design should make one file authoritative and the other a short pointer, and state the dual-target behaviour.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale generated files are never removed",
+      "description": "When a rule or skill is renamed or removed upstream, the old `.github/instructions/X.instructions.md` or `.github/prompts/X.prompt.md` stays in the root and in every worktree. Propagation only copies (`setup-ide.ts:150-153`). Copilot keeps auto-applying the stale file, which conflicts with plan line 201 (\"narrowly scoped and non-conflicting\"). Only manual deletion ends that state. The managed marker already makes safe pruning possible; the design should say the script (and propagation) deletes managed files it no longer generates.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two plan-assigned items are dropped",
+      "description": "- **Tool guide reference:** plan lines 184 and 218 require the tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) to be referenced in the slice design and promoted if needed. The design never mentions it. The file is a raw chat export (`:1-3`), so the promotion decision is live.\n- **Agents mapping:** plan line 192 assigns \"document mapping\" for `.claude/agents` \u2192 custom agents. Line 54 promises to \"document the mapping\", but no mapping appears anywhere in the design.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Propagation and prompt tests cannot be written as described",
+      "description": "- `propagateToWorktrees` is module-private (`setup-ide.ts:127`), so it cannot be called with `target = 'copilot'` directly.\n- `packages/cli/tests/commands/setup-ide.test.ts` has no worktree test today. Its fs mock (`:27-41`) covers only `existsSync`, `copyFileSync` and `readFileSync`, and `sampleProject` (`:47-51`) has no `worktrees`.\n- The \"prompts before overwriting\" case (line 125) has no precedent: no existing test drives `askConfirmation` or readline.\n\nThe design should say whether to export the function or test through the command, and which mocks are added. It should also state that the copilot block must `mkdir` `.github/` in each worktree before copying.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:127"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Help text and docs",
+      "description": "The `setup-ide` argument help is derived from `VALID_TARGETS` (`setup-ide.ts:167`), so it updates on its own. `cf init --help` says only \"default: claude\" (`init.ts:44`), and the design freezes `init.ts` (line 117). `README.md:66,154` and `packages/cli/README.md:122,224` list only `claude` and are not in Files Changed.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf init --ide copilot` still installs Claude slash commands",
+      "description": "`installCommandsAction()` runs for every IDE target and writes to `~/.claude/commands/cf/` (`commandInstaller.ts:90-93`). A Copilot-only user gets a `~/.claude` tree and no `/cf:*` equivalents under `.github/prompts/`. This is outside the plan's scope for 210, but it qualifies the \"end-to-end\" claim on line 33.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/init.ts:99-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Sequence ordering and init-path propagation",
+      "description": "In code, \"IDE setup complete\" prints inside `setupIdeAction` (`setup-ide.ts:105`) before propagation (`:195`), the reverse of steps 6 and 7. Propagation happens only in the `cf setup-ide` handler. `cf init --ide copilot` on an already-registered project with worktrees (`init.ts:63-65`, `:111`) will not propagate. That is consistent with plan line 215 (\"after root setup-ide\") but worth stating.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"VS Code strips markers\" risk can be cut",
+      "description": "VS Code reads instruction files; it does not rewrite them on disk, so the described degradation has no mechanism. Technical Scope (28-34), Interfaces (87-91) and Files Changed (107-111) also restate the same four edits three times. One list would do.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:135"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries and scope match the plan and architecture",
+      "description": "CF core validates, checks, executes and propagates; compilation stays in the guide script. There are no `packages/core` or MCP changes. This matches plan lines 195-196 and the parent architecture's \"Composability preserved\" principle. Non-goals (lines 51-55) match plan lines 204-207. No NFR in the parent architecture applies to the `setup-ide` path.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:67-69"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about existing CLI code are accurate",
+      "description": "Verified against the code:\n- `VALID_TARGETS = ['claude']` (`setup-ide.ts:12`).\n- `setupIdeAction(projectPath, target, opts?)` signature (`:34-38`).\n- `propagateToWorktrees(project, target)` with a `target === 'claude'` block (`:127`, `:137`).\n- Guide check, script path and `execFileSync('bash', [scriptPath, target])` (`:47-58`, `:94`).\n- `--ide <target>` passed as a string to `setupIdeAction` (`init.ts:44`, `:109-111`).\n\nExisting tests survive the `VALID_TARGETS` change. The invalid-target test asserts only that output contains `claude` (`setup-ide.test.ts:78-85`), and `init.test.ts:184-195` mocks `setupIdeAction`.",
+      "file_ref": null,
+      "category": "code-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:87-91"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "summary": "Compilation source is unresolved, and reading from `.claude/` cannot work on a Copilot-only project",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:42-47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Skills layout claim is wrong and skill\u2192prompt frontmatter translation is not specified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:46-47",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Existing CLAUDE.md safety block is not target-gated and will fire for `copilot`",
+      "location": "packages/cli/src/commands/setup-ide.ts:66-90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Unmanaged-file protection covers two of four outputs; prompt and backup semantics are unspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Declining the prompt still propagates to worktrees",
+      "location": "packages/cli/src/commands/setup-ide.ts:194-195",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Marker helper is named and typed two different ways, and duplicates an existing generic function",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Guide-script backend is one bullet with no automated test",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Cross-repo rollout and the old-guide failure path are named as a risk but not handled",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`applyTo` translation leaves the alwaysApply rule and the plan's \"both forms\" undefined",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Same always-on content is written to two (or three) files Copilot loads together",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Stale generated files are never removed",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Two plan-assigned items are dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Propagation and prompt tests cannot be written as described",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:127",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Help text and docs",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`cf init --ide copilot` still installs Claude slash commands",
+      "location": "packages/cli/src/commands/init.ts:99-105",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Sequence ordering and init-path propagation",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The \"VS Code strips markers\" risk can be cut",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layer boundaries and scope match the plan and architecture",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:67-69",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "code-verification",
+      "raw_category": null,
+      "summary": "Claims about existing CLI code are accurate",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:87-91",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-22T22:29:36.815892",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "chars": 9373,
+      "sha256": "da8b546cf1006a8bc4bcbf322188bcbaf36f3f2650a1177e0f49ac1f0dac8688",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+      "chars": 26292,
+      "sha256": "02238c99ba51d2e4c5a6f20dad06721d77ed91c74b39b61d201f430e04958d22",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/cli/src/commands/setup-ide.ts",
+    "packages/cli/src/commands/init.ts",
+    "project-documents/scripts/setup-ide",
+    "packages/cli/tests/commands/setup-ide.test.ts",
+    "project-documents/user/tool-guides/copilot-vscode/setup-ide.md",
+    "packages/cli/tests/commands/init.test.ts",
+    ".gitmodules",
+    "CLAUDE.md",
+    ".claude/rules/typescript.md",
+    ".claude/skills/analyze/SKILL.md",
+    ".gitignore",
+    "packages/cli/src/commands/commandInstaller.ts"
+  ],
+  "searches": [
+    "list_files **/setup-ide* in .",
+    "list_files project-documents/user/tool-guides/** in .",
+    "grep setupIdeAction|propagateToWorktrees|isManagedClaudeMd|VALID_TARGETS in .",
+    "grep GUIDE_RELATIVE_PATH in .",
+    "list_files project-documents/* in .",
+    "list_files project-documents/ai-project-guide/** in .",
+    "list_files {.gitmodules,AGENTS.md,CLAUDE.md,.github/**,.claude/**,.gitignore} in .",
+    "grep setup-ide|setupIde|CLAUDE\\.md|\\.claude/(rules|skills|agents) in .",
+    "grep ^(paths|globs|alwaysApply|description|name|  - |applyTo).* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice/.claude",
+    "grep CLAUDE\\.md|\\.claude|setup-ide|setupIde|propagat in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice/packages",
+    "grep CLAUDE|\\.claude|copyFile|cpSync|setup-ide|\\.github in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice/packages",
+    "grep setup-ide|--ide in .",
+    "grep (?i)NFR|non-functional|latency|throughput|performance|setup-ide|copilot|IDE in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice/project-documents/user/architecture/200-arch.developer-onboarding.md",
+    "grep worktree|mkdirSync|readdirSync|readline in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-210-slice/packages/cli/tests/commands/setup-ide.test.ts"
+  ],
+  "sections_in_document": 9,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 179,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 27,
+  "prompt_tokens": 410432,
+  "cached_tokens": 334535,
+  "cache_write_tokens": 75883,
+  "completion_tokens": 23419,
+  "reasoning_tokens": null,
+  "duration_seconds": 223.72315212525427,
+  "cost_usd": 2.2195127,
+  "cost_basis": "provider"
+}

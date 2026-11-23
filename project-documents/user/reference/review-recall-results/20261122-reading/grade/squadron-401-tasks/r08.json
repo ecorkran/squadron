@@ -1,0 +1,159 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2 breaks four existing tests it says pass \"unchanged\"",
+   "description": "Task 2 (lines 43-45) adds four `SnapshotMetric` members, narrows `PythonAdapter.metrics` to the four 400 metrics, and claims the full `tests/metrology/` suite passes unchanged. It does not:\n\n- **`test_snapshot_models.py:225-253`**: `test_json_round_trip_is_lossless` builds a `LanguageSnapshot` from four literal measurements. `LanguageSnapshot._one_measurement_per_metric` (`snapshot_models.py:190-193`) then raises \"missing metrics\".\n- **`test_render.py:33-65`**: `python_snapshot()` builds a four-measurement `LanguageSnapshot` the same way, so both render tests fail at construction.\n- **`test_python_length.py:60`**: `assert adapter.metrics == set(SnapshotMetric)` fails as soon as Task 2 narrows the set, and stays red until Task 25.\n\nEvery commit from Task 2 through Task 25 or 27 would carry red tests. Task 2 must name these three edits: absent-fill the new metrics in the two builders, and pin the explicit metric set in the adapter test. The success line should read \"passes with only those edits\".",
+   "location": "tests/metrology/snapshot/test_snapshot_models.py:229-246"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 4's Python fixture score (6) contradicts Task 3's counting rule (7)",
+   "description": "Task 3 line 54 says a comprehension adds 1 per `for` plus 1 per `if`. Task 4 line 65 expects the fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) to score 6. A comprehension `if` cannot exist without its `for`, so under Task 3 the fixture scores 1 + if + elif + and + for + if + except = 7.\n\nLine 63 has the same problem: \"one test per decision point \u2026 each scoring 2\" is impossible for the comprehension `if`, whose minimum is 3.\n\nThe conflict is inherited from the slice (D2 line 139 against Success Criterion 3 line 266). An implementer hits a red test and must change either the metric definition or the criterion. Decide which is right and fix both documents before Task 3 starts; the wrong resolution silently changes what gets recorded.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:54-65"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Adding a required `complexity` field breaks positional constructions",
+   "description": "Task 7 (lines 91, 96) adds `complexity: int` to the dataclass and says 400's tests are \"edited only for the rename\". `test_lengths.py:104-106` and `test_render.py:36` construct `FunctionLength(\"b.py\", \"g\", 9, 70)` with four positional arguments, so each needs a fifth value.\n\nThe only way to honour \"rename only\" is a default on `complexity`, which would let an extractor omit the value and record a wrong score silently. Task 7 should state that `complexity` is required and list these call sites as needing a value.",
+   "location": "tests/metrology/snapshot/test_lengths.py:103-107"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`Tokenizer` takes only file text, but the TypeScript tokenizer needs the path",
+   "description": "Task 10 line 119 defines `Tokenizer` as \"file text in, (token text, line) pairs out\". The grammar is chosen from the path suffix (`_parser(Path(path).suffix.lower() == _TSX_SUFFIX)`), and the existing `FunctionExtractor` takes `(path, text)` for that reason.\n\nWith text only, Task 14 cannot pick between the `typescript` and `tsx` grammars. Task 15's `.tsx` JSX case then cannot pass, and line 160's rule that a file unparsed for length is unparsed for duplication no longer holds in reverse. Define `Tokenizer` as `(path, text)` in Task 10 and write Task 11's test tokenizer to match.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:120"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`RecursionError` is not a TypeScript parse error; a recursive walk would crash the snapshot",
+   "description": "Task 9 line 111 and the slice's failure-mode table say a `RecursionError` is \"already one of the adapter's parse errors\". That is true for Python (`python_adapter.py:81`). TypeScript passes `(TypeScriptParseError, MemoryError)`, and its existing walk is an explicit stack that never recurses.\n\nTask 5 does not say the complexity walk must be iterative. A recursive walk over deeply nested TypeScript would raise `RecursionError` straight through `measure_parse_metrics` and abort the snapshot. Either require an iterative walk in Task 5 or add `RecursionError` to the TypeScript tuple in Task 7. Task 9 should also say which language its `RecursionError` test covers; today only Python has one (`test_python_length.py:178`).",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:151"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`MemoryError` is both a per-file token error and a whole-metric failure",
+   "description": "Task 14 line 160 lists `MemoryError` among the TypeScript `token_errors`, which Task 10 line 121 turns into an `unparsed_files` entry. Task 10 line 123 and Task 11 line 139 say a `MemoryError` during the pass makes the whole metric `tool_failed`, \"never a partial figure\".\n\nFor TypeScript the same exception matches both rules, and the outcome depends on which `except` comes first. Remove `MemoryError` from the TypeScript token errors, or state the precedence and test it through the adapter.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 9's function-set comparison is not observable from the measurements",
+   "description": "Task 9 line 110 asks for the same \"(path, qualified name, start line) set\" on complexity and function length. Task 8 line 101 gives the complexity measurement only a `distribution`. Function length exposes rows only through `over_limit`.\n\nThe assertion cannot be written against the two `Measurement`s. Name the seam: compare `distribution.count` on the measurements, and assert the set on the extractor's `MeasuredFunction` list, where each row carries both values.",
+   "location": "src/squadron/metrology/snapshot/lengths.py:118-148"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Marks every line under both windows\" is undefined; D3's non-blank invariant is untested",
+   "description": "Task 10 does not say whether a window marks the lines its tokens sit on or the whole range from first to last token. The range reading counts blank and comment-only lines inside a clone. That breaks D3's \"duplicated lines are always non-blank lines\" (slice line 169), which the file-length denominator relies on.\n\nTask 13 line 153 (\"different comments and blank lines report the function's lines in both\") passes under either reading. State that only token lines are marked, with a multi-line token counting its start line. Add an assertion in Task 11 or 13 that an interleaved blank or comment line is not counted.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "A non-string `metrology.coverage_report`, and a bad value reaching `read_coverage`, are unhandled",
+   "description": "`load_config` merges raw TOML values without coercion, so `\"metrology.coverage_report\" = 5` reaches the parser as an int. 400 guards for this (`preflight.py:111`, `_read_exclusions`). Task 16 line 175 rejects only empty, absolute and `..` values, and Task 17 has no non-string case, so the result is an uncaught `TypeError` instead of `SnapshotPreflightError`.\n\nSeparately, Task 21 re-resolves the key at measurement time and promises its only exception is `SnapshotIntegrityError` (line 219). The parser it reuses raises `SnapshotPreflightError`, and Task 22 calls `read_coverage` directly with no preflight. Say what `read_coverage` returns for a value the parser rejects.",
+   "location": "src/squadron/config/manager.py:96-100"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 29 can't be run as ordered, and leaves a store record nothing removes",
+   "description": "- **Recording results dirties the tree.** Line 279 records each step's output in the slice design, which is tracked (`.gitignore` has no entry for `project-documents`). An edit between steps makes the next `sq metrology snapshot` fail preflight. A commit between steps 3 and 5 gives a tracked file a newer mtime than `coverage.xml`, so step 4 reads `report_stale`. Line 281's fix-and-rerun has the same effect. Tell the implementer to hold results outside the repo until step 10 and to re-run step 3 after any commit.\n- **The scratch project's setup is unstated.** Step 9 needs it to be a git repo with a commit, ignored `node_modules/` and `coverage/`, and an identity (a remote or `metrology.project_id`). Without one, `derive_project_id` raises (`test_take.py:194-200`).\n- **The scratch snapshot stays in the store.** `sq metrology snapshot --cwd <scratch>` writes a record to the real store. Line 282 removes the project but not the record, and `store.py` has no delete or prune. Point `metrology.store_dir` in the scratch `.squadron.toml` at a temporary directory.",
+   "location": "src/squadron/metrology/snapshot/preflight.py:150-155"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The 400-record compatibility behaviour has no automated test",
+   "description": "The slice's Compatibility section (lines 246-248) and walkthrough step 10 rely on 400-written records failing validation, being skipped with a WARNING, and leaving other record types loadable. The code supports this, since `ValidationError` is a `ValueError` and `_iter_records` catches it.\n\nNo task tests it, and Task 29 line 280 lets step 10's check be skipped when no 400 record exists. Add one store test: a four-metric snapshot record on disk is skipped with a WARNING, a sibling record still loads, and `write_snapshot` for the same commit replaces it.",
+   "location": "src/squadron/metrology/store.py:186-199"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "All 18 commit markers are `- [ ] Commit: \u2026` checklist items (lines 46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283, 290). They should be plain `**Commit**:` lines.\n\nPlacement is otherwise sound: each sits after its test task. The exception is Task 2's marker, which lands on a red suite (first finding).",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 28 leaves existing snapshot docs and help text contradicting the new behaviour",
+   "description": "Task 28 adds the metrics and the config key but does not name these existing statements:\n\n- `docs/COMMANDS.md:505` says each language \"gets four metrics\" and \"Python measures all four\".\n- The absence-reason table at `docs/COMMANDS.md:520-526` lacks `coverage_not_configured`, `report_missing` and `report_stale`, which users will see in output.\n- The CLI help at `src/squadron/cli/commands/metrology_snapshot.py:52` and the class docstrings at `python_adapter.py:102` and `typescript_adapter.py:19` list the old metric set.\n\nTask 28 also has no Success line.",
+   "location": "docs/COMMANDS.md:505"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "`tool_support.tool_failed` needs a `command` argument the tasks never supply",
+   "description": "Tasks 10 and 23 route failures through `tool_failed`, whose keyword-only `command: str` is required and is logged as \"(command: \u2026; stderr: \u2026)\". Neither task says what to pass for an in-process pass or a report read.\n\n`tool_failed` also logs its own WARNING. A coverage failure therefore logs once in `read_coverage` (Task 21 line 218) and once per metric in Task 23, three times per language.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Task 21 re-implements `files.resolve_files`",
+   "description": "`resolve_files(repo_root, [])` already runs `git ls-files -z`, logs ERROR and raises `SnapshotIntegrityError` on `None` or non-zero. Task 21 line 214 specifies the same logic again over `run_git`. Calling the existing function also settles where Task 22 patches `run_git`.",
+   "location": "src/squadron/metrology/snapshot/files.py:35-51"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 26 misdescribes `test_take.py` and needs a synthetic report",
+   "description": "Line 254 says \"real adapters, `FakeToolRunner` scripted as 400's tests do\". `test_take.py` uses only `FakeAdapter`; no existing test runs `take_snapshot` with real adapters. Real adapters do work with an empty runner, because ruff and ESLint resolve to `tool_missing` when the repo has none (ruff is also looked up on `PATH`, so it may need a script).\n\nThe Task 18 fixtures list squadron and scratch paths, so Task 26 needs a small hand-written Cobertura file matching the test repo, plus a committed `.gitignore`. Say so, since CLAUDE.md line 53 applies to parser tests and this is not one.",
+   "location": "tests/metrology/snapshot/test_take.py:1"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Task 11's repeated-token case only holds for runs of 101 to 199 tokens",
+   "description": "Under Task 10's rule, the window at index 100 of a run of 200 or more identical tokens does not overlap the first window and is a real clone. State the run length in the test bullet.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:134"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Task 13's \"function length is unaffected\" is ambiguous",
+   "description": "An unterminated triple-quoted string and bad indentation are also `SyntaxError`s for `ast.parse`, so both files are in function length's `unparsed_files` too. Say what is asserted: file length still lists them, and the other files' functions are measured as before.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Task 19 has no rule for a `filename` that resolves under more than one `<source>`",
+   "description": "\"Joined with each `<source>`\" gives two in-repo candidates when a report has several source roots, for example `__init__.py` under both `src/pkg` and `tests`. Both would receive the same lines. The slice's single `--cov=src/squadron` capture will not exercise this; record the rule (the candidate that is a tracked file) or the limit.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:196"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Small test gaps against stated requirements",
+   "description": "- Task 19 fails on a non-integer `number`; Task 20 tests only `hits=\"x\"`. The failure-mode row names both.\n- No test asserts that duplication's `counting` text carries the window size and ceiling, or that complexity's says module-level code is not counted (Success Criterion 1, D2 line 145).\n- Task 21 treats a stat `OSError` on the report as a failure; Task 22 tests only a tracked file.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:206"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Task 18's coverage.py capture will be large",
+   "description": "`--cov=src/squadron` reports every file in the package whatever test subset runs, so the fixture is a full-package XML. `--cov=src/squadron/metrology/snapshot` still satisfies \"captured from squadron\" at a fraction of the size.\n\nThe README's opening lines say every capture is a `.stdout`/`.stderr` pair; update that when the XML files are added.",
+   "location": "tests/metrology/fixtures/snapshot/README.md:11-14"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "Helpers the tasks reuse are private names",
+   "description": "- Task 6 uses \"`typescript_length`'s parser helper\", which is `_parser`. No snapshot test imports a private name today.\n- Task 7's read-and-decode helper is used from `duplication.py`, so it needs a public name under strict pyright on `src`.\n- The existing read warnings say \"for length\" (`lengths.py:168,176`). Task 7 should say whether the helper or its callers log, or duplication will repeat a length-worded warning.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:88"
+  }
+ ]
+}

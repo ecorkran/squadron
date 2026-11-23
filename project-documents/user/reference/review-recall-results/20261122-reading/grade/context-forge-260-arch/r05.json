@@ -1,0 +1,131 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "\"Already planned\" is terminal, so interrupted and pre-planned brownfield repos never adopt",
+   "description": "Line 76 makes \"already planned\" (any initiative plan, architecture doc or slice plan) the adopted state: \"An adopted project lands here, so no completion state is needed.\" The amendment removed the only stored record of adoption progress (L28), and nothing replaces it. Two realistic sequences then fail silently:\n\n- **Interrupted adoption.** Step 5 (L91) has the agent write the derived architecture and then the existing-state slice plan. If the session ends after the architecture is written, the next `sq onboard` gets \"already planned\" at step 2 (L88) and skips adoption. `cf next` then navigates as if the built system had no record. The original rule that \"a re-run resumes from whatever artifacts exist\" (L136) was dropped by the amendment without a replacement.\n- **Pre-planned brownfield repo.** Creating an initiative plan is a normal CF step. A brownfield repo with one initiative plan before `sq onboard` is excluded permanently. The only exit is the opt-out (L75), which means greenfield.\n\nThe shipped code applies the same rule. `findPlanningArtifacts` (packages/core/src/detection/planningArtifacts.ts:56-68) returns any plan or architecture file and never checks whether a baseline exists. Fix: derive \"baseline recorded\" from files, for example the derived architecture's provenance plus a retroactive entry. Make \"brownfield, planned, no baseline\" its own outcome, with a stated `sq onboard` behaviour.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:76-77"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The retroactive marker is an agent-settable review-gate exemption, and the \"cannot bypass\" claim does not hold",
+   "description": "Line 100 says the marker is \"set only by the adoption flow\" and that \"real new work always produces those files, so the marker can't be used to bypass the gate.\" Nothing enforces either part. The implemented rules show this:\n\n- The gate skips any retroactive entry at every slice boundary \"without reading any file\" (packages/core/src/introspection/reviewGate.ts:376).\n- The only structural guard, rule 1 (packages/core/src/introspection/retroactiveRules.ts:98-105), fires only when a design or task file exists. Its own comment (retroactiveRules.ts:80) closes the bypass by assuming new work always has those files. A bypass is exactly the case that doesn't follow that assumption.\n- Rule 3 (retroactiveRules.ts:113-120) checks only index order. An entry numbered just below the lowest new-work index passes.\n- Nothing records who set the marker.\n\nDesignless entries are already tolerated (L60), so the bypass is one plan line: an `[x]` entry with `retroactive` and no design. The gate skips it, and `cf next` advances. L51 says the marker \"is never the PM-only review exemption.\" That is true only by name, since it is a second exemption that an agent can set. Fix: make the marker verifiable, for example with a plan-level baseline header whose provenance points to an existing derived architecture that cites code paths. Otherwise remove the claim and document the marker as an honour-system field.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "An unadopted brownfield repo is steered into the greenfield path the initiative exists to replace",
+   "description": "Lines 104 and 124 give an unadopted brownfield repo \"one line,\" then \"normal navigation.\" For a repo with no planning artifacts, normal navigation is the first-run concept path (Current State, L59, `detectFirstRunContext`). That is the \"Phase 0 conversation that ignores it all\" named as the problem in L35, and the \"greenfield path with caveats\" that L39 rules out. Under the amended design this is the permanent state for every non-squadron user (L129). Fix: for an unadopted brownfield repo, `cf next` should present the decision (adopt via `sq onboard`, or opt out knowing that means greenfield) and recommend no concept step.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:104"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The safety valve is one-directional, and the rework removes the only way to force brownfield",
+   "description": "Line 133 says \"the override is the safety valve.\" Under the amendment the only override is the opt-out, \"treat as new\" (L75, L79). The shipped code has an override in the other direction: `adoption.state = in_progress`, documented as \"by hand to force it\" (packages/core/src/config/ConfigKeys.ts:119). Slice 269 removes it (slice plan line 83). After the rework nothing forces a brownfield outcome. A brownfield repo misjudged as greenfield (a shallow clone, for example) has no recovery except the Phase 0 conversation. The PM declining the paid graph build (L89) also has no defined outcome except opt-out. Fix: keep an explicit \"treat as brownfield\" override, stored the same way as the opt-out, or state that misfires are not recoverable.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Detection's outcome mapping is undefined at the point the document calls the riskiest decision",
+   "description": "Line 77 says brownfield or greenfield is \"decided from the code signals,\" and L133 defers signals and thresholds to slice design. The architecture still needs to say which signals apply, their precedence, and how unknown facts map. The shipped code already has unknown cases the document doesn't decide. History can be `unknown` with a reason, and the walk can fail or stop early (packages/core/src/detection/history.ts:5,18; sourceVolume.ts:14). Two other gaps:\n\n- What counts as source is undefined: vendored dependencies, generated code and lockfiles. `sourceVolume.ts` excludes some directories and dot-directories, but the document says nothing.\n- History is folder-scoped (`history.ts` counts commits touching the project root). A subfolder project in a long-lived repo, with few folder commits, looks like a shallow or squashed repo. The document doesn't address this, though L133 names squashed history as a must-not-misfire case.\n\nThe locked contract in slice 271 and the consumer `sq onboard` both depend on this table. Fix: put the decision table in the architecture, with inputs, precedence, the default for each unknown, and the source definition.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-77"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Ownership and verification of the baseline are undefined",
+   "description": "There are three problems with the baseline.\n\n- **Concept writer (L125).** The row says \"exactly one writer per run\" but names two options, \"squadron 363, or the guide's adoption prompt.\" The choice is not made.\n- **Unverified slice plan (L91, L100, L121).** The PM confirms only the concept. The agent then writes the existing-state slice plan, which declares what is built and \"counts as complete\" for every done check. Nothing checks those claims against the code.\n- **Principle gap (L43).** \"Never fabricate intent\" covers purpose. It does not cover claims that code is built, and the baseline is the artifact every later navigation trusts.\n\nFix: choose one concept writer. Add an automated check that each retroactive entry resolves to real source paths, and state how a wrong entry is corrected.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:91"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Retroactive slice granularity depends on a frozen squadron output with no delivery path",
+   "description": "Row (d) makes squadron 364's `layers[]` the signal for retroactive slice boundaries. L126 says 364 is \"frozen until the handoff contract settles,\" and Current State (L63) says it is only partly built. The document never says where `layers[]` lives (the graph file or the comprehension doc), who reads it, or what happens when it is absent. It cannot be read by cf, because L50 says cf never parses squadron output. So it must reach the agent through the one passed path, `fileComprehension`. L134 calls granularity a hard problem, then answers it with an input that is frozen, undefined and optional. Fix: name the carrier and the fallback (the single coarse entry from L99) in the architecture.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:121"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"cf never parses squadron output\" conflicts with how cf finds the comprehension doc",
+   "description": "Line 50 says cf \"never ... parses squadron output,\" and names the comprehension doc as \"the one point of contact,\" found \"by filename and docType.\" Finding by docType means reading that file's frontmatter. L119 adds squadron's \"provenance block,\" which is squadron-authored content cf would read. The document also does not specify which doc is chosen when several `{n}-analysis.codebase-comprehension.md` files exist. The shipped code takes the highest index that carries the docType (packages/core/src/detection/comprehensionAnalysis.ts:40, 59-63), with no staleness check. L119 cites squadron 361 for the provenance block, while the original contract (L136) cites 363. Fix: restate the principle as \"cf reads one file's name and frontmatter docType, nothing else,\" drop the provenance-block read, and write the selection rule.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:50"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Step 1 of `sq onboard` merges guide rules into existing rule files before reconciliation exists",
+   "description": "Step 1 runs `cf init`. L58 says `cf init` \"appends guide rules without noticing when they contradict the project's own.\" L44 says conflicts are surfaced, never merged silently, and L106-108 place reconciliation \"later.\" So the adoption path itself performs the silent merge before the mechanism that surfaces conflicts exists. Slice 266 is marked complete in the plan, but the architecture doesn't say whether `cf init` now calls reconciliation on the brownfield path. Step 1 also runs before detection in step 2, so the registration writes happen before the outcome is known. Fix: on a brownfield repo, defer rule-file writes until reconciliation has run, or state that the step-1 merge is accepted and explain why it does not contradict L44.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:87"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The persisted `adoption.state` from shipped builds has no migration, and the opt-out key is undecided",
+   "description": "Lines 28 and 79 say the only stored value is the opt-out. Shipped builds already write `adoption.state` on their own: `cf build` sets `in_progress` (README.md:281, 424), and completion writes `complete` (packages/core/src/adoption/adoptionCompletion.ts). The architecture does not say what those values mean after the rework. Slice 269 ignores them \"with a one-time notice\" (slice plan line 83), but a one-time notice needs stored memory that it was shown, which L28 and L79 rule out. Slice 269 also leaves open whether `declined` keeps its key or moves to a new boolean, so the one stored value the architecture specifies has no settled key. Fix: name the opt-out key and value now. Derive the legacy-value notice from the value present, so it needs no memory. State what a user with an interrupted `in_progress` should do, which ties to the first FAIL.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:28"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Rule-file identity is undefined, and the key breaks when #123 lands",
+   "description": "Resolutions \"persist keyed by rule file identity, never heading text\" (L108). Identity is never defined. A path key breaks on rename, and it breaks when #123 splits CLAUDE.md and AGENTS.md (L62, L138), because those composites are the files whose identity would change. A content-hash key invalidates every resolution on any edit, which defeats the purpose. Slice 266 requires that a guide wording change not break a stored resolution (slice plan line 63). That requires a logical rule ID, which the architecture never names. The store's location and format version are also unspecified. Future Work (slice plan line 135) mentions a hand-edited JSON file. Fix: define a logical rule identity (source rule file plus a stable rule ID from the guide manifest), and specify the store's location and version.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:108"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Detection and adoption are split across modules in the inverted direction",
+   "description": "Line 49 says core \"reports observable facts ... and maps them to an outcome,\" which is a two-layer split with facts below outcome. The shipped code inverts it:\n\n- `detection/sourceVolume.ts:7` imports `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts`, which imports the `SourceVolume` type back from `detection/sourceVolume.ts:3`. The type-only direction avoids a runtime cycle, but the layering is still inverted.\n- Detection modules throw `AdoptionError` from `adoption/contracts.ts`, and that file imports a type from `detection/squadronProbe.ts`, which slice 271 removes.\n- `detection/planningArtifacts.ts` imports from `introspection/ArtifactIntrospector.ts`, while `introspection/adoptionNavigation.ts` imports `detection/planningArtifacts.ts`.\n- `detection/` is also the shared fs-helper home (`isEnoent`, `pathPresent`, `presentPaths`) used by `docs-map`, `ruleReconciliation` and `introspection`.\n\nThe document asserts \"one detection, in core\" but gives no module boundary. Fix: state the boundary (facts, outcome, shared fs utilities) and where the threshold constant lives.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48-49"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Superseded contracts remain normative, and the text contradicts itself",
+   "description": "Line 24 says \"the sections below are rewritten to match\" the amendment. Lines 135 and 136 were not rewritten. They still specify the probe's field names, `surfaces` entries and `probe_version` 1. They say \"CF tests check the field names as a cross-repo contract,\" describe an Adoption Facts section that `cf build` appends, and state that \"a re-run resumes from whatever artifacts exist\" and \"graph staleness has no cf threshold.\" An implementer reading the document as the spec would build the removed design. Smaller contradictions:\n\n- Row (c) says \"CF writes the architecture doc on both paths\" (L120), but L129 says there is no CF-only path.\n- L69 places the concept conversation inside onboarding, while slice 260 (slice plan line 16) makes onboarding end in a `cf build` handoff.\n- L20 and L106-109 use future tense for conventions reconciliation and docs mapping, which the slice plan (L143) lists as shipped.\n\nFix: move the superseded text into history, and fix row (c), L69 and the tense.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135-136"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The cross-release window between slices 268 and 272 is unaddressed",
+   "description": "After 268 makes `cf build` pure, the shipped guide prompt still tells agents to run `cf build` for adoption (slice plan line 82), and that step no longer does anything. L137 ties the guide coupling only to profile selection. Slice 272 raises `MIN_GUIDE_VERSION` to a guide release the architecture does not name. Adoption is parked, so the impact is limited to users who run the prompt or hold legacy `in_progress` values. Fix: name the interim behaviour, or the guide version that resolves it.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:137"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The CF-only future path has no home under the no-orchestration rule",
+   "description": "L129 and Future Work defer a CF-only adoption path. The design forbids cf from orchestrating (L24-31, L42), and `sq onboard` belongs to squadron. The architecture does not say where a CF-only orchestrator would live, such as a guide skill or a second orchestrator. Until it does, the 271 primitives are the only composition point, and the deferred path would need the same non-squadron exit that the safety-valve finding describes. Fix: name the intended home, even if deferred, so 271 is not shaped around squadron alone.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:129"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The `sq onboard` primitive contract is named but not specified",
+   "description": "L85 says the outline exists \"so squadron and the guide can design against it.\" Yet the detection report's JSON shape, the facts' field names, and the prompt-delivery inputs and outputs (key, comprehension path, failure when the prompt is missing) are not specified. Slice 271 says to \"confirm it with the sq session before design is final\" (slice plan line 97). The contract is therefore being set by a consumer whose design does not exist yet. Fix: write the JSON schema and error contract for 271 into the architecture, or mark the contract provisional.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:85-94"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The linked review file is not in the tree",
+   "description": "L169 links `../reviews/260-review.arch.brownfield-adoption.md` and states that all findings are addressed. No such file exists under `project-documents/user/reviews/` in this checkout, so the claim cannot be checked here. The slice plan (line 123) says no re-review has been run. Fix: restore the file or correct the link.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:169"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Detection runs on every `cf next` with no stated cost bound",
+   "description": "Detection is \"derived from the files every time\" (L48), and `cf next` consumes it (L48, L104). For a repo with no planning artifacts, each call does a bounded source walk and folder-scoped git calls (packages/core/src/detection/history.ts). The code bounds the walk (sourceVolume.ts directory-visit limit), but the architecture sets no latency budget and no rule about when git is consulted. On a long-history repo the git calls are the likely cost, and nothing validates it. Fix: set a latency budget, and confirm the cost on a large-history repository before `cf next` calls it on every run.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79-81"
+  }
+ ]
+}

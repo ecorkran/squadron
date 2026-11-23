@@ -1,0 +1,68 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "8.2 decline path will hit re-run semantics instead of the interview",
+   "description": "8.2 runs on \"a scratch copy of the tree\" after 8.1 has already written `000-concept.squadron.md` to the real tree. A copy made at that point contains the document. Under 6.2's rules the flow would report the existing document and stop by default, so the two questions are never asked and the decline path (SC5) never runs.\n\nThere is a second risk. Precondition 3 requires the cf project registration to resolve a name, and this repo's cf config is stored per checkout directory. A copy at a new path may not resolve `squadron`, which would trigger a terminal stop before the interview.\n\nFix: tell 8.2 to delete `000-concept.squadron.md` from the copy, or make the copy before 8.1. Also add a pre-step that confirms `cf get` resolves `squadron` inside the copy.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "8.5 writes comprehension documents that 8.6's scope check forbids",
+   "description": "8.5 runs the comprehension flow twice in the real tree (no argument, then `comprehension`). According to `commands/analysis/understand.md:347-356`, every comprehension run writes a new `project-documents/user/analysis/9nn-analysis.codebase-comprehension.md` at a fresh index and never overwrites.\n\n8.6 then requires `git diff --name-only main` to show only the skill file, the generated concept, this slice's documents and the DEVLOG. The two new analysis files make that check fail, or tempt the implementer to bend it.\n\nFix: run 8.5 on a scratch copy, or have 8.5 confirm routing and then remove the generated analysis files before 8.6.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:338-347"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "SC10 is only partly verified",
+   "description": "SC10 requires three things:\n- per-section sourcing over the full outcome set\n- the engagement-questions and inferred-claims lines\n- every `[INFERRED]` sentence satisfying the checkable rule\n\n8.1 checks only the engagement-questions line, the inferred-claims line, and the extracted-and-corrected outcome for the Overview. Nothing checks that all seven sections have a sourcing entry, and nothing audits each `[INFERRED]` sentence against 7.1's rule (derived from a named field but not literally stated in it).\n\nFix: add both checks to 8.1.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-316"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "SC4 (dropped topics absent) has no verification step",
+   "description": "4.1 writes the dropped-topics rule into the skill, but neither 8.1 nor 8.2 checks the written documents for it. SC4 says why-now, audience-evolution and methodology-preference must appear nowhere, either as content or as gap markers.\n\n8.2 is where gap markers are most likely to spread, so the check matters there. Fix: add a \"no dropped-topic content or gap marker\" check to 8.1 and 8.2.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-324"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All commit points are written as checklist items (`- [ ] Commit: ...`), at lines 99, 125, 164, 185, 221, 254, 296 and 351. Commit markers should be plain `**Commit**:` lines, not checkboxes, so they aren't confused with work items or left unchecked.\n\nThe cadence is fine: one commit per task matches this repo's \"at least once per task\" rule, and each one comes after a verification subtask. Only the format needs changing.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "SC7's absent/unreadable cases are not exercised",
+   "description": "8.3 tests only a renamed heading. SC7 also covers a guide that is absent or unreadable, which should produce a different stop message (6.1 Check 1). The design's walkthrough has the same gap.\n\nA one-line variant of 8.3 would cover it: point the check at a missing scratch path and confirm the stop names that path.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "SC12 has no recorded outcome",
+   "description": "\"A concept a PM would edit rather than discard\" has no matching check. The PM is already present for 8.1, so the 9.2 DEVLOG entry could record their verdict on the generated document. This adds no new gate.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:364-368"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "1.2 and 4.2 repeat their parent tasks' success lines",
+   "description": "1.2 repeats 1.1's success line (\"selector covers all four argument cases\"), and 8.5 tests the same thing live. 4.2 (lines 181\u2013184) repeats 4.1's \"row-for-row\" success line.\n\nBoth could fold into their parent task's success criteria without losing coverage. 5.3 should stay separate: its byte-identity check guards SC2 directly.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "0.1 states the target instead of reading it",
+   "description": "\"Integration branch is unset; target is `main`\" is a fact recorded at planning time. The project's git rules say to read `cf config get git.integration_branch` before starting rather than relying on memory. Fix: replace the claim with that command.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-61"
+  }
+ ]
+}

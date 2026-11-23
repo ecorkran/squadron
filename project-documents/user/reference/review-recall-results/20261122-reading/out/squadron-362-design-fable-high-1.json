@@ -1,0 +1,428 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The file this slice edits does not exist; slice 361 is unimplemented in this tree",
+      "description": "The design says \"Everything here is markdown edits to the existing `commands/analysis/understand.md`\" and calls 361 a shipped contract \"executed unchanged\" (lines 64-65, 71-72, 115-117, 310-311). In this tree:\n\n- `commands/analysis/` contains only `tech-debt-audit.md`; there is no `understand.md`.\n- `361-slice.graph-contract-and-provenance.md` is `status: not_started`.\n- Every task in `361-tasks.graph-contract-and-provenance.md` is unchecked, including Task 0.1 (generate the graph) and Task 1.2 (create the file).\n- The slice-plan entry for 361 is unchecked (plan line 44).\n\nConsequences as written:\n\n- Implementation Notes step 1 (\"apply the two corrections to the existing 361 sections\", lines 456-458) has nothing to apply to.\n- Success criterion 11 and walkthrough step 8 describe `understand.md` as a changed file when it would be a new one.\n- No preflight, provenance or index-selection text exists to \"execute unchanged\".\n\nThe design must either be gated on 361 landing and re-anchored to the text that actually ships, or move the two corrections into 361's design and tasks before 361 is implemented.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:22-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"corrections\" target 361 text that the only 361 artifact in the repo does not contain",
+      "description": "- **Correction 2** (lines 145-147) says 361 \"collapsed\" the nine file-level types to `select(.type == \"file\")`. The 361 design specifies `.nodes[] | select(.type == \"file\" or ...)`, an allow-list with further types elided.\n- **Correction 1** (lines 121-122) says the 361 skill \"states that `nodeIds` mixes file, function, and class nodes and instructs intersecting with `type == \"file\"`\". Neither the 361 design (line 244: \"file count, from `layers[]`\") nor 361 Tasks 2.1/6.1 says this.\n\nThe claimed defects exist only in skill text that is not in the tree. Since 361's tasks are all open, the cheaper fix is to amend the 361 design (line 108, line 244) and Tasks 2.1/6.1 so the defect never ships. That removes \"Corrections to the 361 contract\", the undercount table and Implementation step 1 from this slice.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/361-slice.graph-contract-and-provenance.md:108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The graph the design measured is not in the repository; the walkthrough cannot start from a clean checkout",
+      "description": "`.understand-anything/` does not exist here, and 361's task file records the same (\"`.understand-anything/` does not exist in this repo\", line 39). `.gitignore` has no entry hiding it, and the architecture says the graph files stay tracked (arch lines 262-264), so its absence is real.\n\n- Every row of \"Verified graph facts\" (lines 92-109) is unverifiable. This covers 925 nodes, 238 file-level, 27 `entry-point`, 17 active ignore lines and the `config.json` contents. The design calls these \"measurements, not assumptions\".\n- Walkthrough step 1's four `jq` commands fail on a missing file.\n- Unlike 361's walkthrough (361 design lines 297-298), this one has no \"generate the graph if absent\" prerequisite.\n- The step-4 spot-check on `.understand-anything/.understandignore` fails the same way.\n\nThe one fact I could check holds: `src/squadron/data/pipelines/*.yaml` has 20 files, matching the stated 20 `pipeline` nodes. The table's arithmetic is also self-consistent (476+211+201+20+17 = 925; 201+17+20 = 238; 106+89+43 = 238; 925\u2212238 = 687).",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:346-365"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The 943/944 index pins are wrong against the tree and inconsistent with the design's own run sequence",
+      "description": "`project-documents/user/analysis/` holds 940, 941 and 942 only. No `943-analysis.codebase-comprehension.md` exists, so:\n\n- \"The generated `943` sample carries both wrong counts\" (line 136) and the \"361 reported 1 / 2\" column (lines 130-133) cite a document that is not there.\n- \"943 exists, so expect **944**\" is wrong here; the lowest unused index is 943.\n- \"Leave it in place and do not edit it\" (lines 466-469) refers to nothing.\n\nEven if 943 existed, the pin fails. Implementation step 1 says \"re-run the flow\" after applying the corrections (line 456), and 361's convention gives every run a new index. That run takes 944, so walkthrough step 2 would write 945. State the expectation as \"next unused index\" and drop the literal.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file-level selector has three definitions, contradicts itself, and inverts the architecture's allow-list",
+      "description": "- The heading defines file-level as \"carries a `filePath`\".\n- Line 151 says the selector \"becomes an explicit type allow-list\".\n- The code is an exclusion, `select(.type != \"function\" and .type != \"class\")`.\n- Line 158 says \"Stated as an exclusion rather than an allow-list deliberately\".\n\nLines 151 and 158 contradict each other outright.\n\nThe architecture's read discipline is an allow-list of nine types (arch lines 107-110). The design argues only one drift direction: a tenth file-level type gets included. It does not argue the other: a new sub-file type (method, module, concept) is admitted into context. The only guard is \"surviving but no `filePath` \u2192 drift\" (line 160). That guard does not fire if the new type carries `filePath`, which the architecture's `function:path:name` ids and `filePath?` shape make plausible.\n\nTwo follow-on effects:\n\n- Any such node breaks the 238 = `analyzedFiles` reconciliation, and section 7 would then report \"the graph is internally inconsistent\" (lines 225-227) when the cause is the selector.\n- Correction 1's cross-check conflates two tests: \"resolves to a node carrying `filePath`\" and \"resolves to a `function` or `class`\" (lines 139-141, 442-444).\n\nPick one definition and state what happens for an unknown type in both directions.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 requires reading function/class nodes, contradicting the read discipline and success criterion 9",
+      "description": "\"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped\" gives no mechanism. The options are reading the function/class node's `filePath`, walking `contains` edges, or parsing the id string, and none is named. The first conflicts with:\n\n- \"no function- or class-level node is read\" (success criterion 9, line 333);\n- \"the excluded 687 function and class nodes remain excluded\" (line 288);\n- the plan's \"skip function/class nodes\" (plan lines 90-91).\n\nThe mechanism also has no consumer. The section reports only inter-layer `imports` and `depends_on`, while the example given is a `calls` edge, which is not in the reported set. Either cut the resolution or add `calls` to the section and specify an id-only mechanism.\n\nThree smaller gaps in the same section:\n\n- `edges[].direction` is listed as consumed (line 86) but appears in no mapping row or rule.\n- \"Ties by `weight`\" does not say how per-edge weights aggregate over a layer pair (sum, max or mean).\n- \"Every file-level node belongs to exactly one layer (verified)\" is verified on one graph. A node in zero or two layers has no handling, unlike Correction 1, which keeps a cross-check for the same reason.",
+      "file_ref": null,
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The fallback column, the slice's core deliverable, leaves reachable states undefined",
+      "description": "The plan assigns this slice \"what fallback when a field is absent\" (plan lines 87-88), and the design says the column \"has no third option\" (line 186). These states have no row:\n\n- **Row 2:** \"preflight rejects empty `layers`\" covers only an empty array. A layer with missing `description` or empty `nodeIds` is not covered.\n- **Row 4:** it is not stated whether the gap marker fires when some nodes lack `complexity` or only when all do. It is also unstated what \"top tier\" means when zero nodes are `complex`. The list has no bound (43 entries here).\n- **Row 6:** \"preflight rejects empty `edges`\" does not cover non-empty edges with zero inter-layer `imports`/`depends_on`, or edges lacking `weight`.\n- **Row 7:** the row says \"naming the unreadable file\", but `config.json` and `.understandignore` are optional upstream files. An absent one cannot satisfy the gap-marker syntax's \"which input would supply it\" half. Absent, unreadable and unparseable need separate outcomes.\n- **Line 234:** \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\" reads as though this repo is the all-comments case, which it is not.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:172-180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tour `nodeIds` is dropped from the mapping that 363 is told to reuse verbatim",
+      "description": "Row 5 sources `order`, `title` and `description` only. 361 read `tour[]` order/title/nodeIds (361 design line 109).\n\n- The plan assigns this slice \"`tour[]` ordering as the signal for which components matter most\" (plan lines 89-90). Without `nodeIds`, the reading order names no components.\n- The architecture's Solution Approach row for 363 is \"`tour[]` node ordering\" (arch line 219).\n- Tour `nodeIds` may point at function/class nodes, which needs a stated rule under the read discipline.\n- \"Provides to 363\" (lines 299-301) says the mapping is exactly what extract-then-ask needs. The architecture's concept table also needs `config` nodes and test/CI `config` nodes (arch lines 220-221), and the mapping defines no such selection.\n\nSection 5 has no entry under \"Section detail\" at all. Add `nodeIds` to row 5 with a resolution rule, and say how 363 obtains config-node selections.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The entry-point signal rests on one observed value of a free-form field, with a misleading fallback",
+      "description": "The architecture's contract documents `tags[]` but no tag vocabulary (arch line 94). `entry-point` is a string seen in one graph. Entry points are a required output (plan line 100; arch line 163), and the Risk Assessment does not cover this dependency.\n\n- A graph spelling the tag differently yields `[GAP: no node carries the entry-point tag \u2014 re-run /understand]` (line 176). Re-running would not supply it.\n- A codebase with no entry points gets the same marker, which is equally wrong advice.\n- \"No node has a `tags` key\" (contract drift) is not distinguished from \"tags present, none is `entry-point`\" (a legitimate state).\n- The 27 count and the 40% `languageNotes` coverage were measured on the 201 `file` nodes (lines 104-105), but sections 3 and 4 run over the 238 file-level nodes. Both numbers are stated for the wrong population.\n- \"Layer, then `filePath`\" does not say which layer order applies.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:200-204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"closing observation\" is an unsourced-prose channel the mapping never defines, and the check does not test it",
+      "description": "The governance section introduces \"the closing observation each section carries\". No mapping row, section detail or success criterion defines it. It also conflicts with line 187 (\"never filled with prose that is not traceable to its named fields\").\n\nThe stated test is \"mechanical: derivable from the table directly above\". The design's own example fails it: \"complexity concentrates in the seams where squadron meets an external SDK\" cannot be derived from a table of paths, tiers and layers.\n\nThe only verification is `grep -c 'INFERRED'` returning 0 (line 378, success criterion 8). That checks the marker is absent, not that inference is absent. A document full of unmarked interpretive closers passes. Either cut closing observations, which is the lighter option and consistent with \"sourced content or a gap marker\", or define their permitted form and add a walkthrough check for it.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The reuse decision mis-describes the template it rejects",
+      "description": "The design (lines 266-271) describes a \"ten-part structure (identity, architecture, build/test/deploy, code quality, security, performance, operations, and so on)\". The template has eight sections:\n\n1. Identity & Stack\n2. Architecture\n3. Build, Test & Deploy\n4. Code Quality & Defects\n5. Issue Tracker & Project Health\n6. AI Agent Integration\n7. Risks & Recommendations\n8. Deep-Dive Plan\n\nIt calls itself an \"8-section structured analysis\" (line 358). It has no security, performance or operations section.\n\nThe overlap statement (line 273) is also incomplete. Section 8's \"Files to read first (ordered by importance)\" and section 6's \"what to read first\u2026 where the complexity lives\" map directly onto this design's reading-order and hotspot sections. The probe backend also lists \"Entry points\" (line 347).\n\nThe conclusion probably survives, since sections 3-5 and 7 are unsourceable from a graph. But this is the open question the plan assigns to 362 (plan lines 92-94), and the recorded decision should describe the real comparable. The two adopted conventions are accurately cited (prompt lines 34-35, 47).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/reference/analyze-codebase-prompt.md:45-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough steps 5 and 6 cannot run as written",
+      "description": "- `$S` is never defined.\n- The tampered graphs are written to `kg-empty-tour.json`, `kg-no-entrypoints.json` and `meta-wrong.json`. The skill reads only `knowledge-graph.json` and `meta.json`, and no step swaps the files in, so each run would use the untampered inputs.\n- Only `knowledge-graph.json` and `meta.json` are copied. With `config.json` and `.understandignore` missing, section 7 emits gap markers on every scratch run. That contradicts \"every other section is unaffected\" (line 409) and the \"2 occurrences\" count (line 407).\n- `$S/real` has no `project-documents/user/analysis/`, so index selection and the write have no directory. 361's own pattern copies the whole repo (361 design line 312).\n- `$S/real` is not a git repository, so every run also takes the staleness-skip and hygiene-does-not-apply paths. The expected outputs do not mention this.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-420"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The cross-reference line into `analyze-codebase-prompt.md` needs a stated position",
+      "description": "The reference file is itself a prompt; its pipeline block pulls `{{include:analyze-codebase-prompt.md#system-prompt}}` (prompt line 227). A line placed inside `## System Prompt` or `## Analysis Template` becomes model input. Say it goes in the header block (prompt lines 9-21) and that `dateUpdated` is bumped.\n\nThe wording is also inconsistent: \"stays \u2026 unchanged\" in the same paragraph that adds a line, and \"all within `commands/analysis/understand.md`\" (line 42) against success criterion 11's second changed file.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Small cuts available",
+      "description": "- Reporting `config.json` settings (`outputLanguage: en`) in a \"coverage and scope limits\" section tells the reader nothing about coverage. 361's forwarded note (F011) asked only that the file be addressed, and a one-line \"read, not consumed\" would close it.\n- The `tour[].languageLesson` row (line 106) is used nowhere.\n- \"Provides to 365: nothing directly\" (lines 305-306) restates 361.\n\nNone of these makes the design overweight on its own.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:228-231"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, layering and dependency direction match the plan and architecture",
+      "description": "- No Python, no installer, manifest or dispatcher change, consistent with plan lines 29-32 and 281-282.\n- Interview, candidates and routing are correctly left to 363, 364 and 366.\n- Frontmatter `dependencies: [361]` and `interfaces: [363, 364]` match plan lines 106-107, 132 and 158.\n- The slice only reads upstream output, so \"consume, do not re-implement\" holds.\n- Project identity is justified by the architecture's `project.languages`/`project.frameworks` row; the coverage section by the architecture's `.understandignore` role and 361's forwarded deferrals.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:40-65"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every slice-plan success criterion has a design criterion",
+      "description": "| Plan criterion | Design criteria |\n|---|---|\n| Sections name fields; absent fields emit a gap marker (plan 98-99) | 1, 2 |\n| Four required sections present and traceable (plan 100-101) | 3 |\n| Graph never loaded whole (plan 102) | 9 |\n| Reuse decision recorded, document retained (plan 103-104) | 7 |\n| Checkable against the real repo (plan 105) | 10 |\n\nThe architecture's read-discipline constraint is restated with its specific rule (lines 282-293). The `[INFERRED]` decision is one 361 explicitly delegated here (361 design lines 183-186).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:313-338"
+    },
+    {
+      "severity": "PASS",
+      "title": "Existing tests are not disturbed by the files this slice touches",
+      "description": "- `_install_prefix` globs `*.md`, as the plan says.\n- `tests/skills/` builds pack sources in temp directories and pins no real `commands/analysis/` listing.\n- `tests/metrology/test_audit_skill_sync.py:41` reads only `tech-debt-audit.md`.\n- The `topic:`/`model:` frontmatter shape matches `942-analysis.tech-debt-audit.md:1-9`.\n\n`uv run pytest tests/skills/` in walkthrough step 8 is therefore a valid, if weak, regression check.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/skills/installer.py:87"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The file this slice edits does not exist; slice 361 is unimplemented in this tree",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The \"corrections\" target 361 text that the only 361 artifact in the repo does not contain",
+      "location": "project-documents/user/slices/361-slice.graph-contract-and-provenance.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "The graph the design measured is not in the repository; the walkthrough cannot start from a clean checkout",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:346-365",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The 943/944 index pins are wrong against the tree and inconsistent with the design's own run sequence",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The file-level selector has three definitions, contradicts itself, and inverts the architecture's allow-list",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "summary": "Section 6 requires reading function/class nodes, contradicting the read discipline and success criterion 9",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The fallback column, the slice's core deliverable, leaves reachable states undefined",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:172-180",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Tour `nodeIds` is dropped from the mapping that 363 is told to reuse verbatim",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The entry-point signal rests on one observed value of a free-form field, with a misleading fallback",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:200-204",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The \"closing observation\" is an unsourced-prose channel the mapping never defines, and the check does not test it",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The reuse decision mis-describes the template it rejects",
+      "location": "project-documents/user/reference/analyze-codebase-prompt.md:45-183",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "Walkthrough steps 5 and 6 cannot run as written",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-420",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The cross-reference line into `analyze-codebase-prompt.md` needs a stated position",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Small cuts available",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:228-231",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope, layering and dependency direction match the plan and architecture",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:40-65",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Every slice-plan success criterion has a design criterion",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:313-338",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Existing tests are not disturbed by the files this slice touches",
+      "location": "src/squadron/skills/installer.py:87",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-22T22:14:10.650663",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "chars": 27038,
+      "sha256": "a04a766ac25e2954187d3066b73d97a0a9460664f7c10c440da655638e4134ad",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/360-slices.document-intelligence.md",
+      "chars": 18007,
+      "sha256": "5f6dd200b484c2d5d60eb12d238b65a41d16afaa9999aaeaac6c65f16f4d8680",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "project-documents/user/slices/361-slice.graph-contract-and-provenance.md",
+    "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md",
+    "project-documents/user/reference/analyze-codebase-prompt.md",
+    "commands/sq/analysis.md",
+    "project-documents/DEVLOG.md",
+    "src/squadron/skills/installer.py",
+    "project-documents/user/analysis/942-analysis.tech-debt-audit.md",
+    "tests/metrology/test_audit_skill_sync.py",
+    "src/squadron/metrology/audit.py"
+  ],
+  "searches": [
+    "list_files commands/**/*.md in .",
+    "list_files project-documents/user/**/*36* in .",
+    "list_files project-documents/user/analysis/* in .",
+    "list_files .understand-anything/* in .",
+    "list_files project-documents/user/reference/* in .",
+    "list_files tests/skills/**/* in .",
+    "grep understand in .",
+    "list_files .understand-anything/** in .",
+    "list_files **/understand.md in .",
+    "list_files **/*codebase-comprehension* in .",
+    "grep analyzedFiles in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/.understand-anything",
+    "grep understand|trash in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/.gitignore",
+    "grep 361|362|understand-anything|knowledge-graph in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/DEVLOG.md",
+    "grep 361|362|understand-anything|knowledge-graph in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/DEVLOG.md",
+    "list_files src/squadron/data/{pipelines,templates}/* in .",
+    "grep understand|tech-debt-audit|commands/analysis|glob\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/tests/skills",
+    "list_files project-documents/user/**/*codebase-probe* in .",
+    "grep analyze-codebase-prompt in .",
+    "grep understandignore|node type|\"type\"|entry-point|languageNotes|config\\.json|autoUpdate in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/project-documents/user/slices/344-slice.add-understand-anything-to-analysis-pack.md",
+    "grep commands/analysis|commands.*analysis|understand in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/tests",
+    "grep analysis|understand in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/src/squadron/skills",
+    "list_files project-documents/user/**/94[0-9]-* in .",
+    "list_files **/.understandignore in .",
+    "grep 9\\d\\d-|94\\d|user/analysis in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/tests",
+    "grep 94\\d|9\\[0-9\\]|user/analysis|analysis\\.tech-debt-audit|-analysis\\. in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/src/squadron",
+    "grep 94\\d|user/analysis in /Users/manta/.config/squadron/reading-20261122/wt/squadron-362-design/tests/documents/test_frontmatter.py"
+  ],
+  "sections_in_document": 21,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 619523,
+  "cached_tokens": 533317,
+  "cache_write_tokens": 86188,
+  "completion_tokens": 27942,
+  "reasoning_tokens": null,
+  "duration_seconds": 264.5972064998932,
+  "cost_usd": 2.6054172,
+  "cost_basis": "provider"
+}

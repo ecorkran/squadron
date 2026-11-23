@@ -1,0 +1,131 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2.2's real-file fixture assertion cannot stay green",
+   "description": "Task 2.2 (line 67) asserts \"both groups are non-empty\" against a live task file.\n- **384's file:** it has zero unchecked list items (every 38x task file except 385 has none), so the assertion fails the moment it is written against the named interim fixture.\n- **This file:** Task 16.4 (line 371) requires every item to be `[x]` before closing, so the assertion fails after the 16.1 gate has already run, leaving a red test on `squadron-pr`.\n- **Count check:** \"counts sum to the file's checkbox count\" is ambiguous, because both files carry inline `[x]`/`[ ]` in item text (lines 59, 66, 371 here). A substring count will not match a line-anchored parser.\n\nFix: freeze a snapshot of a real task file under `tests/pr/fixtures/` (still \"the actual format\") and assert exact expected counts.",
+   "location": "project-documents/user/tasks/384-tasks.post-findings-to-the-pr.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3's detached-HEAD rule either breaks the import-boundary test or raises something nothing catches",
+   "description": "Line 79 says to \"match `github_cli._branch_for`'s existing behavior\", which raises `TargetUnresolvableError` from `squadron.codehost.errors`. `current_branch` lives in `review/git_utils.py`, and `test_review_does_not_import_codehost` (tests/codehost/test_import_boundaries.py:74-87) fails for any `review/` module importing `codehost`. Any other exception type is not a `CodeHostError`, so the only handler the plan names (Task 14, line 324) will not catch it. Task 13.1's order (line 298) also omits the current-branch step, and 13.2 has no detached-HEAD case. Name the exception type and where the command converts it.",
+   "location": "src/squadron/codehost/github_cli.py:187-191"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Refusal exception types are never named, and one existing pin depends on the choice",
+   "description": "Tasks 5.1 (line 119), 6.1 (lines 138-140), 12.1 (line 282) and 3.1 all say \"raise\" with no type, and Task 13.1 lists no handlers.\n- **Timeout at `ls-remote`:** it surfaces as a raw `ProcessTimedOutError` from the runner; only `_run_gh` converts it (github_cli.py:493-495). Task 14 expects it to exit 1 via `except CodeHostError`, so Task 6 must do the conversion and does not say so.\n- **Non-zero `ls-remote` exit:** the \"classified transport failure\" for git has no specified error.\n- **Error-count pin:** if new classes go into `codehost/errors.py`, `test_the_error_table_covers_every_subclass` (pinned to 19 with set equality) fails until updated.\n\nLine 324 is also an implementation requirement that sits only inside test Task 14.",
+   "location": "tests/cli/test_pr_show.py:333-341"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Empty commit range is declared impossible but nothing prevents it",
+   "description": "Task 7.1 says an empty range \"is impossible here\", yet Task 3.2 (line 87) tests that it returns `[]`. No precondition checks it: a pushed branch level with its base passes identity, `branch_exists` and the sha comparison. The model is then called (contradicting line 299), and Task 10a's fallback to \"the first commit's subject \u2014 always present\" (line 242) indexes an empty list. The host's 422 arrives only at the write.\n\nThe plan also never says which ref `base` resolves to locally. `--base` and the host default are host branch names; a missing local ref makes `git log` refuse, and a stale one yields the wrong commit list. Add an explicit empty or unresolvable range refusal before composition and state the ref form.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 15.1's obvious implementation fails three existing cases",
+   "description": "The guard matches with `imported.startswith(forbidden)`. Adding `\"squadron.pr\"` to `_FORBIDDEN_FROM_REVIEW` also matches `squadron.providers`, which `review/persistence.py:16`, `review/review_client.py:22-25` and `review/tool_support.py:16` import. The task should specify an exact-or-dotted-prefix match (`== \"squadron.pr\"` or `startswith(\"squadron.pr.\")`).",
+   "location": "tests/codehost/test_import_boundaries.py:76-78"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No task resolves `--model` and `--profile` into what the composer needs",
+   "description": "Task 10.1 (line 217) takes `profile: str` \"exactly as the CLI flags supply them\", but the review flag is `str | None` defaulting to `None` (review_pr.py:296). The review path resolves through `_resolve_model`, `resolve_model_alias` and `_resolve_profile` (flag \u2192 alias \u2192 config \u2192 `\"sdk\"`), all private to `review.py`. Neither Task 10 nor Task 13 says how `create` gets a default profile or turns `--model opus` into a model id. Unspecified, the implementer either hardcodes `\"sdk\"` or passes aliases raw to the provider.",
+   "location": "src/squadron/cli/commands/review.py:516-636"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 10.1's enumerated sequence omits three things both existing one-shots do",
+   "description": "- **SDK duplicate filter:** SDK providers emit the same content twice, and both one-shots skip `SDK_RESULT_TYPE`, `tool_use` and `tool_result`. Without it, on the default `sdk` profile the body prose doubles and every model title becomes \"multi-line\", silently falling back. Line 225's \"returned unmodified\" pushes away from filtering.\n- **Shutdown:** `finally: await agent.shutdown()` is not mentioned.\n- **No tools:** `AgentConfig.allowed_tools` defaults to `None`, and the SDK provider restricts tools only when it is not `None` (providers/sdk/provider.py:64-75). \"Give the model no tools\" must be `allowed_tools=[]`; 10.2's \"no tools are requested\" would pass on `None` while the agent keeps its full default set.\n\nThe sequence is also async, and no task states the `asyncio.run` bridge.",
+   "location": "src/squadron/pipeline/summary_oneshot.py:116-143"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "CLI tests \"against the fake runner\" cannot script half the command's process calls",
+   "description": "Task 3 routes `current_branch` and `commits_in_range` through `run_git`, which calls `subprocess` directly, as does Task 8's `rev-list`. `ContextForgeClient` likewise shells out to real `cf` with no seam at the command (integrations/context_forge.py:103-110). So Tasks 13.2 and 14.1 run real git and `cf` in whatever checkout the suite runs from.\n- **CI:** it uses `actions/checkout` on `pull_request` (.github/workflows/ci.yml:17), which is normally a detached HEAD, so `current_branch` raises there. CI also installs `cf`.\n- **Developer machine:** `cf` returns `squadron-pr` and triggers unscripted `branch_exists` calls.\n\n`pr.py:48-50` states the rule this splits. The tasks need to prescribe a fixture repository plus `--cwd`, and an injection point for the cf client, or route the git calls through `host.runner`.",
+   "location": "src/squadron/review/git_utils.py:27-48"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "cf reads ignore `--cwd` and only one of two cf failure types is handled",
+   "description": "`ContextForgeClient._run` has no `cwd`. Under `sq pr create --cwd <repo>` (line 297), `git.integration_branch` and the slice lookup come from the process directory's project, not the target repository. That is the wrong-base write D1 exists to prevent.\n\nTask 5.1 (line 122) covers only \"cf unavailable\". `get_config` also raises `ContextForgeError` (non-zero exit, bad JSON), which is what an unplanned repository on a machine with `cf` installed is likely to produce. The task must say whether that maps to the host default, and log it.\n\nLine 121 says \"accept an injectable client\" but the signature on line 114 has no such parameter.",
+   "location": "src/squadron/integrations/context_forge.py:96-118"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 7.1 reads only the first task file",
+   "description": "`SliceInfo.task_files` is a list, and slices 381 and 382 have two and three task files. \"Read the first task file\" (line 159) drops the other parts' items, so \"how it was verified\" and \"known gaps\" are incomplete for split slices. Entries are also bare filenames to be joined with `TASKS_DIR` under the repo cwd (persistence.py:32-35), which the task does not say. `PrInputs` is consumed by Task 9 and its fields are never defined.",
+   "location": "src/squadron/review/persistence.py:106-108"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Tasks 11 and 12 leave the prose-to-section contract for the implementer to invent",
+   "description": "The plan does not say whether composition is one model call or one per section, nor how a single response is split once \"the model's own headings are discarded\". Since squadron always emits all five headings in order, Task 12's \"missing section\" and \"out of order\" cases (line 286) are reachable only from hand-built strings. The task should say which composer outputs produce a failed check, since Task 13.2 line 309 relies on one.\n\n11.2 never asserts that the composer is not asked for prose on a no-input section (line 262). 12.2's \"no host call is made\" (line 287) is vacuous for a pure function and duplicates 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:258-262"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 6 leaves an input and an outcome open",
+   "description": "`check_head_pushed` takes `local_sha`, but no task produces it; Task 3 adds two helpers and `_resolve_rev` is private. The 6.2 case \"`ls-remote` returning no matching ref\" has no stated expected result. The return type is `None` where the slice shows `HeadState` (slice line 149).",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138-147"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Criteria only partly asserted at the command level",
+   "description": "- **Provider failure:** the criterion \"exits non-zero, logs at ERROR, creates nothing\" is tested only in `tests/pr/test_body.py` (line 227), where neither an exit code nor a host write exists. 13.2 has no composer-failure case, and the plan never says which layer turns the failure into an exit.\n- **Title-composition exception:** it is unspecified whether this refuses (Task 10) or degrades (Task 10a).\n- **13.2 gaps:** it does not assert that base and source are printed, that the dry-run title (not just the body) equals the real run's, or that creation succeeds on the unplanned path.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309-310"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The live walkthrough leaves state no step removes",
+   "description": "Step 3 creates `385-scratch`, pushes it, and leaves the checkout on it. Task 16.2 restores only the config key (line 357). Nothing deletes the local and remote scratch branch or switches back before step 5, where `sq pr create` would otherwise open the evidence PR from the scratch branch. Task 16.4 does not say what happens to the live PR when the branch is merged into `squadron-pr`.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:597-621"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Task 6.2 contradicts the success criterion as literally written",
+   "description": "The criterion says a behind branch \"fails the same way with the same command\". D2 and Task 6.2 (line 149) require different commands. The task follows D2; the criterion needs correcting.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 4's return type drops the parsed target",
+   "description": "`resolve_and_fetch_pull_request` needs `parsed` for `resolve_pull_request`, so with `tuple[CodeHost, RepositoryLocator]` it must parse twice. The task also does not say `create` passes `None` (bare form). The extraction itself is safe: the existing patches target `squadron.cli.commands.pr.build_github_host` and `.list_remotes`, which keep working if `resolve_locator` stays in `pr.py`.",
+   "location": "src/squadron/cli/commands/pr.py:53-56"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Task 15.2's new test is already satisfied by an existing one",
+   "description": "`test_capture_summary_happy_path` already routes a registered profile with no SDK reference. To add anything, the new test should use a profile for which `is_sdk_profile` is true.",
+   "location": "tests/pipeline/test_summary_oneshot.py:90-107"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Smaller inaccuracies",
+   "description": "- **Wrong consumers:** Task 1 says it is \"needed by Task 9\" and Task 2 \"by Tasks 9 and 10\"; the consumer of both is Task 7.1.\n- **Missing `__init__.py`:** every sibling test directory has one; Task 1.2 creates `tests/pr/` without it.\n- **Test isolation in 8.2:** the external-directory case must isolate `HOME` and config, because `resolve_reviews_dir` falls back to `~/.config/squadron/reviews/...` (review/reviews_dir.py:89-93).\n- **Return shape in 8.1:** it must carry the verdict Task 9 copies.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+  }
+ ]
+}

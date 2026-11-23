@@ -1,0 +1,75 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Default threshold contradicts the design's own math and the cited perf data",
+   "description": "Line 210 calculates that N=3100 spread uniformly over the whole 300\u00d7300 world gives about 132 mean neighbors, which is \"far above threshold, so brute-force is selected.\" Line 211 then says agents \"spread uniformly across the whole world\" can drop below 10. Both lines describe the same distribution and reach opposite results. The perf journal says the grid wins in exactly this phase (Entry 4 addendum: pre-flock grid 20 TPS vs brute 14 TPS). Entry 4's synthetic uniform case also has grid 3.3\u00d7 faster at a mean of roughly 16 neighbors (N=2000, r=50, 1000\u00d71000), which is above 10 + 2. So by the design's own numbers, the default `adaptive` mode would stay on brute in the scattered regime the slice is meant to capture. In practice that is brute-force plus overhead. Because the default backend changes to `adaptive` (line 187), this ships to everyone who omits the section.\n\nThe signal also has a structural problem. Brute-force cost scales as n\u00b2, while grid cost scales as roughly n\u00b7k. The crossover therefore depends on mean neighbors relative to n, not on an absolute count. Entry 4's original proposal (`max_cell / n > threshold`) was a ratio for this reason. Line 402 admits the absolute threshold goes stale when N changes and hands the problem to operators.\n\nFix: normalize the signal (for example `mean_neighbors / n`) or derive the default from the Entry 4 data points. Then fix the self-contradiction in lines 210\u2013211, so the default selects grid in the documented pre-flock regime.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:208-213"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Bit-exact integration test conflicts with the grid's documented neighbor-order caveat",
+   "description": "Step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" with a mocked density sequence that \"exercises both backends in one run.\" Slice 105 (line 100, line 203) and this slice's own line 431 say the grid's neighbor order within a row may differ from brute's. CSR forces sum with `np.add.reduceat`, so a different order changes floating-point summation order. With `max_neighbors` set, `argpartition` tie-breaking can also pick different neighbors. Bit-exact parity across a backend switch is therefore not achievable. Lines 359 and 335 add \"modulo documented determinism caveats\" and \"all 652 tests pass under grid,\" which also conflict with any existing test that asserts exact values.\n\nFix: require bit-exactness only for brute-only and adaptive-while-on-brute runs. Use neighbor-set equality per tick plus a tolerance-based position comparison whenever the grid is active. Also narrow line 335 to the end-to-end suites named at line 432, rather than all 652 tests.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Backend selection makes tick output depend on hidden history (determinism and replay)",
+   "description": "The architecture's \"Tick determinism\" goal exists to enable replay and eventual distributed agreement. Because the backends produce different neighbor orderings (see the previous finding), the floating-point result of a tick now depends on `_selected`. That is dispatcher state built up from earlier ticks and not stored in the agent state arrays. Replaying from the start is still deterministic. Replaying or resuming from a mid-run snapshot, or having two regions agree from boundary state, will diverge unless the selected backend is recorded too.\n\nFix: state this explicitly in the design. Either (a) expose the selected backend so the server can include it in logged and replayed state, or (b) make grid output row-order canonical so the backend choice cannot affect results. Option (b) is out of scope here, since the slice excludes changes to `HashGridQuery`, so (a) or an explicit documented limitation is the proportionate answer.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#density-signal-and-switching-logic"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `tick.py` `record_density` hook and `hasattr` guard are unnecessary",
+   "description": "The wrapper already sees the backend's `counts` in its own `query_radius_batch` return path. Each evaluated agent always finds itself at distance 0, so `filtered_counts == counts - 1` row by row. The wrapper can therefore record the density itself, at the same cost. Doing that would remove:\n- the engine-layer change to `tick.py`\n- the duck-typed `hasattr` informal protocol, a hidden dependency the design defends at lines 162\u2013164 and 437\n- the `record_density` public method and the test for the guard (line 344)\n\nThis also makes \"the dispatcher is invisible to every existing consumer\" (line 254) literally true and settles the inconsistency between \"raw `counts`\" (line 27) and `filtered_counts` (line 116). Cut the hook and record density inside `AdaptiveSpatial.query_radius_batch`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is promised to operators but not in config; backend names and defaults are scattered",
+   "description": "Lines 37, 301 and 400 say operators can set `initial_backend: grid`. But `SpatialConfig` (lines 171\u2013176) has no such field, `_build_spatial` hard-codes `initial_backend=\"brute\"` (line 238), and line 305 says threshold and band are \"the only dispatcher parameters.\" Choose one: add the field with validation, or remove the operator-facing claims.\n\nRelated project-rule problems in the same design:\n- The `\"adaptive\" | \"grid\" | \"brute\"` string literals appear in config validation, `_build_spatial`, and `AdaptiveSpatial.__init__`. CLAUDE.md requires comparison values to be defined once (an enum).\n- `AdaptiveSpatial.__init__` has its own defaults (`hysteresis_band=0.0`, `initial_backend=\"brute\"`, line 88). Line 136 says \"A reasonable default lives in the config layer rather than hardcoded in the dispatcher,\" and CLAUDE.md forbids magic defaults outside config. Remove the constructor defaults.\n- `_validate_spatial` does not reject `hysteresis_band >= grid_threshold_mean_neighbors`. In that case `m < t - h` can never hold, so brute\u2192grid never fires and adaptive mode silently becomes brute-only. Add that check.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:171-176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Zero active agents produces a divide-by-zero or NaN that silently freezes backend selection",
+   "description": "The signal is `counts.sum() / n_active` (line 25 uses `len(counts)`). Under the architecture's subset-evaluable tick, and under world-server entity management, `n_active` can be 0, either from an empty population or an empty evaluation subset. NumPy then yields NaN, every comparison in the switching rule (lines 132\u2013133) is false, and the dispatcher stays on its current backend with no signal. That conflicts with the \"never use silent fallback values\" rule. Specify the behavior: skip the update when `n_active == 0` and leave the backend unchanged, with that behavior documented and tested.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Switch observability is required by the walkthrough but never designed",
+   "description": "Walkthrough step 5 depends on \"`grid_selected` count in the dispatcher's log output\" and on `brute_selected` dominating. Step 4 needs \"the ratio of ticks served by grid vs. brute.\" No Architecture section defines these counters, a log line on switch, its level, or how often it is emitted. Without it, the flip-flop risk at line 398 cannot be detected in practice, and the project's failure-mode rule requires backend switches to be observable. Specify a log record on each switch (old backend \u2192 new backend, `m`, tick) and per-backend tick counters exposed by `AdaptiveSpatial`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Minor internal inconsistencies",
+   "description": "- Line 340 calls `record_density` \"O(1) given `counts.sum()` already known,\" but it computes `.sum()` itself, which is O(n_active). That is cheap, but the claim is wrong.\n- Line 25 says the swap happens \"on the next tick's `build`,\" while line 110 says `record_density` changes the selection.\n- Line 120 gives brute's cost as `n_active \u00d7 n`, while line 278 says `n\u00b2 / 2`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:340"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The empty-profile `cell_size` fallback is carried over from slice 105",
+   "description": "Falling back to `max(world.width, world.height)` keeps slice 105's existing behavior, so it is not a regression. It is still a silent fallback that produces a single-cell grid, which is always slower than brute. Consider raising a `ConfigError` for `backend: grid` with no profiles. Also, \"in the same module\" at line 219 does not say which module gets `_derive_cell_size`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The \"pluggable dispatcher pattern\" overstates extensibility",
+   "description": "`AdaptiveSpatial` has exactly two backends and a binary threshold rule. A third backend (KD-tree) would need a new decision rule and constructor shape, not just a slot. That is fine for this slice, and nothing more general should be built now. The \"Provides\" claim should just say it is a two-backend dispatcher.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:313"
+  }
+ ]
+}

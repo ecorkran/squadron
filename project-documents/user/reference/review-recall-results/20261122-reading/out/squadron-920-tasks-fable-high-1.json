@@ -1,0 +1,408 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 7 places the pipeline inspection after `progressed = True`, so every rejected event resets the retry budget",
+      "description": "Task 7 (task line 70) says to add the `RateLimitEvent` inspection \"before the existing `ResultMessage.is_error` check\". That check is at line 156, but `progressed = True` is at line 153, the first statement in the loop body.\n\n- **Today:** the throttle is raised from the iterator, so `progressed` stays `False` when a throttle is the first thing to arrive.\n- **After Task 7 as written:** the rejected event is a yielded message, so `progressed` is set before the raise. The handler at lines 190-191 then resets `retries = 0` on every throttle.\n- **Effect:** the delay is always 2s, the budget of 10 is never reached, and a sustained throttle retries without bound. This breaks slice criterion 5 (budget, exponential schedule and `progressed` reset unchanged) on the path the slice calls most likely to half-land.\n- **Not caught:** Task 11's rewritten `test_dispatch_retries_on_rate_limit` throttles twice then succeeds, with no sleep or budget assertion.\n\nFix: Task 7 must put the inspection ahead of `progressed = True`, or set `progressed` only for non-rate-limit messages. Task 11 needs a test that a first-message rejected event on every call exhausts the budget with growing delays.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:153-156"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 6 gives contradictory instructions for informational events, and one reading leaks them into four agent-path consumers",
+      "description": "Task 6 (task line 61) says to \"log at DEBUG and continue the loop without yielding it to the caller\" and, in the same sentence, to \"let it flow to translation as normal\". On the agent paths, translation only sees what `_skip_unparseable` yields (`agent.py:155-156`, `203-205`), so these cannot both hold. The slice carries the same split: D4 (slice lines 264-266) says \"must not reach translation\", while the data flow (line 329) says it continues to translation.\n\nIf the implementer picks \"flow to translation\", Task 4's new system message reaches four consumers that append anything not in their exclusion lists:\n\n- `review/review_client.py:263-265`\n- `pipeline/summary_oneshot.py:139-141`\n- `metrology/audit.py:542-559`\n- `pipeline/actions/dispatch.py:165-167`\n\nThat is the issue #22/#23 defect on the review, summary, audit and agent-dispatch paths. Task 8 (task line 79) only says to \"verify no other `sdk_type` exclusion list exists\" by grepping `SDK_RESULT_TYPE`. The grep returns these four sites and the task gives no instruction for them.\n\nTwo further gaps:\n\n- Task 10's new test (task line 98) asserts no raise and `throttles == 0`, but not whether a `rate_limit_event` message comes out of `handle_message`. It passes under either reading.\n- Task 4 never specifies `content`, which is a required `str` (`core/models.py:88`).\n\nFix: state that on the agent paths an informational event is logged and not yielded, so translation's branch is reached only from `sdk_session.dispatch`. Have Task 10 assert no `sdk_type == \"rate_limit_event\"` message leaves `handle_message`. Rewrite Task 8's grep step to name the four consumers and why they need no change. Give Task 4 a concrete `content`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers sit at red points, and the tests for Tasks 6\u20139 arrive only in Tasks 10\u201311",
+      "description": "The plan commits after nearly every task, written as checkboxes (`- [ ] Commit:`) instead of plain marker lines. Several of those commits land on a failing suite:\n\n- **Task 1:** per the slice's probe, `rate_limit_event` now parses to `RateLimitEvent` without raising. `test_the_shim_absorbs_informational_events` (asserts `SystemMessage`, line 712) and `test_the_shim_lets_a_rejected_event_raise` (expects `MessageParseError`, line 723) fail from this commit until Task 10. Task 1 runs no tests.\n- **Task 6:** removing the `is_rate_limit_event` re-raise makes `test_a_rejected_rate_limit_event_reaches_the_backoff` (lines 648-681) fail until Task 10.\n- **Task 9:** deleting the shim makes all four `test_the_shim_*` tests fail on import until Task 10.\n- **Task 4:** the translated notice is appended to `dispatch`'s text (`sdk_session.py:173-174`) until Task 8 lands.\n\nTasks 6, 7, 8 and 9 each commit with no test run, and their tests do not immediately follow.\n\nFix:\n- Delete the four shim tests in Task 1, since the bump is what invalidates them.\n- Pair Task 6 with the `test_agent.py` rewrite.\n- Pair Tasks 7 and 8 with the `test_sdk_session.py` rewrite.\n- Put plain commit marker lines only at those green points. `CLAUDE.md:36` asks for a commit per task, which pairing still satisfies.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "tests/providers/sdk/test_agent.py:648-762"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6 says \"both\" marker gates in `agent.py`; there are three uses, and the third decides `ProviderRateLimitError`",
+      "description": "Task 6 (task line 63) replaces \"both `RATE_LIMIT_MARKER in str(exc)` gates\". `agent.py` has three: the retry gates at lines 167 and 216, and the exhaustion classifier at line 180 that chooses `ProviderRateLimitError` over `ProviderError`.\n\nNo task specifies `RateLimitRejected`'s message text. If it lacks `rate_limit`, exhaustion raises plain `ProviderError`. That breaks criterion 6 and the audit's `except ProviderRateLimitError` (`audit.py:693`). If the implementer adds the substring to make the tests pass, classification still rests on the substring D4 says must not be the gate.\n\nFix: Task 6 should name line 180 and switch it to `_is_throttle(exc)`. It should then also say to drop the `RATE_LIMIT_MARKER` import from `agent.py`, which becomes unused (ruff F401); Task 7 needs the same for `sdk_session.py:35`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Importing `_is_throttle` into `agent.py` and `sdk_session.py` will fail pyright strict",
+      "description": "Task 2 defines a module-private `_is_throttle`, and Tasks 6 and 7 use it from two other modules. `pyproject.toml:96` sets `typeCheckingMode = \"strict\"` over `src`, which reports private names used outside their module. The codebase already suppresses that rule at `agent.py:21`. Criterion 11 requires zero pyright errors, and the plan only discovers this in Task 13 with no remedy named.\n\nFix: give the helper a public name in Task 2, or state the ignore comment at both import sites.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/rate_limit.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3's test trips Task 10's success grep",
+      "description": "Task 3 (task line 41) adds `_is_throttle(ClaudeSDKError(\"rate_limit_event: slow down\"))` to `test_agent.py`. Task 10's success check (task line 99) requires that a grep for `ClaudeSDKError(\"rate_limit_event` in that file return no matches. Both cannot pass.\n\nTask 3's run command (`-k \"classif or throttle or RateLimitRejected\"`, task line 42) also selects by test name. `event_blocks` tests named otherwise are silently not run, and if the tests go in the \"new focused module\" the task permits, nothing is selected.\n\nFix: use a non-`rate_limit_event` string for the retained-substring test (for example `\"429 rate_limit exceeded\"`) or put it in a different file. Run the test class or file directly instead of a `-k` filter.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "tests/providers/sdk/test_agent.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15's audit command does not run as written",
+      "description": "Task 15 (task line 135) runs `uv run sq metrology audit run -v`. `audit_run` takes a required `project_paths` argument and has no `-v`/`--verbose` option; its options are `--profile`, `--model`, `--json` and `--cwd`. Neither `app.py` nor the metrology app adds a verbose flag. The command exits with a usage error before any audit starts, and this is a step the slice marks mandatory.\n\nFix: give the command a project path and drop `-v`. If WARNING visibility needs a logging setting, name it. Task 14's `sq review code --diff HEAD~1 -v` is valid (`review.py:985-1007`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/metrology.py:784-791"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15's forced-throttle patch has no revert command, and nothing re-checks the tree after it",
+      "description": "Task 15 (task line 137) asks for a \"local, uncommitted patch\" to source and then \"Revert this injection before committing\". No command undoes it or proves it is gone, and Task 13's test and lint gate runs before the patch exists. If the step is interrupted, the patch stays in the tree and Task 16's commit can include it.\n\nThe step is also under-specified for a junior implementer:\n\n- It does not say which path to inject into. Both the review and the audit run in agent client mode (`review_client.py:200`, `audit.py:647`).\n- It does not say which command to run with the injection in place.\n- It does not say the injection must fire once. An every-call injection exhausts the budget instead of showing \"the run continues\".\n\nFix: name the file and seam, make the injection one-shot, and name the command. End with `git checkout -- <file>` and a `git status --porcelain src tests` check that must be empty before Task 16.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:203"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 3's stats and WARNING are not verifiable on the pipeline path",
+      "description": "Criterion 3 requires `RateLimitStats.throttles` to increment and a WARNING naming the attempt on all three dispatch paths. `sdk_session.dispatch` logs the WARNING but has no `RateLimitStats`; stats exist only on `ClaudeSDKAgent` (`agent.py:65`, `176`, `225`). Task 11 asserts only `\"done\" in result` and `call_count == 3`. Task 15 allows the forced observation \"in one dispatch path\", where the stats check is impossible if that path is the pipeline. No test in the plan asserts the WARNING on any path.\n\nFix: record in Task 7 or 11 that the pipeline path has no stats counter, and assert the WARNING there with `caplog`. Alternatively add the counter, which widens the slice's scope.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:192-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's claim about the `rate_limit.py` docstring is wrong, and the stale text that does exist is not assigned",
+      "description": "Task 9 (task line 85) says the module docstring \"currently narrates the shim's history and purpose as the module's lead description\". Lines 1-8 do not mention the shim. They describe consolidating the retry budget, marker and backoff. Told to remove shim narration, an implementer finds none.\n\nThe stale text sits elsewhere and no task covers it:\n\n- `rate_limit.py:30-32`: the `RATE_LIMIT_MARKER` comment about parse failures being \"classified structurally below\".\n- `agent.py:145` and `agent.py:187-191`: handler docstrings saying \"the SDK raises `ClaudeSDKError`\".\n- `sdk_session.py:132-135`: `dispatch`'s docstring with the same claim, plus a reference to a non-existent `_MAX_RATE_LIMIT_RETRIES`.\n\nSlice Part B (slice lines 354-355) requires the stale docstrings in `_skip_unparseable` and the dispatch methods to be rewritten. Tasks 6 and 7 cover only `_skip_unparseable`'s docstring and one comment block in `dispatch`.\n\nFix: correct Task 9's description, and add these four sites to Tasks 6, 7 and 9.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/rate_limit.py:1-8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sixteen tasks for a 3/5 slice; three can merge",
+      "description": "- **Task 8** is a one-tuple edit in the function Task 7 is already editing. Merging also closes the leak window noted above.\n- **Task 12** changes nothing, and its only command is subsumed by Task 13's `uv run pytest tests/providers tests/metrology -q`. Fold its two confirmations into Task 13.\n- **Tasks 4 and 5** are one branch and one test, and can be a single task.\n\nTask 13's success line says \"all four commands\" but lists six.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smaller inaccuracies against the code",
+      "description": "- Task 10 (task line 97) puts `test_other_unknown_messages_are_still_skipped` in `TestUnparseableMessages`; it is in `TestRateLimitBackoff` (line 765).\n- Task 5 says \"create if it does not exist\"; `tests/providers/sdk/test_translation.py` exists, and its `TestUnknownTypes` class (lines 221-232) is the natural neighbour.\n- Tasks 4 and 8 hard-code the literal `\"rate_limit_event\"` although `RATE_LIMIT_EVENT_TYPE` (`rate_limit.py:46`) is retained. After Task 9 that constant and `rate_limit_event_blocks` have no caller in `src` or `tests`.\n- Criterion 2 covers `src/` and `tests/`. Task 9 greps only `src`, and no later step runs the walkthrough's `src tests` grep after Task 10.\n- Task 16 updates the slice and architecture statuses but not this task file's own `status: not_started` (task line 10).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "tests/providers/sdk/test_agent.py:765"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Criterion 6's audit half is unreachable from a rejected event in client mode, and that predates this slice",
+      "description": "The audit runs in client mode (`audit.py:647`). Client-mode exhaustion re-raises into the outer handler, which converts to plain `ProviderError`, so `audit.py:693` never sees `ProviderRateLimitError` from that path. This is existing behaviour, and Task 12's tests construct `AuditRunResult` directly. No test in the plan drives a rejected event through to `RATE_LIMITED`. Worth a line in the DEVLOG so the \"still reports\" wording is not read as end-to-end verified.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:228-238"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`RateLimitInfo` import path and constructor are unverifiable here",
+      "description": "Tasks 3, 5, 10 and 11 and the Notes (task line 152) assume `RateLimitEvent` and `RateLimitInfo` import from the top-level `claude_agent_sdk`, and leave the constructor arguments as `...`. The SDK is not installed in this worktree and `uv.lock` still resolves 0.1.38. Task 2 or 3 should record the actual import path and required fields once Task 1 has synced.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task 12's determination that two test files need no rewrite matches the code",
+      "description": "The slice lists `test_provider.py` and `test_audit_cli.py` among affected files. `test_provider.py` has no shim reference and only checks retry/cap plumbing. `test_audit_cli.py:355` and `:390` build `AuditRunResult` directly. No fabricated SDK exception exists in either, and leaving `tests/providers/openai/test_agent.py` alone matches the slice.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "tests/providers/sdk/test_provider.py:194-206"
+    },
+    {
+      "severity": "PASS",
+      "title": "Criteria-to-task traceability and stated code facts hold",
+      "description": "Criteria map as follows, subject to the findings above:\n\n| Criterion | Tasks |\n| --- | --- |\n| 1 | 1 |\n| 2 | 7, 9, 10 |\n| 3 | 6, 7, 10, 11, 15 |\n| 4 | 4, 6, 8, 10, 11 |\n| 5 | 10 |\n| 6 | 10, 12 |\n| 7 | 2, 3 |\n| 8 | 6, 10 |\n| 9 | 10, 11 |\n| 10 | 10, 11 |\n| 11 | 13 |\n\nWalkthrough steps 3\u20135 map to Tasks 14\u201315. Facts verified against the code:\n\n- The pin at `pyproject.toml:30` and the 0.1.38 lock entry.\n- The 50-line shim at `rate_limit.py:56-105`, with call sites at `provider.py:43` and `sdk_session.py:100`.\n- The four shim test names, and every test named in Tasks 10 and 11.\n- The exclusion tuple at `sdk_session.py:173`.\n- Root `DEVLOG.md`, the `project-documents/DEVLOG.md` stub, architecture entry 18, and `.claude/agents/task-checker.md`.\n\nNo task is scope creep. The slice restates no NFR, so no load test or CI wiring is owed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:373"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 7 places the pipeline inspection after `progressed = True`, so every rejected event resets the retry budget",
+      "location": "src/squadron/pipeline/sdk_session.py:153-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 6 gives contradictory instructions for informational events, and one reading leaks them into four agent-path consumers",
+      "location": "src/squadron/review/review_client.py:263",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers sit at red points, and the tests for Tasks 6\u20139 arrive only in Tasks 10\u201311",
+      "location": "tests/providers/sdk/test_agent.py:648-762",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 6 says \"both\" marker gates in `agent.py`; there are three uses, and the third decides `ProviderRateLimitError`",
+      "location": "src/squadron/providers/sdk/agent.py:180",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Importing `_is_throttle` into `agent.py` and `sdk_session.py` will fail pyright strict",
+      "location": "src/squadron/providers/sdk/rate_limit.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Task 3's test trips Task 10's success grep",
+      "location": "tests/providers/sdk/test_agent.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 15's audit command does not run as written",
+      "location": "src/squadron/cli/commands/metrology.py:784-791",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 15's forced-throttle patch has no revert command, and nothing re-checks the tree after it",
+      "location": "src/squadron/providers/sdk/agent.py:203",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Criterion 3's stats and WARNING are not verifiable on the pipeline path",
+      "location": "src/squadron/pipeline/sdk_session.py:192-202",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 9's claim about the `rate_limit.py` docstring is wrong, and the stale text that does exist is not assigned",
+      "location": "src/squadron/providers/sdk/rate_limit.py:1-8",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Sixteen tasks for a 3/5 slice; three can merge",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Smaller inaccuracies against the code",
+      "location": "tests/providers/sdk/test_agent.py:765",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion 6's audit half is unreachable from a rejected event in client mode, and that predates this slice",
+      "location": "src/squadron/providers/sdk/agent.py:228-238",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "`RateLimitInfo` import path and constructor are unverifiable here",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 12's determination that two test files need no rewrite matches the code",
+      "location": "tests/providers/sdk/test_provider.py:194-206",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criteria-to-task traceability and stated code facts hold",
+      "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:373",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-22T22:15:26.901427",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "chars": 23344,
+      "sha256": "5f55b77dce2658c602e2f9803b0dbfd385d296e31f2429a0bce0e57df0efdabd",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "chars": 25364,
+      "sha256": "5ac1daf01a867945406ec46d4f83202136d6b767df4fafc069b020cc842ffbfd",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/providers/sdk/rate_limit.py",
+    "src/squadron/providers/sdk/agent.py",
+    "src/squadron/pipeline/sdk_session.py",
+    "src/squadron/providers/sdk/translation.py",
+    "src/squadron/providers/sdk/provider.py",
+    "tests/providers/sdk/test_agent.py",
+    "tests/pipeline/test_sdk_session.py",
+    "src/squadron/review/review_client.py",
+    "src/squadron/pipeline/summary_oneshot.py",
+    "src/squadron/metrology/audit.py",
+    "src/squadron/pipeline/actions/dispatch.py",
+    "src/squadron/core/models.py",
+    "pyproject.toml",
+    "tests/providers/sdk/test_translation.py",
+    "DEVLOG.md",
+    "src/squadron/cli/commands/run.py",
+    "src/squadron/cli/commands/metrology.py",
+    "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "CLAUDE.md",
+    "tests/providers/sdk/test_provider.py"
+  ],
+  "searches": [
+    "grep install_rate_limit_parser_shim|is_rate_limit_event|RATE_LIMIT_MARKER|claude_agent_sdk\\._|SDK_RESULT_TYPE|rate_limit_event|MessageParseError in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks",
+    "list_files **/claude_agent_sdk/{__init__,types}.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks",
+    "grep claude-agent-sdk|pyright|reportPrivateUsage|typeCheckingMode|vulture|\\[tool\\. in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/pyproject.toml",
+    "grep RATE_LIMITED|ProviderRateLimitError|rate_limit_stats|\"rate_limit\"|rate_limit\" in|CLAUDECODE in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/src",
+    "grep shim|rate_limit|sdk_type|translate_sdk_message|_is_throttle|event_blocks in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/tests",
+    "list_files tests/providers/sdk/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks",
+    "list_files {DEVLOG.md,CLAUDE.md,AGENTS.md,uv.lock,project-documents/DEVLOG.md,project-documents/user/architecture/900-*,.claude/agents/*,tests/load/**,.github/workflows/*} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks",
+    "grep 920|^\\s*18\\.|\\b18\\b.*SDK|claude-agent-sdk in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "grep name = \"claude-agent-sdk\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/uv.lock",
+    "grep DEVLOG|CHANGELOG|task-checker|[Cc]ommit|pyright|ruff|uv run in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/CLAUDE.md",
+    "grep \"--diff\"|\"--verbose\"|\"-v\"|command\\(\"(code|run|audit)\"|add_typer\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/src/squadron/cli",
+    "grep pytest|pyright|ruff|load in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/.github/workflows/ci.yml",
+    "grep verbose|callback in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/src/squadron/cli",
+    "grep \"mode\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-920-tasks/src/squadron"
+  ],
+  "sections_in_document": 3,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 37,
+  "prompt_tokens": 617328,
+  "cached_tokens": 504998,
+  "cache_write_tokens": 112316,
+  "completion_tokens": 32815,
+  "reasoning_tokens": null,
+  "duration_seconds": 307.5150137920864,
+  "cost_usd": 3.2130634000000002,
+  "cost_basis": "provider"
+}

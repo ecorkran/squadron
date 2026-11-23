@@ -1,0 +1,319 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T points at the wrong test setup",
+      "description": "Line 107 says to follow the setup in `validate.test.ts`. That file mocks `@context-forge/core/node` and stubs `validateFrontmatterFiles`. It also replaces `FileProjectStore` with `vi.fn().mockImplementation`. Its own comment in `validate-worktree-scope.test.ts:26-28` says `restoreAllMocks` strips that implementation.\n\nThe design command needs real fixtures: the real template, real files, and a registered project whose `projectPath` holds the guide. `validate-worktree-scope.test.ts` is the right base, with a plain class store and real directories. The task should name that file as the base.\n\nIt should also say how to capture \"empty stdout\". `printJson` writes through `process.stdout.write` (`formatter.ts:5`), while human output would use `console.log`. The test has to spy on both. Without that, \"exit 2 with empty stdout\" can't be asserted.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:10-21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers use the wrong format",
+      "description": "The commit markers are written as checkbox tasks (`- [ ] **Task 2C: Commit** \u2014 ...`). They should be plain `**Commit**:` lines, never checkboxes. The placement is good: after tested units, with 5C and 6C conditional. Only the form needs fixing.\n\nThe Task 2C commit message says only \"validator\", but the commit also contains the Task 1 constant (see the granularity finding).",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71,94,117,126,134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No CHANGELOG entry for a new user-facing command",
+      "description": "`CHANGELOG.md` has an `[Unreleased]` section. It says entries answer \"What can I do now that I couldn't do before?\". Slices 213, 241 and 242 each had a task that adds a CHANGELOG entry.\n\nSlice 214 adds a new command. The guide session is told to wait for a release that ships it, and that release needs the entry. Task 6 only checks the README. Add a CHANGELOG `[Unreleased]` \u2192 Added bullet to Task 6, and change its 6C commit message.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "CHANGELOG.md:16"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 1 is too granular and its constant sits unused until Task 4",
+      "description": "Task 1 is a one-line constant with no consumer until Task 4. It is committed under the \"validator\" message at 2C, so it lands in a commit that has nothing to do with it. Merge it into Task 4, where it is first used.\n\nIts hedge, \"add it there if the barrel lists names explicitly\", is also unnecessary. `packages/core/src/guides/index.ts:4-32` does list names explicitly, so `SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` must be added to that list. `GUIDE_RELATIVE_PATH` is exported at line 24. State that as a required step.",
+      "file_ref": null,
+      "category": "task-scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 may need a registered project, and no project-resolution failure is covered",
+      "description": "The new command resolves the checkout like `frontmatter` does. That path throws a `UserError` and exits 2 when no project is found (`project.ts:96-103`) or `projectPath` is unset (`validate.ts:160`). Neither case is listed in the design's exit-2 causes. No task names it or tests it.\n\nWalkthrough steps 1\u20136 in Task 5 only work if the invoking directory resolves to a registered project, or if `--project` is passed. Task 5 doesn't say so. Add a precondition line to Task 5 and a \"project not found \u2192 exit 2, empty stdout\" case to Task 4T. Also say that the empty-file-list check must run before project resolution. Line 99 lists it first, but doesn't say the order matters.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:152-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T repeats core-level cases, so it is heavier than needed",
+      "description": "Task 3T already tests the broken copy (missing `## Value`), a missing `docType`, multiple files in order, and the exit-2 errors at the core level. Task 4T repeats those through the CLI. That is fine for output format and exit codes. It does not need to re-prove the matching logic.\n\nTrim 4T to what only the CLI adds:\n- the human and `--json` formats\n- the exit code mapping\n- empty stdout on exit 2\n- the worktree template\n- the real-design smoke test\n\nTask 2T's `#hashtag` case traces to a design decision, not a success criterion. It is cheap, so keep it as is.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:106-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T's real-design test depends on the bash script and is not reproducible",
+      "description": "The step says \"several files \u2026 that pass the bash script today\". The junior has to run the bash script to find them, and no step says to hard-code the resulting list. Say how to pick them: run the sweep first and hard-code 3\u20134 filenames, plus the 214 design.\n\nNote that these tests also fail whenever a guide update changes the real template. `cf guides update` overwrites `project-documents/ai-project-guide/`. That coupling is required by the slice's success criteria, so keep it. Add a comment in the test saying why, so a failure after a guide bump reads as a template change.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`parseFrontmatter` swallows read errors and takes a path",
+      "description": "Task 3 says to wrap unexpected `fs` errors in `SliceDesignValidationError`. `parseFrontmatter` takes a path, re-reads the file, and never throws (line 63). If a file passes preflight and then becomes unreadable, the result is a `doctype` failure with exit 1, not exit 2. Each file is also read twice.\n\nPreflight makes this a narrow race, so I'm not escalating it. Task 3 could note that `parseFrontmatter` is called only after preflight, or read the file once.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:9-66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity differences beyond the leniency list in Task 5",
+      "description": "Task 5 treats any `DIFF` outside \"quoted docType, CRLF, `\\r`, real heading syntax\" as a bug. Two more differences follow from design choices and would be flagged wrongly:\n- `parseFrontmatter` requires a closing `---` (lines 61-62), and the bash awk does not.\n- The new heading regex `^(#{1,6})\\s+` rejects `#######` and tab-separated lines, which the bash `'#'*' '*` glob accepts.\n\nWiden the list, or say \"other differences that trace to the design's normalization rules\". The sweep also compares only the first word (PASS/FAIL) of the first line, not the `missing:` lines.",
+      "file_ref": null,
+      "category": "parity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and sequencing",
+      "description": "Every functional and technical criterion has a task:\n- the PASS/FAIL output, `docType` failure, multi-file ordering, `--json`, and worktree template are in Tasks 4 and 4T\n- the exit-2 cases and the valid-before-missing run are in 3T and 4T\n- the real-template and real-design tests are in 3T and 4T\n- build, lint and the full suite are in Task 6\n\nTest tasks directly follow their implementation tasks. There are no circular dependencies: core pure, then file layer, then CLI. I found no scope creep beyond the Task 1 split, and the \"after release\" note is correctly kept out of the task list.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about existing code",
+      "description": "These claims check out:\n- `validate.ts` is 258 lines.\n- `GUIDE_RELATIVE_PATH` is in `guides/types.ts:313`.\n- `handleError(err, 2)`, `withJsonOption` and `withProjectOption` exist as described.\n- `resolveOperationPath` is at `worktree-overlay.ts:16`.\n- The real template exists and has the required markers, including `## Overview` and `### Verification Walkthrough`.\n- The README `cf validate` row (`README.md:355`) has no subcommand list.\n- Nothing in `packages` hard-codes the template path.\n- None of the new export names collide with existing ones.\n- `command catalog` builds from the command tree, with no pinned counts.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:258"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 4T points at the wrong test setup",
+      "location": "packages/cli/tests/commands/validate.test.ts:10-21",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers use the wrong format",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71,94,117,126,134",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "No CHANGELOG entry for a new user-facing command",
+      "location": "CHANGELOG.md:16",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-scope",
+      "raw_category": null,
+      "summary": "Task 1 is too granular and its constant sits unused until Task 4",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 5 may need a registered project, and no project-resolution failure is covered",
+      "location": "packages/cli/src/commands/validate.ts:152-162",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 4T repeats core-level cases, so it is heavier than needed",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:106-115",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 4T's real-design test depends on the bash script and is not reproducible",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`parseFrontmatter` swallows read errors and takes a path",
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:9-66",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "parity",
+      "raw_category": null,
+      "summary": "Parity differences beyond the leniency list in Task 5",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Claims about existing code",
+      "location": "packages/cli/src/commands/validate.ts:258",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-22T23:47:18.829868",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "chars": 12695,
+      "sha256": "87155cbb0f5c578fc113faf557788e8caf65ba493cef947ff358e4a0d81207a5",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+      "chars": 14710,
+      "sha256": "bd688be4953dc08270a60ad5582972b1329230b82e11a5314f9d918e23dfc4d8",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/guides/types.ts",
+    "packages/cli/src/commands/validate.ts",
+    "packages/core/src/guides/index.ts",
+    "packages/core/src/index.ts",
+    "packages/core/src/node.ts",
+    "project-documents/ai-project-guide/scripts/validate-slice-design",
+    "packages/cli/src/utils/errors.ts",
+    "packages/core/src/introspection/parsers/frontmatterParser.ts",
+    "project-documents/ai-project-guide/project-guides/templates/slice-design.md",
+    "packages/cli/tests/commands/validate.test.ts",
+    "packages/cli/tests/commands/validate-worktree-scope.test.ts",
+    "packages/cli/src/options.ts",
+    "CHANGELOG.md"
+  ],
+  "searches": [
+    "list_files packages/core/src/guides/index.ts in .",
+    "grep frontmatterSchema|frontmatterFileValidator|guides/index|guides/ in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/core/src",
+    "list_files project-documents/ai-project-guide/**/{slice-design.md,validate-slice-design} in .",
+    "grep export (async )?function parseFrontmatter|export function parseFrontmatter in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/core/src",
+    "list_files packages/cli/tests/commands/validate*.test.ts in .",
+    "grep ai-project-guide|submodules in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks",
+    "grep cf validate|validate frontmatter in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks",
+    "grep export (async )?function (resolveProjectWorktree|resolveOperationPath) in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/src/utils",
+    "list_files project-documents/user/tasks/21[23]-tasks*.md in .",
+    "grep CHANGELOG|changelog|Unreleased in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/project-documents/user/tasks",
+    "grep validate|commands list|registerValidateCommand in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli",
+    "grep templates/slice-design|slice-design\\.md in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages",
+    "list_files packages/core/tests/schema/*.test.ts in .",
+    "grep \"lint\"|\"test\"|\"build\" in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/package.json",
+    "grep requiredHeadings|missingHeadings|documentHeadingKeys|HeadingKey|RequiredHeading|DesignValidationResult|SliceDesignValidationError in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages",
+    "grep setJsonMode in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/src",
+    "grep export function printJson in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli/src/output/formatter.ts",
+    "grep ai-project-guide in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks",
+    "grep validate|toHaveLength|subcommands in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages/cli",
+    "grep frontmatter in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-214-tasks/packages"
+  ],
+  "sections_in_document": 2,
+  "sections_not_covered": [
+    "Tasks"
+  ],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 34,
+  "prompt_tokens": 378002,
+  "cached_tokens": 318572,
+  "cache_write_tokens": 59414,
+  "completion_tokens": 17168,
+  "reasoning_tokens": null,
+  "duration_seconds": 126.75760575011373,
+  "cost_usd": 0.44253459999999994,
+  "cost_basis": "provider"
+}

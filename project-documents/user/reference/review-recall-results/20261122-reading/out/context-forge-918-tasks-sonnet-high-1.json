@@ -1,0 +1,290 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 1's unindexed `[~]` fixture line cannot match `PLAN_UNINDEXED_RE`",
+      "description": "Task 1 (lines 40-41) adds `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.`. That line has no `**\u2026**` bold wrap. `PLAN_UNINDEXED_RE` requires `\\*\\*([^(].*?)\\*\\*`, so even after Task 2 widens the class this line is still silently dropped. The Task 1 success text contradicts itself: it asks for \"same `**Name**` bold-wrap\" but only for the indexed form. Task 5's assertion that the unindexed entry parses with `indexSource: 'fallback'` cannot pass. The line needs to be `7. [~] **Feature Epsilon** \u2014 cut for scope.`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Adding the two lines to `sample-slice-plan.md` breaks existing tests that no task updates",
+      "description": "The unindexed entry gets `index: 1` from `unindexedCounter`, and `entries.sort` puts it first. That shifts every positional assertion:\n- Lines 12-31 expect `entries[0]` to be 101 and `entries[2]` to be 103.\n- Lines 166-167 check `entries[0].description` and `entries[1].description`.\n- Lines 126-129 assert every entry in this fixture has `indexSource === 'explicit'`. The fallback entry fails it.\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` asserts `totalSlices` is 5 for this fixture. No task touches it.\n\nTask 5 only updates the length and the `totalSlices`/`completedSlices` test, and Task 1 forbids altering existing lines. The slice's own criterion (line 280-282) says the existing fixture tests must keep passing unchanged. That is incompatible with editing this fixture.\n\nThe slice design offers \"or add a sibling fixture\" (line 221-222). Use a new fixture file, such as `deprecated-entries-slice-plan.md`, for both `[~]` forms, and leave `sample-slice-plan.md` alone.",
+      "file_ref": null,
+      "category": "test-impact",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-31"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 8's `Pick` widening is incomplete and its caller claim is wrong",
+      "description": "Task 8 (lines 142-149) widens only `resolveEntryStatus`'s `entry: Pick<SlicePlanEntry,'index'|'isChecked'>` and says its \"only caller passes a full `SlicePlanEntry`\". The only caller is `resolveEntryStatusSafe` (line 740). It declares the same narrow `Pick` at line 736 and forwards `entry`. Once `resolveEntryStatus` requires `status`, this call fails to compile, so \"builds clean\" is not met. Task 8 must also widen `resolveEntryStatusSafe`'s `Pick`. Its call site at line 807 spreads a full entry, so that site is fine.",
+      "file_ref": null,
+      "category": "build-break",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's `derivedStatus` initializer change is dead code, and the stated rationale is wrong",
+      "description": "Task 9 (lines 155-163) says a `detectDocuments` failure would \"incorrectly report [a `[~]` entry] as `not-started`\". That isn't what happens. The initializer is overwritten on every path. The try block assigns at lines 122-124, and the catch at line 126 assigns `'degraded'`. A `[~]` entry whose design frontmatter status is unrecognized, or whose `detectDocuments` throws, becomes `degraded`. `degraded` is neither Complete, Deprecated nor Deferred, so `isNext` is true at lines 130-135. The same happens in `WorkflowNavigator.resolveEntryStatus` (lines 696-717): it throws before `deriveEntryStatus`, `resolveEntryStatusSafe` returns `'degraded'`, and `findFirstNotCompleteEntry` offers it.\n\nDecision 4 says the plan-line signal is \"definitionally true regardless\". The plan should short-circuit on `entry.status === STATUS.Deprecated` before the I/O in both places. Alternatively it should add a test that a `[~]` entry with a bad design frontmatter is not offered as next. Reword or drop the initializer step.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/slice.ts:91-127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Other consumers of plan entries still ignore the plan-line status or the new arithmetic",
+      "description": "These callers are not in any task:\n- `ProjectModelBuilder.ts:445` calls `deriveEntryStatus({ isChecked })` for planned-but-unwritten slices. That is exactly the `[~]`-with-no-design case, and it will render `not-started`.\n- `packages/cli/src/commands/arch.ts:99-114` has the same pattern. Its completed count at line 189 counts only `status === 'complete'`.\n- `packages/mcp-server/src/tools/introspectionTools.ts:117-120` recomputes `completedSlices` from `isChecked` alone when a worktree index range applies. This contradicts Decision 3 and gives MCP different counts from the parser.\n\nThe slice scope is silent on all three. Either add one-line wiring and the mcp-server fix, or record them as explicitly out of scope. Task 13 runs `pnpm -r test`, but nothing exercises these paths.",
+      "file_ref": null,
+      "category": "unhandled-callers",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 12 would not test the `completedSlices` arithmetic, and `arch-status-vs-plans` is not covered",
+      "description": "The existing Rule 7 tests mock `parseSlicePlan` and hard-code `completedSlices`/`totalSlices`. A new case written in that style would only prove that `2 === 2` yields no finding, which never touches Decision 3. Task 12 should say to use a real scratch plan through the real parser, or the test is vacuous. The slice success criterion (lines 277-279) also names `arch-status-vs-plans` (`ConsistencyChecker.ts:828-853`), and Task 12 covers only `plan-status-vs-entries`.\n\nSeparately, `ruleTaskVsPlan` (`ConsistencyChecker.ts:299-316`) reads `planEntry.isChecked`. A `[~]` entry with a complete task file would be flagged \"tasks complete but unchecked\" and marked fixable. `updateCheckbox` (`markdownWriter.ts:24-26`) then throws \"does not contain a checkbox pattern\" on a `[~]` line. Decide whether this is intentionally out of scope.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:795-849"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test-with ordering: Task 8's wiring is tested only in Task 11, after an intervening commit",
+      "description": "Task 8 (core wiring) has no test until Task 11. Tasks 9 and 10 sit between them, and the Task 10 commit (line 179) claims to thread the status through `resolveEntryStatus` while the core test lands in a later commit. Move Task 11 to directly after Task 8. Also, tasks 1-4 leave the suite red (the fixture change plus a half-wired parser, with Task 2 alone producing `[~]` entries as `not-started`). That is acceptable only because no commit sits between them. Merging tasks 1-5 resolves it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task file is overweight for a small slice",
+      "description": "Tasks 2, 3 and 4 are three one-line edits to the same file and function, and should be one task. Task 5's \"explicit regression test\" for `[ ]`/`[x]`/`[X]` duplicates the existing tests, which already assert those values. The slice criterion (line 282) says to prove this by those tests passing unchanged. Task 13's manual walkthrough repeats what Tasks 5, 10, 11 and 12 assert. Tasks 6 and 7 could merge. Tasks 2-4 merged into one and the redundant regression test dropped would bring the file to about 9 tasks.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7's \"stale/contradictory frontmatter\" case relies on lattice order",
+      "description": "The `planLineStatus: Deprecated` plus `frontmatterStatus: Complete` case is valid. The Task 6 edit doesn't update the lattice doc comment at lines 19-29 to mention the plan-line tier. This is a documentation nicety only.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/statusDerivation.ts:30-33"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria traceability",
+      "description": "Every success criterion except the `arch-status-vs-plans` half of the checker criterion maps to a task. Those criteria are indexed and unindexed parsing (T2/3/5), the `completedSlices` arithmetic (T4/5), `cf list slices` (T9/10), `cf next` (T8/11), and the checker rules (T12). The other claims I checked are accurate: file paths, line numbers (slice.ts:91, statusDerivation test lines 6-22, WorkflowNavigator.ts:692, test line 1073) and the existing `STATUS.Deprecated` consumers. No scope creep was found beyond the redundant tests noted above.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md:261-282"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 1's unindexed `[~]` fixture line cannot match `PLAN_UNINDEXED_RE`",
+      "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "test-impact",
+      "raw_category": null,
+      "summary": "Adding the two lines to `sample-slice-plan.md` breaks existing tests that no task updates",
+      "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-31",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "build-break",
+      "raw_category": null,
+      "summary": "Task 8's `Pick` widening is incomplete and its caller claim is wrong",
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 9's `derivedStatus` initializer change is dead code, and the stated rationale is wrong",
+      "location": "packages/cli/src/commands/slice.ts:91-127",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "unhandled-callers",
+      "raw_category": null,
+      "summary": "Other consumers of plan entries still ignore the plan-line status or the new arithmetic",
+      "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Task 12 would not test the `completedSlices` arithmetic, and `arch-status-vs-plans` is not covered",
+      "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:795-849",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Test-with ordering: Task 8's wiring is tested only in Task 11, after an intervening commit",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task file is overweight for a small slice",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Task 7's \"stale/contradictory frontmatter\" case relies on lattice order",
+      "location": "packages/core/src/introspection/statusDerivation.ts:30-33",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success-criteria traceability",
+      "location": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md:261-282",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-22T21:40:09.118616",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "chars": 13605,
+      "sha256": "c34a4f705c793355c638d6f6e3ca768b16731e2188f91ad7af820e5bbb88f9d7",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+      "chars": 16369,
+      "sha256": "a9901a0a48f1183d9f49322670fdde537fd26f5d4b6c108aceea2bf96f2c0522",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/introspection/parsers/slicePlanParser.ts",
+    "packages/core/src/introspection/statusDerivation.ts",
+    "packages/core/tests/fixtures/introspection/sample-slice-plan.md",
+    "packages/core/tests/introspection/slicePlanParser.test.ts",
+    "packages/cli/src/commands/slice.ts",
+    "packages/core/src/introspection/WorkflowNavigator.ts",
+    "packages/core/tests/introspection/statusDerivation.test.ts",
+    "packages/mcp-server/src/tools/introspectionTools.ts",
+    "packages/core/src/introspection/ConsistencyChecker.ts",
+    "packages/core/src/introspection/ProjectModelBuilder.ts",
+    "packages/core/tests/introspection/ConsistencyChecker.test.ts",
+    "packages/core/tests/introspection/WorkflowNavigator.test.ts",
+    "packages/cli/tests/commands/list-derived-status.test.ts",
+    "packages/core/src/introspection/writers/markdownWriter.ts",
+    "packages/core/tests/introspection/ArtifactIntrospector.test.ts",
+    "packages/core/tests/introspection/overviewParser.test.ts"
+  ],
+  "searches": [
+    "grep sample-slice-plan in .",
+    "grep resolveEntryStatus|completedSlices|totalSlices|\\.isChecked in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks/packages",
+    "grep \\[ xX\\]|\\[\\[ xX|update-checkbox|\\\\\\[\\(\\[ in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks/packages",
+    "grep plan-status-vs-entries in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks/packages/core/tests",
+    "grep deferred in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks/packages/core/tests/introspection/WorkflowNavigator.test.ts",
+    "list_files packages/cli/tests/commands/list-derived-status.test.ts in .",
+    "grep writeSlicePlan|function makeScratchProject in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-918-tasks/packages/core/tests/introspection/WorkflowNavigator.test.ts",
+    "list_files packages/core/tests/fixtures/introspection/*.md in ."
+  ],
+  "sections_in_document": 2,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 30,
+  "prompt_tokens": 467278,
+  "cached_tokens": 410422,
+  "cache_write_tokens": 56836,
+  "completion_tokens": 12807,
+  "reasoning_tokens": null,
+  "duration_seconds": 91.41260887496173,
+  "cost_usd": 0.3980087,
+  "cost_basis": "provider"
+}

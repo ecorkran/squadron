@@ -1,0 +1,201 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The export path cannot reuse `_measure_all` as the design describes",
+   "description": "The design says `take_snapshot_at` shares `_measure_all` (403 design line 92), and that the export's files are the archive's member names (line 135). But `_measure_all` takes `repo_root` and calls `resolve_files(repo_root, exclusions)` (take.py:100). That runs `git ls-files` (files.py:42-50). On the export directory, which is not a repository, the call fails and raises `SnapshotIntegrityError`. `tests/metrology/snapshot/test_files.py:107` already asserts this non-repo failure. The design needs a file-list parameter on the shared path, or a separate measure function, and it says neither. Every `--commit` run and every `report slice` boundary fails as written.",
+   "location": "src/squadron/metrology/snapshot/take.py:100"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "A fast-forward \"before\" is not the target's pre-landing state when the branch absorbed target commits",
+   "description": "D3 claims \"a fast-forward is only possible if the target hadn't moved past the fork, so for that case the two definitions agree.\" That is false in squadron's flow:\n1. A slice branch is created at fork F (reflog: \"Created from F\").\n2. The target advances to X through another slice's merge.\n3. `branch enter` merges X into the behind branch (`merge: main into slice N`, src/squadron/pipeline/branch_ops.py:260; tests/pipeline/test_branch_catch_up.py:66-70).\n4. The target is still at X, so the branch can fast-forward into it. The tip descends from X.\n5. The resolver's checks pass: tip is contained, tip is on the first-parent line, and F is an ancestor of the tip (line 120). It stores before=F, after=tip, and F..tip contains X's other-slice commits. D1 rejects exactly this kind of spanning range.\n\nA rebase onto a newer target also keeps F as an ancestor, so the listed `FORK_NOT_ANCESTOR` test (line 347) won't fire in the common case. The landing is persisted and \"never corrected\" (line 376). Fix: define `before` as the target's tip just before the fast-forward (from the target's reflog entry, which expires, so the landing becomes unresolved after that), or refuse fast-forward landings whose branch absorbed target history, with an explicit reason. Add that case to the test list. D3's wording also doesn't match the architecture, which credits D3 with a fast-forward refinement; see the NOTE on traceability below.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:199-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Type counts at an export: the `uv` check and the venv gate run in the export directory",
+   "description": "D5 says tools run with `cwd=repo_root`, which is the export at line 211. The same section says the venv and \"the uv check\" resolve from `environment_root`. The code runs `uv sync --check` with `cwd=ctx.repo_root` (src/squadron/metrology/snapshot/python_types.py:93) and requires `.venv` under `repo_root` (python_types.py:79). Read literally, the live-environment check runs in an export with no `.venv` and the export's `pyproject.toml`, so every export reports `environment_unresolved` even when the lockfile matches. That breaks criterion 5 (line 336), which needs type counts on both sides. D5's own rejected alternative (line 218) says `uv sync --check` depends on the project tree, so the check must run against the live tree. The design should name the working directory for `uv` and for pyright's `--pythonpath` (line 223). Pyright's relative `.venv/bin/python` (python_types.py:197-198) would point at a non-existent interpreter inside the export.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A required `environment_root` field breaks existing test constructions; \"400 tests pass unchanged\" is false",
+   "description": "Adding a required field with no default breaks the direct `AdapterContext(...)` call at test_python_length.py:25-34 and the `make_context` helper at tests/metrology/snapshot/builders.py:80-89. Those must change. Development Approach step 4 (line 389) says the 400 tests pass unchanged, which is wrong. Either name the two test edits or accept them. Leave `take.py:101` to pass the field explicitly.",
+   "location": "tests/metrology/snapshot/test_python_length.py:25"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Renaming the `git_utils` helpers breaks `sq review code`'s own tests, which the design says pass unchanged",
+   "description": "D2 (line 195) and Interfaces Required (line 77) make `_find_slice_branch`, `_resolve_fork_point`, `_search_merge_commit` and `_find_merge_commit` public. `tests/review/test_git_utils.py` imports them (lines 26-28) and patches them by string, for example `squadron.review.git_utils._find_slice_branch` at line 217 and about 25 more sites. `tests/pipeline/test_code_pipelines_branching.py:17` imports `_find_slice_branch`. Without aliases, `patch` raises `AttributeError` and the imports fail. Success criterion line 351 (\"`sq review code`'s range-resolution tests pass unchanged\") and step 1 (line 386) can't both hold. Keep private aliases, or state the test edits.",
+   "location": "tests/review/test_git_utils.py:26"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`_search_merge_commit` returns one hash, but the design's merge query needs every merge in order",
+   "description": "The helper runs `git log --merges --oneline ... -1` and returns the newest hash (git_utils.py:236, 242). The design's query (line 112) needs every first-parent merge, oldest first, which is a different command and return type. \"Gains `first_parent: bool`\" (line 195) doesn't cover that. Name a new function that returns a list. The `sq review code` callers (`_find_merge_commit` at git_utils.py:262 and :269) depend on the single hash, so leave them alone.",
+   "location": "src/squadron/review/git_utils.py:236"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "A fast-forward follow-up is never resolved when the slice already has a merge landing",
+   "description": "The data flow runs the fast-forward path only when no merge landings were found (\"none found \u2192 fast-forward landing\", line 114). A slice with a `--no-ff` landing and a later fast-forward follow-up loses the follow-up silently. D1 (line 186) promises that a later resolution picks up later landings, but it says only \"a later follow-up merge\". Run the fast-forward check after the merge search rather than instead of it, or state the limit and test it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "An unreadable `slice_ranges` file loses every stored landing, and concurrent writes can corrupt it",
+   "description": "`_iter_records` skips an unreadable file with a WARNING (store.py:196-198). A corrupt `sliceranges-*.json` therefore reads as \"no record\", and the next `write_slice_ranges` replaces it with only the new landings. Fast-forward landings whose reflog has expired are gone for good, which violates criterion 2 (line 333). Line 166 says concurrent writers give \"last write wins\", but `_write_atomic` writes every writer to one shared `.tmp` name (store.py:168). Two writers can therefore publish a torn file, not just lose a landing. Read the record by its deterministic id and raise on an unreadable file, as `load_record` does. Also correct the concurrency row. Line 110's \"one store scan\" is unnecessary when the id is deterministic.",
+   "location": "src/squadron/metrology/store.py:168"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Unresolved reasons conflate \"git could not answer\" with \"no match\", and target resolution has no failure row",
+   "description": "`_find_slice_branch` returns None on a git error (line 184) and on no match (line 190). `_search_merge_commit` does the same (line 239). A missing or misspelled integration branch therefore makes every slice report `no_landing` or `not_landed`, not a ref error. The failure table (line 164) covers only reflog and merge reads. Nothing covers `resolve_diff_base` (line 109), which can run `cf`. Give git failures a distinct result, and add failure rows for the target.",
+   "location": "src/squadron/review/git_utils.py:183"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Several local `<n>-slice.*` branches can match; only the first is considered",
+   "description": "`_find_slice_branch` returns the first line of `git branch --list`, which is alphabetical (git_utils.py:186-190). Line 115 (\"branch = `<index>-slice.*` (local)\") doesn't say what happens with two matches, so a stale branch can decide the result. Specify whether all matches are considered or the case is refused with a reason.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:115"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"Oldest first\" is undefined, and landings from different targets share one list",
+   "description": "The schema says each list is \"oldest first\" (line 305), and D1 says \"oldest first\" (line 185). The sort key is never defined. Append order is resolution order, which need not be chronological: fast-forward landings can be found after merges, and a later run can find older work. D2 (line 194) also lets landings from a different target join the same list. `target_ref` is stored, but no output shows it (lines 277 and 298). Define the sort key, and show `target_ref` when targets differ.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:305"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The CLI doesn't map the new errors, and `slice-ranges` has no contract for identity or store failures",
+   "description": "`_FAILURES` (lines 29-34) lists the snapshot's exceptions. `SnapshotExportError` is new and isn't listed, so the \"ERROR, exit 1\" rows (lines 157-161) become tracebacks unless the export command adds it. `MetrologyStoreError` is caught only in `snapshot` (lines 71-74). `slice-ranges` says it exits 1 on \"a git or store error\" (line 275). A repo with no remote and no recorded `metrology.project_id` raises `MetrologyIdentityError` (src/squadron/metrology/identity.py:151), and the design never names that for `slice-ranges` or the reports.",
+   "location": "src/squadron/cli/commands/metrology_snapshot.py:29"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Export integrity and project identity are unspecified",
+   "description": "`take_snapshot` calls `derive_project_id(str(repo_root))` (take.py:127) and `check_integrity(repo_root)` (take.py:130). For an export, `derive_project_id` must receive the live checkout, because the remote lookup and the `.squadron.toml` read are per cwd (identity.py:67-98, 131-155). `check_integrity` runs `git status` and raises on any dirty path (src/squadron/metrology/snapshot/preflight.py:171-183). Called on the live tree, it rejects dirty checkouts, which exports are meant to allow (design line 130). Called on the temp tree, it always fails because the directory isn't a repository. Neither the data flow (lines 129-139) nor the failure table says which root each call uses, or how a tool that writes into the export is caught. `tests/metrology/snapshot/test_take.py:107` covers that only in place.",
+   "location": "src/squadron/metrology/snapshot/take.py:127"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "`--commit` relaxes the clean-tree rule, which the architecture states",
+   "description": "The architecture says \"A dirty tree is refused, never silently attributed to HEAD\" (400-arch line 51). The design reads config from a checkout with no clean check (line 130), so `--commit HEAD` on a dirty tree is accepted. Committed content is what gets measured, so this may be sound. But it is a deviation the design doesn't mention. State why it is allowed, and say that `--commit HEAD` on a dirty tree records committed content. Or refuse it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:130"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Each boundary reads the whole store, against the architecture's record-count cost rule",
+   "description": "The architecture says the store \"reads every record file on every query, so record count is the cost that matters\" (400-arch line 49). The slice report calls `ensure_snapshot` for each landing boundary (line 147), and each call is a `list_snapshots` scan (store.py:446-465). That is two full scans per landing, plus scans for reviews and audits. Specify one snapshot scan per command, and a direct read of the deterministic `sliceranges-*` record instead of a scan (line 110).",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:110"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The audit section names `compute_delta` but not the baseline it needs",
+   "description": "`compute_delta(baseline: ProjectBaseline, new_run: AuditRun)` (src/squadron/metrology/audit_delta.py:53) takes a `ProjectBaseline`, not a run. `baseline_report` builds baselines per (project, commit, prompt hash) with no commit filter (audit_report.py:54-59, 122-136). Line 149 says \"baseline at before_sha, latest run at after_sha\", but not how the baseline is obtained. Filter `baseline_report`'s output by commit and hash, or build one from the latest run and its floor, and say which.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:149"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 2 (`git clone .`) cannot test store durability",
+   "description": "`git clone .` gives the clone an `origin` that is a local path. `derive_project_id` normalizes the remote URL, so the clone gets a different ProjectId (identity.py:131-145), and the record from step 1 is not read. The step passes through topology and never tests the store. The resolver tests have the same problem. Throwaway repos under `tmp_path` (line 347) have no remote, so `derive_project_id` raises unless they set `metrology.project_id`. Also, identity.py:139 says identity is never derived from a filesystem path, but a local-path remote becomes the identity. Specify the test fixtures, and make step 2 use a real remote or a recorded id.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "No way to correct or remove one wrong or dangling landing",
+   "description": "The only recovery for a wrong landing (lines 376 and 381) is to delete the project's whole record by hand. That also drops every fast-forward landing whose reflog has expired, which the design exists to keep (line 381 admits it). A state that only a person editing files can end is a gap. Specify a removal path, for example `slice-ranges` with a forget option for one landing, and state the rule for dangling landings (line 165).",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:381"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "The conformance test assumes a live ESLint that this repo doesn't have",
+   "description": "The conformance test runs \"with the live tools available\" on an export with no `node_modules`. Squadron's root has `uv.lock` but no `package.json`, no ESLint config and no `node_modules`, so the TypeScript side has no live tool here. A `tool_missing` result fails the rule on line 215, so the test must provision ESLint. The design doesn't say whether it skips, uses a fixture project with installed ESLint, or fakes the runner. Name the fixture.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:215"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "The design fixes a provided API for consumer 420, which has no document in this checkout",
+   "description": "There is no 420 slice doc or architecture entry in this checkout. The architecture says 420 \"reads snapshots and normalized review findings to score implementation replays\" (400-arch line 84), not that it measures replays at commits. The design still promises `take_snapshot_at(commit)` (line 320), but the component table gives five parameters (line 92). Integration requirement line 356 (\"420 can call ... with no change\") can't be checked. Name 420's requirement, or cut the promise from this slice.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:320"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "Proportionality: restated and speculative material to cut",
+   "description": "Cut without losing a requirement:\n- The \"Store write fails\" row (line 167, which is 400's behavior) and the \"tool hangs\" row (line 162, \"unchanged from 400\").\n- The Security paragraph (line 396), which restates 400's trust boundary. One line with a pointer is enough.\n- The Technology Choices and Patterns lines that restate 400's store and error conventions (lines 254-261).\n- The 420 \"provides\" surface above.\n\nThe largest optional piece is the `history` report's per-row review placement and off-line counts (line 298). Plan criterion 4 requires over-time breakdowns across review records, so defer per-row placement until one run shows the project-level line is insufficient.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:162"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "The 30-second `git archive` timeout applies to writing a whole tree, with no configuration knob",
+   "description": "`run_git` bounds every call to `GIT_COMMAND_TIMEOUT_SECONDS = 30` (src/squadron/review/git_utils.py:25). Extraction is unbounded (line 159), but the archive write is not. On a large brownfield repo, the architecture's target audience, every export could time out. Say so, or make the bound configurable.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:158"
+  },
+  {
+   "i": 22,
+   "severity": "NOTE",
+   "title": "Squash-merged slices are reported as \"not landed\"",
+   "description": "A squash-merged branch has no merge commit and its tip isn't contained in the target, so line 116 reports `NOT_LANDED`. The reason is misleading for a branch that did land. Add a reason for it, or name the case as out of scope.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:116"
+  },
+  {
+   "i": 23,
+   "severity": "NOTE",
+   "title": "A killed export leaves a temp directory outside the repository",
+   "description": "\"Tmp removed (also on error)\" covers exceptions, not SIGKILL or power loss. A killed run leaves the temp directory and its `node_modules` symlink in system temp. The measured repository is untouched, but the design should say so.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:139"
+  },
+  {
+   "i": 24,
+   "severity": "NOTE",
+   "title": "Some outputs and signatures are undefined or mis-typed",
+   "description": "`slice-ranges --json` (line 268) has no defined shape, unlike the other commands. `effective_exclusions(config, registry)` (line 131) takes adapters, not the registry (src/squadron/metrology/snapshot/files.py:25-27). The Interfaces Required entry \"400's `preflight` ... (D4)\" (line 78) cites 400's D4, which is exclusions; the config keys are 400's D10.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:268"
+  },
+  {
+   "i": 25,
+   "severity": "NOTE",
+   "title": "Traceability: D3 cites an architecture phrase that doesn't exist, and the architecture credits D3 with a refinement D3 says is a no-op",
+   "description": "D3 says it refines \"the architecture's 'fork commit against merge commit'\". The architecture (400-arch line 80) has no such phrase. It specifies the first parent against the merge for merges, and \"the fork against the tip for a fast-forward (refined in slice 403, D3...)\". D3 says the fast-forward definitions agree, so the cross-reference is inaccurate. Fix D3 and the architecture reference together, once the finding above is resolved.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197"
+  },
+  {
+   "i": 26,
+   "severity": "NOTE",
+   "title": "Coverage absence reason at an export would be wrong if 401 is built",
+   "description": "If 401's coverage key is read from `repo_root` at an export, it returns `coverage_not_configured` even when the live project sets the key. D5's list of settings read from the live checkout (line 214) covers limits, exclusions and timeout, but not the coverage key. Add the key to that list, or record an explicit absence reason for exports.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:224"
+  },
+  {
+   "i": 27,
+   "severity": "NOTE",
+   "title": "Unverified history claims",
+   "description": "The squadron-history claims cannot be checked from this checkout: landings on 172, 305 and 940 (line 182), the sync-merge example for 381 (line 191), `squadron-brownfield` (line 65), the 946/947 walkthrough (line 363), and 2,127 files (line 255). This checkout has one commit (`.git/logs/refs/heads/main` has a single entry).",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:255"
+  }
+ ]
+}

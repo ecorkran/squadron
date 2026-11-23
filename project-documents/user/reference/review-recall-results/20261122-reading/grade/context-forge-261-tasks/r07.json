@@ -1,0 +1,180 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Explicit `--it brownfield-adoption` can drop an adoption back to the concept prompt",
+   "description": "On the explicit path, detection is skipped and nothing is written, so the state stays `''`. The guide's brownfield prompt then writes planning files: the concept first, then an `nnn-arch` file. On the next plain `cf build`, the default instruction is `Phase 0: Concept` (`packages/core/src/project-defaults.ts:53`). `findPlanningArtifacts` finds the architecture file, so the outcome is `already-planned` and the concept prompt returns. D1's rationale (state first, so writing concept and architecture doesn't drop the user out) only holds when a state was persisted, and this path never persists one.\n\nNo test covers the sequence. Task 12.11 (line 242) checks one explicit build. Task 12.8 (line 239) sets `in_progress` by hand rather than running build, then adding arch, then rebuilding. The only remedy the messages name is `declined` (slice line 243). Also, slice line 185 says the explicit path does no state check, but Task 9 Step 2 (line 185) reads the state. A hand-edited invalid value would then throw `AdoptionError` on the escape hatch that D4 says must not depend on detection.\n\nFix: decide the explicit path's behavior and record it in D4. The recommendation is to keep it non-writing and name `cf config set adoption.state in_progress` in the notice. Add a build \u2192 write \u2192 add arch \u2192 rebuild case, and either skip the state read on this path or make it tolerant.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:184-185"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`readAdoptionState` inherits a machine-wide fallback, and the tests don't isolate it",
+   "description": "Task 2 (line 66) reads `adoption.state` through `ConfigManager.get`. `get` checks the project file, then the user config, then the default. So `cf config set --global adoption.state in_progress`, or an MCP `config_set` with `scope: \"user\"`, changes the outcome for every repo whose `.context-forge.toml` has no `adoption.state`. Those repos never get their own key, because `in_progress` returns `adoption-in-progress` without a write. That conflicts with \"adoption is a property of the repository, not of one machine\" (slice line 135).\n\nThe CLI's `set` defaults to project scope (`packages/cli/src/commands/config.ts`, `resolveScopeAndPath`), so the walkthrough's `cfl config set` is fine. The fallback itself is existing convention: `permissivenessResolver.ts:61` does the same for `workflow.permissiveness`. So this is a decision to make. Either read `getRawProjectFileValues(key).shared` (`ConfigManager.ts:244-259`), or document `--global` as a machine-wide default.\n\nSeparately, Tasks 2T and 9T read the real user config unless they set `CONTEXT_FORGE_DATA_DIR` (`packages/core/src/storage/storagePaths.ts:66-67`). The existing config tests do this, and the plan doesn't mention it.",
+   "location": "packages/core/src/config/ConfigManager.ts:159-169"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The build-time config write is non-atomic and can leave the committed file empty or truncated",
+   "description": "`writeToml` calls `writeFile` directly, which truncates and then writes. Task 9 Step 5 (line 188) and slice line 397 make a build rewrite the committed `.context-forge.toml` on first detection, so a kill or a full disk during that write is now reachable from the build. An empty file parses as `{}` with no error, which silently drops every shared setting, including `workflow.permissiveness`. A partial file fails to parse, so every build returns the error stub. Nothing in the plan detects or repairs either state, so the user has to notice and restore the settings by hand.\n\nFix: write to a temp file in the same directory and rename it into place, as a prerequisite listed in Task 2. Add a test that a failed write leaves the original bytes.",
+   "location": "packages/core/src/config/ConfigManager.ts:33-36"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`measureSourceVolume` in `detection/` imports a policy constant from `adoption/`, and `adoption/` imports back",
+   "description": "Task 3 (lines 85 and 87) has `detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts` as the stop threshold. Task 7 (line 153) has `adoptionOutcome.ts` import `SourceVolume` back. The type-only import avoids a runtime cycle. But the design says `detection/` is \"facts only, no policy\", with thresholds in `adoption/` (slice lines 84\u201386 and 106), and it never describes a `detection/` \u2192 `adoption/` edge.\n\nFix: pass the stop threshold into the walk from the resolver, for example `measureSourceVolume(root, { stopAtLines })`. That keeps `detection/` policy-free. If the signature must stay `measureSourceVolume(root)`, amend D2 to allow the edge.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`generateContext` cannot take a required parameter after its optional ones",
+   "description": "The current signature is `generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)`. Task 11 (line 220) asks for a required `adoptionStateWrites` after those. TypeScript rejects a required parameter after an optional one (TS1016), so `pnpm -r typecheck` fails as written. The call sites at `contextTools.ts:200-205` and `264-269` also need the new argument.\n\nFix: make the parameter `adoptionStateWrites: AdoptionStateWrites | undefined` in the required position, or move the optional parameters into an options object. Name which one in the task.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 9 calls `getPromptForInstruction` as if it were synchronous, so the prompt-missing check never fires",
+   "description": "`getPromptForInstruction` is `async` and returns `Promise<SystemPrompt | null>`. Task 9 Step 4 (line 187) says \"a non-null `new SystemPromptParser(path).getPromptForInstruction(...)`\" with no `await`. An unawaited call returns a Promise, which is never `null`, so the D9 prompt-missing `AdoptionError` cannot fire. Task 9T's \"profile present, prompt missing\" case (line 198) would catch this, but the step text is wrong.\n\nFix: write `await` in the step.",
+   "location": "packages/core/src/services/SystemPromptParser.ts:186"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 9 calls `ContextProfileParser.parseProfiles` as a static method",
+   "description": "`parseProfiles` is an instance method. Task 9 Step 4 (line 187) writes `ContextProfileParser.parseProfiles(content)`, which does not compile. `ContextIntegrator` already holds an instance (`ContextIntegrator.ts:96`).\n\nFix: write `new ContextProfileParser().parseProfiles(content)`.",
+   "location": "packages/core/src/services/ContextProfileParser.ts:131"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The test-project guide has no profile block, so \"add a profile line\" will not parse",
+   "description": "Task 9T (line 194) says to copy the test-project prompt and add \"a `brownfield-adoption: [...]` profile line\". The fixture has no `context_profiles:` block at all. Its sections are `Context Initialization`, `Tool Usage`, `implementation`, `design`, `review` and `Task Breakdown (Phase 5)`. `parseProfiles` only reads a `context_profiles:` key inside a fenced block (`ContextProfileParser.ts:10` and `131-147`), so a lone line returns `{}`. Every positive brownfield case would then fail with the profile error, for the wrong reason.\n\nFix: the fixture needs the full fenced `context_profiles:` block plus the `##### Brownfield Adoption` section. The \"no profile\" variant must stay the untouched copy.",
+   "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 5T's `vi.mock` of `gitExec` applies to the whole test file",
+   "description": "Task 5T puts the real-git cases (lines 124\u2013127: three commits, shallow clone, subdirectory scoping, non-repo, no commits) and a `vi.mock` of the gitExec module (line 128) in one file. Vitest hoists `vi.mock` and applies it to every test in the file, so the real-git cases would receive the rejecting mock and fail.\n\nFix: put the timeout case in its own file, or mock with `importActual` as the default and override only the timeout test with `mockRejectedValueOnce`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The entry-cap test creates 20,001 files under the default 5-second timeout",
+   "description": "Task 3T (line 101) creates `MAX_WALK_ENTRIES + 1` (20,001) files and then walks them. The core vitest config sets no `testTimeout`, so the 5-second default applies. Creating that many files one at a time can take several seconds, and a timeout here would look like a product failure.\n\nFix: give that case an explicit timeout, or make the cap injectable so the test can use a small limit and still prove the throw.",
+   "location": "packages/core/vitest.config.ts:3-8"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The Phase 2 \"no fs access\" test can't prove what it claims, and the walk spy mocks internal logic",
+   "description": "Task 9T (line 195) offers \"spy or a non-existent checkoutPath\" to show no fs access for Phase 2 on an `in_progress` project. A non-existent path proves nothing: `readToml` returns `{}` on ENOENT (`ConfigManager.ts:21-31`), so a read would silently see the default. The spy on `measureSourceVolume`, for the \"walk never runs\" case on the same line, mocks an internal function, which `.claude/rules/testing.md` says not to do.\n\nFix: for the Phase 2 case, put an invalid `adoption.state` such as `maybe` in the checkout. Any read would throw `AdoptionError`, so a passing test proves no read happened. For the walk, either accept the spy and say why, or inject the walk into the resolver.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:195"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The renderer tests skip outcomes the success criteria name",
+   "description": "Slice line 336 requires `renderAdoptionFacts` tests for \"every outcome\". Task 8T covers brownfield (capped), adoption-in-progress and `NOT_EVALUATED`. It has no case for `greenfield`, `already-planned`, or `adoption-closed` (`complete` and `declined`). The `never` check guards the compiler, not the rendered text.\n\nFix: add one renderer case per remaining outcome.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "No test covers the `cf build` or `context_build` error paths",
+   "description": "The success criteria (slice lines 332\u2013333) require `cf build` to exit non-zero with the `AdoptionError` text, and `context_build` to return it as an error. Task 10T (line 213) checks only the integrator rethrow. Task 11 (line 222) asserts argument values only. `context_build` probably already returns the error, since its catch turns any thrown error into `errorResult` (`contextTools.ts:210-212`), but no task asserts it. For `cf build`, no task asserts the exit status. The manual walkthrough check is in Task 15 (line 263).\n\nFix: add a `contextTools` case where the mocked pipeline rejects `AdoptionError` (expect `isError: true` and the remedy text), and a `build.test.ts` case for the non-zero exit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Commit points are checkboxes, not plain `**Commit**:` markers",
+   "description": "The ten commit steps are checkbox items, for example `- [ ] **Task 2C: Commit** \u2014 feat(core): \u2026`, at lines 78, 105, 131, 148, 178, 202, 225, 251, 257 and 269. The convention requires plain `**Commit**:` lines, never checkboxes. The placement is good: each commit follows its tested group, so only the format needs changing.\n\nFix: rewrite each as a plain `**Commit**: feat(core): \u2026` line at the end of its group.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The `format` check in Task 15 does not exist in this repo",
+   "description": "The root `package.json` defines `build`, `test`, `lint` and `typecheck`. There is no formatter script and no Prettier config; the only lint config is `eslint.config.mjs`. Task 15 (line 260) says \"Run format, lint, \u2026 All pass\", but the success criteria (slice line 339) list build, lint, typecheck and tests, not format.\n\nFix: drop \"format\", or name a command that exists.",
+   "location": "package.json:8-11"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The performance NFR has no timing or load check, and the reason given is not in this repo",
+   "description": "The design restates an NFR: \"detection adds under one second to a Phase 0 build on a local disk\" (slice line 167). The task file (line 38) declines any timing or load test because \"the `tests/load/` tier is a rule in `rules/python.md`\". Neither `rules/python.md` nor `tests/load/` exists in this repo; its rules are `.claude/rules/{sql,testing,typescript,shell}.md`. So no task verifies the NFR, and the stated reason does not apply here.\n\nFix: either add a bounded timing test for the 20,000-entry walk in the core tests, or state in Task 3T and Task 15 that the caps are the verification, as the design intends, and drop the `rules/python.md` citation.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Task 11 should spell out the expected build call",
+   "description": "Task 11 (line 221) says to change `toHaveBeenCalledWith('/tmp/test')` to \"expect `persist`\". The call becomes `createContextPipeline('/tmp/test', { adoptionStateWrites: 'persist' })`, so the assertion must match that full shape.",
+   "location": "packages/cli/tests/commands/build.test.ts:227"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Task 1T's second option cites a case that does not exist",
+   "description": "Line 60 says \"or in `ConfigManager.test.ts`, following the permissiveness `set` case\". `ConfigManager.test.ts` has no such case. The case is in `ConfigKeys.test.ts:81-87`, which the first bullet (line 59) already names correctly.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:60"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "The context summary's `it.skipIf` claim is wrong about the 260 tests",
+   "description": "The 260 detection tests (`packages/core/tests/detection/`) contain no `skipIf` and no permission logic. The pattern exists elsewhere, for example `packages/core/tests/schema/sliceDesignFiles.test.ts:157-158`. Point the task at that file instead.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:39"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "`packages/electron/out/` does not exist in this tree",
+   "description": "The packages here are `core`, `mcp-server`, `context-forge` and `cli`. The design's \"stale compiled caller\" (slice line 399) is not present. The \"do not touch\" instruction is harmless, but it should be dropped or verified.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:221"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Task 12 has an open target file and bundles many scenarios",
+   "description": "Line 230 allows either `CoreServiceFactory.test.ts` or `pipeline-integration.test.ts`, and packs 13 scenarios plus a helper into one effort-3 task. Pick one file. Splitting the filesystem-only scenarios from the git-backed ones (4 and 5) is optional.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "Task 4T creates every list entry when a sample would do",
+   "description": "The `it.each` creates all 19 entries across the three lists, including nested paths such as `.github/copilot-instructions.md`, `.cursor/rules` and `docs/adr`. The presence check needs one present and one absent case per shape. The list constants are verified by reading them against D5.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112"
+  },
+  {
+   "i": 22,
+   "severity": "NOTE",
+   "title": "Granularity: 36 tasks plus 10 commit items for 10 new source files",
+   "description": "Candidates to merge: Task 4 and 4T into the Task 5 pair (both small, same module family); Task 7 into Task 8 (Task 7T stays a separate test group). Converting the commit items to plain markers (see the format finding) removes the rest of the overhead.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:43"
+  },
+  {
+   "i": 23,
+   "severity": "NOTE",
+   "title": "Task 13 runs against core's built output and doesn't say to build first",
+   "description": "`packages/core/package.json` `exports` point to `dist/`, so the MCP parity test imports the built core. Task 13 does not say to run `pnpm -r build` first, so a single-package test run would test stale code. The context summary (line 40) states the rule; Task 13 should repeat it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248"
+  },
+  {
+   "i": 24,
+   "severity": "NOTE",
+   "title": "Task 6 deliberately doesn't reuse `resolveInitiativePlanPath`, as D6 literally says",
+   "description": "D6 (slice line 213) says \"reusing `resolveInitiativePlanPath`\". `findProjectGuideFile` swallows every `readdir` error, which conflicts with D6's \"other read errors throw\". Task 6 extracts the pattern and reads the directory with the ENOENT-only rule, and the context summary (line 36) records the reason. The deviation is correct; keep it in the task text, not only in the summary.",
+   "location": "packages/core/src/introspection/ArtifactIntrospector.ts:21-31"
+  }
+ ]
+}

@@ -1,0 +1,103 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Existing codex tests that the port breaks are not accounted for",
+   "description": "The design promises the full existing suite passes and that `resolve_codex_binary` and `codex_app_server` references are gone. It never lists the tests that must change:\n- `tests/providers/codex/test_agent.py::test_none_response_yields_empty` asserts that `final_response=None` yields `\"\"`. D8 (line 114) makes that a `ProviderError`.\n- `test_effort_logs_one_warning` asserts the \"cannot apply effort\" WARNING. D5 (line 101) deletes it.\n- `test_subsequent_message_reuses_thread` asserts `run.assert_awaited_once_with(\"follow up\")`. The call now carries `effort=`.\n- `_MockRunResult` has no `status` and no `usage.last`. D8's `TurnStatus.completed` check will fail against it.\n- The `_mock_sdk_imports` fixture mocks `codex_app_server` and `codex_app_server.client`. It has to be rewritten for `openai_codex`.\n- `test_sdk_import_error_raises` patches `builtins.__import__`.\n- `tests/providers/codex/test_provider.py` patches `squadron.providers.codex.agent.resolve_codex_binary` in four places.\n- `test_provider.py` also uses `sys.modules[\"codex_app_server\"]` mocks.\n\nThe design should say these are rewritten, not left to be found as failures.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:197-199"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Timeout/cancel handling assumes a turn handle that `thread.run()` does not give you",
+   "description": "The data flow uses `thread.run(prompt, effort=...)` (line 80). The Failure Modes table says \"cancel the turn\" and \"Turn handle interrupted and `shutdown()` still runs in `finally`\" (lines 125 and 128). `run()` is the convenience call. Nothing in the design shows it returning a handle, so there is nothing to interrupt. `asyncio.timeout` only cancels the awaiting task.\n\n`shutdown()` is also not called in `_run_prompt`'s `finally`. The caller does that (`review_client.py:281-282`). After a timeout the agent keeps its `_thread` with a turn still in flight. The review pipeline then reuses the same agent for the recovery turn (`review_client.py:406`). The \"reset `_codex`/`_thread`\" step (line 129) is written only for `TransportClosedError`. The design must say which SDK primitive is used (`thread.turn()` plus interrupt, or `run()` plus teardown) and clear agent state on timeout too. It should also close the dead client in the transport-closed case, not just null it.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80,125,128"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Empty-response handling bypasses the existing empty-turn recovery",
+   "description": "D8 raises a plain `ProviderError(\"Codex turn completed with no response text\")`. The review pipeline already has a typed path for empty turns. `EmptyFinalTurnError` (`providers/errors.py:34`) is caught in `_collect_review` (`review_client.py:372`) and triggers one recovery turn. A plain `ProviderError` skips that and fails the review. The design doesn't say whether that is intended. It also doesn't say how the required `EmptyFinalTurnError` fields (`finish_reason`, `reasoning_chars`, `tool_calls_made`, `failed_tool_calls`) would be filled for Codex. State the choice either way.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114,133"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`sq models` marker: profile-to-provider mapping, unknown profiles and Rich markup are unhandled",
+   "description": "- **Profile versus provider type.** Aliases carry a profile name (`alias[\"profile\"]`, `models.py:107`). `ensure_provider_loaded`/`get_provider` take the provider type, via `get_profile(name).provider` (see `review_client.py:110-111`). The design says it resolves the \"alias's profile through ensure_provider_loaded + get_provider\". It skips the `get_profile` hop, and it doesn't say what happens when the profile is unknown or the provider isn't registered.\n- **Existing test.** `tests/cli/test_model_list.py::test_unknown_profile_is_listed_not_dropped` uses `some-custom-profile`. `get_profile` raises `KeyError` for it, so the listing would crash unless caught.\n- **Rich markup.** The marker text `(needs [codex] extra)` goes into a Rich table cell (`models.py:80`). Rich parses `[codex]` as a markup tag and drops it, so the user would see \"(needs  extra)\". It must be escaped.\n- **Placement.** Line 173 says \"Notes/Profile cell\". Notes exists only in verbose mode and is cut to 30 characters (`models.py:136`), yet the marker is also required in default output. Pick the Profile column and name it. Check it against the `\u2502 openai-oauth ` matching in `_profile_column_order` (`test_model_list.py:418-420`) at narrow widths.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112,173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`CodexRuntime` shape contradicts what doctor needs, and doctor's \"no probing\" claim does not hold",
+   "description": "The component list gives `CodexRuntime(source, path|None)` (line 64). D9 says doctor's detail, including the package version, \"comes from `resolve_codex_runtime()`\" (line 112). There is no version field. Getting one needs `importlib.metadata`, which is exactly the \"import probing\" D9 says doctor does not do.\n\nDoctor's \"login state from `auth.json` presence\" (line 172) also needs a file check. The design doesn't say whether that goes through `OAuthFileStrategy`.\n\nThe resolver also \"raises\" (D2, line 98), but doctor has to render a missing state (walkthrough step 1: WARN row). It isn't stated whether doctor catches `ProviderError` or the resolver has a non-raising form. The `check_codex_provider` signature and the `CodexRuntime` fields need to be pinned.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:64,112,172"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two sequential doctor/status assumptions are untested against existing pins",
+   "description": "`tests/cli/test_doctor_checks.py:612` (`test_run_all_checks_starts_no_subprocess`) and the `run_all_checks` section-shape tests exercise every row. The new row has to pass them with the extra both present and absent. The design lists \"doctor row states\" as new tests but doesn't mention the `no_subprocess` pin or the setup flow in `tests/cli/test_setup.py`, which also consumes `run_all_checks`. Name them as constraints on the new row, in particular that it does no I/O beyond `shutil.which` and an import check.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:172,199"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`OPENAI_API_KEY` fallback is left as a branch, and the walkthrough assumes one outcome",
+   "description": "Step 0 makes the verification a prerequisite, which is reasonable. But the design's own success criteria already depend on the answer. Walkthrough step 8 expects `sq auth status` to print `\u2717 not authenticated` after logout. `OAuthFileStrategy.is_valid()` (`auth.py:85-87`) returns True when only `OPENAI_API_KEY` is set. In the \"works\" outcome, logout leaves the profile authenticated via the key.\n\nIn the \"fails\" outcome, `is_valid`, `active_source`, `get_credentials` and `setup_hint` change, and `provider.create_agent` and `doctor` follow. The design should state the expected `status` output after logout when a key is set. It should also say that `setup_hint` (\"Run 'codex' CLI to authenticate\", `auth.py:64`) is replaced with the `sq auth login openai-oauth` hint in both outcomes.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:224,232,219"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Typecheck and dev-dependency story is missing",
+   "description": "`pyproject.toml:95` excludes `providers/codex/agent.py` from strict pyright because the SDK is untyped. The design requires `pyright` clean and adds `login.py`, which is not excluded. It doesn't say whether the exclusion stays, moves to `login.py`, or is removed because `openai_codex` is typed. It also doesn't say whether the dev dependency group installs the `codex` extra.\n\nWithout that, `reportMissingImports = true` (`pyproject.toml:98`) flags `login.py` and `agent.py` in CI. The \"real-types\" test (line 200) is skipped when the extra is absent. If CI never installs the extra, it never runs, so it can't \"fail loudly\". State where CI gets the SDK, or drop the claim.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:200-201"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`InteractiveLogin` is async but the CLI commands are sync, and the `status` flow is under-specified",
+   "description": "`auth_login` and `auth_status` are synchronous Typer functions (`cli/commands/auth.py:19,40`). The Protocol methods are `async`. The design doesn't say the commands call `asyncio.run` once per call, or per profile in the status loop. Spawning the runtime per profile is another cost. It also doesn't say how `status` avoids spawning the runtime for profiles that don't implement `InteractiveLogin`, or how it behaves if one is already running.\n\nThe `notify` callable is typed `Callable[[str], None]`, but a login prints two things for device code (URL and user code). It is unspecified whether that is one call or two, and who owns the `webbrowser.open` attempt.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86,163-165"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Per-turn usage stamping leaves `turns` undefined and `_run_prompt` contract changes unstated",
+   "description": "D6 says to stamp \"the same metadata keys the OpenAI agent uses\". The OpenAI agent stamps `usage`, `turns`, `reasoning_chars`, `failed_tool_calls`, `stop_reason` and others (`openai/agent.py:685-701`). The design says nothing about which of these Codex stamps, or what `turns` means for one agentic `thread.run`.\n\n`turn_capture.collect_turn` treats missing keys as \"not reported\". That is fine for `usage`, but `result.turns` (`review_client.py:288`) would be `None`. `_run_prompt` currently returns `str` (`agent.py:105`). Returning usage with it is a signature change, and the existing test spies on it (`test_agent.py:138`). Specify the new return type.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:55,80,102"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Scope is heavier than the slice needs in a few places",
+   "description": "- **Failure Modes table.** Twelve rows with \"one test per row\" required (line 199). Several rows restate SDK behavior with no distinct squadron handling:\n  - \"Server busy / rate-limited: no squadron-side retry\"\n  - the \"Not logged in\" and \"Turn failed or interrupted\" duplicates (lines 131-133 repeat D8)\n  - \"Teardown error: existing behavior\"\n\n  Merge them into one \"wrap every `CodexError` into `ProviderError`\" row plus the rows that have distinct behavior.\n- **Three config keys.** `codex.login_timeout_s` and `codex.account_timeout_s` are only read in the CLI path. `--timeout` already overrides login. Consider module constants for `account_timeout_s`, since D7's reason for config keys (tunable agent turns) doesn't apply to a 30 s status probe.\n- **Startup-cost paragraph.** The \"Runtime startup cost\" paragraph (line 82) restates D7 and the lazy-client behavior. The DEBUG-log sentence is the only new content.\n- **\"Relationship to the architecture's auth model\".** It argues against a conflict nobody raised, at paragraph length. Cut it to two sentences.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82,103-111,116-135"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Wording about registration and the hint overstates what `get_provider` does",
+   "description": "The design says the provider still registers \"so `get_provider(\"openai-oauth\")` can raise the install hint rather than 'unknown provider'\". `get_provider` (`registry.py:16`) only returns the instance or raises `KeyError`. The hint is raised later, in `create_agent`. The behavior is right (the import chain stays clean because `codex/__init__.py` imports only agent and provider), but the sentence should say `create_agent`. It should also note that `ensure_provider_loaded` (`loader.py:21-24`) swallows `ImportError`, which is why a stray top-level `openai_codex` import would make the provider disappear with a misleading \"not registered\" message.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Install-hint distribution name is deferred while also being asserted",
+   "description": "`pyproject.toml:2` names the package `squadron-ai`. Success criteria, README text and the walkthrough all assert `squadron-ai[codex]`. Line 171 still says \"confirmed \u2026 during implementation\". It is already known, so state it as fact. Also, `pip install` is the wrong hint for users who installed via `pipx` or `uv tool` (the install path slice 117 targets in the plan). Those users need `pipx inject` or `uv tool install 'squadron-ai[codex]'`. The single-source hint (line 139) should cover this.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:25,139,171"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Slice 931 prerequisites verified",
+   "description": "`ProviderCapabilities.applies_effort` (`base.py:59`), `core/usage.py` (`TokenUsage`, `RunTelemetry`) and `review_client.py:262` (`sent_effort`) exist as described. `AUTH_STRATEGIES` dispatch (`auth.py:158-172`) matches slice 128's description. Dependency directions are sound: `providers/auth.py` and `providers/base.py` gain Protocols with no new upward imports, and `providers/codex` reading config keys follows `providers/openai`. `config/keys.py` placement beside `cf.mcp_timeout_s` is accurate (`keys.py:356`).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:49-55"
+  }
+ ]
+}

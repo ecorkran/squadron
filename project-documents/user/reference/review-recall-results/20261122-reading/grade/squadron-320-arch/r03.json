@@ -1,0 +1,89 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "\"Read-side over 300's write path\" is contradicted by what 300 actually persists",
+   "description": "Line 46 says 300 persisted results \"as self-describing (provenance) precisely so 320 could consume them\", and line 102 forbids changing the judging path. The code does not support that premise:\n\n- **No stable result identity; records are overwritten.** `save_review_result` writes to `{index}-review.{template}.{slice_name}.md` with `write_text` (`src/squadron/review/persistence.py:282-299`). The shipped `judge-cycle.yaml` loops the judge up to 3 times, so each iteration overwrites the last. The only timestamp is a `YYYYMMDD` date. Line 75's requirement to \"attach unambiguously to the specific persisted judge result\" has nothing to attach to, and line 67's trend has no history.\n- **Provenance is not persisted.** `persistence.py:147` states it is never emitted. `ReviewAction` sets provenance only on the in-memory `ActionResult` (`src/squadron/pipeline/actions/review.py:296`), and `pipeline/state.py` hoists `score` but contains no provenance field.\n- **Judge configuration is not recorded.** Line 79 fixes \"keyed by judge configuration (template identity/version, model)\". The record has a template name and a model string only. Templates have no version field, and a user-directory template can replace a built-in under the same name (`review/templates/__init__.py:200-202`). The thresholds that produced the verdict are not stored either.\n- **Persistence is best-effort.** A save failure is a WARNING and the gate still proceeds (`review.py:244-280`). Without `slice_info` the record is written with `slice: unknown`, `project: unknown`, slice `0` (`persistence.py:126-128`). The sampling frame therefore has holes and unjoinable rows.\n\nAll of this must be captured at judge time; none of it can be reconstructed by a read-side layer. Fix the document: replace the read-only principle with \"additive write-path changes, owned by 320's keystone slice\", and enumerate them:\n\n- a unique result id, with append instead of overwrite;\n- persisted provenance and the thresholds in effect;\n- a template content hash and the resolved model id;\n- a content hash or git SHA of the judged artifact.\n\nAmend the non-goal at line 102 to match. Otherwise slice design inherits work the architecture prohibits.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dispersion relies on a \"multi-sample option\" that does not exist",
+   "description": "Line 81 says \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`\". Lines 62 and 109 of the same document call multi-sample \"300 Future Work 1\", and it is unchecked in `300-slices`. The fan-in reducers (`pipeline/intelligence/fan_in/reducers.py`) either gather branches or return the first PASS; there is no median or score reducer.\n\nTwo further gaps:\n\n- A `review` step inside `fan_out` would write every branch to the same review file path, because the filename has no model or branch component. Multi-judge runs would clobber each other in the per-project record.\n- \"Accept dispersion data opportunistically (when multi-sample ran anyway)\" requires that multi-sample keep each sample's score, not only the reduced median. That constrains unbuilt 300 work and nobody owns it.\n\nSay plainly that only `fan_out` exists, and decide whether 320 builds the calibration-run path itself or takes 300 FW1 as a prerequisite with a \"retain per-leg scores\" requirement.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Calibration grain is finer than the threshold locus it feeds",
+   "description": "Calibration is keyed by artifact level \u00d7 judge configuration including model (lines 48, 79). Thresholds resolve from template default and step override only (`resolve_thresholds`, `src/squadron/pipeline/actions/judge.py:41-57`); there is no model dimension. The judge model is a pipeline param (`review-model` in `judge-cycle.yaml`) that can be changed per run.\n\nA floor loosened on evidence earned by model X therefore silently applies when the step runs model Y. That is the \"moving thresholds on noise\" failure line 52 warns against.\n\nTwo related gaps:\n\n- Template defaults are package data shipped with squadron. Operator-specific calibration cannot live there; only step overrides or user-directory template copies remain, and the document does not choose.\n- The feedback slice (line 95, \"documented, evidence-floored path\") does not say whether its output is a report, a generated override snippet, or a command.\n\nEither state that a calibrated threshold is only valid for the configuration that earned it and specify how the engine detects a mismatch at gate time, or commit to the additive change that lets thresholds be scoped by model.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:36"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The human oracle's verdict is never defined, and it determines the keystone schema",
+   "description": "\"Their verdict is recorded against the judge's result\" (line 67) does not say what the operator records. The options are agree/disagree with the judge's verdict, an independent PASS/CONCERNS/FAIL, or a score. This is not slice detail:\n\n- The judge's verdict is a projection of its score through the very thresholds calibration will move. Agree/disagree data is invalidated every time a threshold changes and cannot be replayed against candidate thresholds.\n- \"X overreaches, Y rubber-stamps\" (lines 20, 32) needs signed disagreement. Binary agreement cannot produce it.\n- Recommending a floor requires the human's independent categorical call paired with the judge's raw score.\n- \"Spot-checks a judge call\" implies the operator sees the judge's verdict first. That anchors the human and inflates agreement.\n\nCommit here: the sample is an independent human verdict, stored against the raw score, with agreement recomputed under whatever thresholds are being evaluated. State whether capture is blind.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:67"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Normal course of work\" sampling cannot see the results that matter for loosening a gate",
+   "description": "Lines 34 and 42 require sampling to be opportunistic and inline. Under 300 the operator only meets judge results that escalate. PASS results auto-advance unseen, yet the false-pass rate is exactly what must be bounded before a floor is lowered. Line 75 acknowledges sample bias but defers it as \"slice-level\"; the conflict with the \"no dedicated labeling\" principle is architectural.\n\nA second gap is that the judged artifact is not preserved. In the judge cycle the fix dispatch mutates the artifact between iterations. Per 300 Future Work 5, `commit` cannot be a loop-body step. A later spot-check therefore judges a different document from the one the judge scored.\n\nThe architecture should fix a random-sample quota of auto-passed results, presented at a natural stopping point. It should also require an artifact snapshot or hash on every sampled result.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:34"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The mandated grain and the evidence floor are arithmetically incompatible with \"a handful\" of samples",
+   "description": "The document fixes per-level reporting (line 48), per-configuration keying with no blending across \"incompatible\" configurations (line 79), and a minimum-evidence floor (line 77). It expects \"a handful\" of samples (line 52).\n\nBy the rule of three, bounding a disagreement rate below 10% at 95% confidence needs about 30 clean samples per cell. With 3 levels and 2 models that is roughly 180 spot-checks. Every cell resets on any template edit or model change. A single operator will never clear the floor, so the \"conservative tax\" of line 61 becomes permanent by construction.\n\nMissing decisions:\n\n- A definition of \"incompatible\", and a pooling rule (for example, pool across template revisions that leave the rubric and bands unchanged).\n- A rough order-of-magnitude floor, so feasibility can be judged now.\n- Trend scope. Agreement trend at this n is noise; restrict trend to judge score distributions, which need no human labels.\n\nSeparately, only two judge templates exist (`judge.slice-vs-arch`, `judge.tasks-vs-slice`). The arch-vs-concept level in line 30 has no judge to calibrate, and no slice authors one.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:77"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The storage home is the keystone decision and is deferred; the named candidate cannot meet the stated requirement",
+   "description": "Line 87 introduces cross-project aggregation as \"a new requirement\" and leaves the store to slice design, naming 280 as a candidate (also line 112). Three problems:\n\n- 280's store is per-project (`{project_root}/.squadron/artifacts.db` in `280-arch`), so it cannot aggregate across projects.\n- 280 is not started and sits behind 260 and 240, and the initiative plan declares 320 independent of 280.\n- \"Squadron-managed projects\" (lines 69, 96) has no backing concept. There is no project registry in `src/`; squadron operates per working directory.\n\nThe stack has no database today; records are markdown frontmatter in the repo and run-state JSON under `~/.config/squadron/runs/`. Decide at this level, and take the lightest option: append-only records beside the reviews in each repo, with reports given an explicit list of project roots. Drop the 280 candidate and the implied registry.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:87"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Audit-findings-per-project drops\" is not a valid measure with the skill as shipped",
+   "description": "The success signal for the second oracle (lines 22, 38) is a findings count. The skill itself undermines that in three ways:\n\n- **The count is prompt-anchored.** `commands/analysis/tech-debt-audit.md:68` instructs \"Aim for 30\u201380 findings; padding past that is noise.\" A cleaner codebase will still yield about 30.\n- **Repeat runs are not independent.** Repeat-run mode (`tech-debt-audit.md:103`) reads the previous audit file and marks RESOLVED/NEW. The \"after\" measurement is conditioned on the \"before\", and line 83's audit variance cannot be estimated from such runs.\n- **The unit does not match the intervention.** The audit covers the whole repository, including code that predates the pipeline. The pre-emption prompt only affects newly dispatched code, so a whole-project count barely moves.\n\nLine 85 covers attribution in general but none of these. The document also never requires recording whether pre-emption (and which version) was active on a run, so before/after cannot be partitioned.\n\nThe architecture should commit to:\n\n- a metrology-mode audit with no count target and no prior-audit read;\n- repeated baseline runs to set a noise floor before any delta is reported;\n- a metric scoped to code produced after the intervention;\n- a per-run intervention marker.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The audit harness has no execution path in the current stack",
+   "description": "The audit is a Claude Code slash command. 340-arch is explicit that \"Claude Code's existing slash command system handles invocation unchanged\"; squadron only copies the file, and the pack is opt-in. The protocol uses `TodoWrite`, Task subagents and shell tooling (`pip-audit`, `vulture`, `git log`), takes 5\u201320 minutes, and writes its own `analysis/nnn-analysis.*.md` file.\n\n\"Run the audit across squadron-managed projects\" therefore needs decisions the document does not make:\n\n- How a slash-command skill is executed headlessly: as a dispatch prompt on an SDK profile with Bash and Task permitted, or as a new action.\n- What happens on non-SDK profiles, which have no tool use until 260 lands.\n- Whether the harness requires the pack to be installed or reads the bundled source directly.\n\nThe frontmatter `dependencies: [100, 140, 300]` also omits 340, although lines 22, 63 and 111 depend on it and 340-arch names 320 as its primary consumer.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:96"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "\"Two oracles, one metrology shape \u2014 built once\" is an abstraction the two data shapes do not share",
+   "description": "Judge calibration is paired-rater agreement on one item: human verdict against judge score, keyed by level and judge configuration. The audit baseline is single-rater finding counts per project over time, with category and severity. They share only \"persist a record, aggregate, print n\".\n\nCommitting to a single reporting layer before either exists invites a generic verdict-record abstraction that fits neither. Cut the shared-layer commitment and build two small reporters; extract common code only if duplication appears. The speculative \"interface parity if other surfaces are added\" clause at line 75 can be dropped for the same reason.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The `criteria` example contradicts the read-only principle and is not aggregable",
+   "description": "Line 46 says 320 \"populates or reads\" the reserved `criteria` map. The judge templates already populate it, and 320 populating it would be a write in the judging path. The keys are model-chosen free text (`<criterion name>` in `judge-tasks-vs-slice.yaml:37-39`), so per-criterion values cannot be joined across runs without fixing the key set in the templates.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:46"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Scope matches plan entry 10; nothing assigned is dropped",
+   "description": "Both oracles, per-level calibration, dispersion and the pre-emption prompt are all in the plan entry and all present. The overweight items are named in the findings above: the 280 coupling, the shared reporting layer, and agreement trend.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:24"
+  }
+ ]
+}

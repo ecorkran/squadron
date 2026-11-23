@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Relocated core still imports `pipeline`, which recreates the review\u2194pipeline cycle F002 was meant to remove",
+   "description": "The plan moves `models.py`, `verification.py` and the judge core into `review/addressed/` \"verbatim\". Both moved modules depend on pipeline code:\n- **`models.py`** line 14 does `from squadron.pipeline.models import ActionResult`, used by `read_findings(result: ActionResult | None)`. Importing `squadron.pipeline.models` runs `squadron/pipeline/__init__.py`, which imports actions, steps and `sdk_session`. The chain is `pipeline/__init__` \u2192 `actions/gate.py:280` \u2192 `findings_addressed.policy` \u2192 `judge` \u2192 `review.addressed.*` \u2192 `pipeline.models`. That is a real circular-import risk. T1 forbids logic changes, and T7 exports `read_findings` from the new package.\n- **`verification.py`** (line 17) imports `RoundDiff` from `findings_addressed.screens`. T3 says this \"stays as a cross-package import in the pipeline\u2192review direction\". It is the opposite: `review/addressed/verification.py` would import `pipeline.actions.findings_addressed.screens`. That is exactly the inversion the slice's Dependency direction section forbids. `judge_residue_core(..., diff)` in T5 needs `RoundDiff` too.\n\nFix: move `RoundDiff` (the dataclass only, not `compute_round_diff`) into `review/addressed/`. Keep `read_findings` (the `ActionResult` adapter) in the pipeline layer, or give it a neutral type. Add a check, such as a grep or an import-smoke test, that `review/` imports nothing from `squadron.pipeline`. T7's export list must also include `RoundDiff`.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Overwrite guard is placed in `save_review_file`, which `sq review code` never calls",
+   "description": "The CLI path is `cli/commands/review.py:746`, which calls `save_review_result`. That function does `path.write_text(...)` directly at `persistence.py:300` and `:303`. The pipeline action also routes through `save_review_result` whenever `slice_info` is set (`pipeline/actions/review.py:253-262`). `save_review_file` is only the fallback when `slice_info` is `None` (`:272`).\n\nSo T12 guards a rarely used path. The success criterion \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\" is not met, and the data-loss hazard from the slice Value section stays open. The existing test `testsave_review_result_overwrites_existing` (`tests/cli/test_review_save.py:117`) documents the silent overwrite.\n\nOther consequences of putting the guard in the wrong function:\n- `save_review_result` returns `Path`, not `Path | None`. Its callers, `rprint(path)` and `str(save_review_result(...))`, have no `None` contract, so T12's \"return None on failure\" cannot be applied there. The plan must say what a fail-closed abort looks like, for example raise and let callers handle it.\n- `save_review_result` takes `reviews_dir`. T12 hardcodes `project-documents/user/reviews/archive/`, so the archive location has to derive from the actual target directory.\n- The design says that on abort \"the review content is still printed to the terminal\". No task covers this.\n\nFix: put the guard in a shared helper used by both writers. T13 needs a test through `save_review_result`.",
+   "location": "src/squadron/review/persistence.py:257-314"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "T5/T6 are self-contradictory and would break the existing judge tests",
+   "description": "T5 defines the core as \"the body of today's `judge_residue` from `_resolve_model` onward (template load, `run_review_with_profile` call\u2026)\".\n- In the current code the template load (lines 106-113) comes before `_resolve_model`. `_resolve_model` also needs `template.model` as its fallback (line 116).\n- The plan does not say who loads the template, so the wrapper cannot call `_resolve_model` as written.\n- It also omits the `ModelResolutionError` try/except (lines 115-119), the early `if not residue` return, and the template-missing failure path. Each currently yields `JudgeLegResult(failed=True)`.\n\nT6 claims the tests pass \"unchanged\". They cannot:\n- `tests/pipeline/test_findings_addressed_judge.py:32` and `test_findings_addressed_e2e.py:27` patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile`. That call moves to `review.addressed.judge`.\n- Once the import is removed from the pipeline module, the patch target raises `AttributeError`. Otherwise it patches a name nobody calls and the real transport runs.\n- Five patch sites in the judge tests plus the e2e site need retargeting.\n\nT6's rule \"if a test needed rewriting, stop and reconcile\" would trip on the first run. State the patch-target update explicitly, and specify where template load and model-resolution errors live. Slice criterion 12, \"305 suite passes unchanged\", should be reworded to \"unchanged apart from import and patch paths\".",
+   "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:106-134"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Archive filename is not unique, so a second overwrite destroys the first archived copy",
+   "description": "T12 archives to `archive/{original filename}`. The second overwrite of the same review replaces the archived hand-edited content from the first one. A write that fails partway after archiving is worse. The original is truncated, and the next overwrite then archives the truncated file over the good copy. This breaks the guard's \"nothing is silently destroyed\" purpose. Use a unique name, for example a timestamp or `-rN` suffix, or refuse to clobber an existing archive entry. T14's recursive-scan fallback should be folded into the same naming scheme.",
+   "location": "src/squadron/review/persistence.py:220-254"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T14 (cf scanning check) is sequenced after the tasks it gates, and T13's commit lands before it",
+   "description": "The slice's Phase 5 note says the check must be \"sequenced before Part D lands\". Here it is numbered T14, after T12 and T13. T12 carries a \"do not mark done until T14\" workaround, and the T13 `Commit:` marker puts code on the branch before the go/no-go answer. Move it ahead of T12 so the checklist order matches the dependency. The guide path `ai-project-guide/tool-guides/context-forge/` does not resolve in this worktree, so I could not confirm it exists. The task already says to ask the Project Manager if the guide is silent. I did confirm squadron's own globs are non-recursive: `metrology/discovery.py:46` and `metrology/capture.py:97`.",
+   "location": "unverified"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T10 does not match the signatures it wires into, and the pipeline-path wiring is ambiguous",
+   "description": "- `save_review_result` has no `cwd` parameter. It uses the process-relative `_REVIEWS_DIR` or `reviews_dir`. `run_git` needs `cwd: str` (`git_utils.py:19`), so the task must say which directory HEAD is resolved in.\n- In `pipeline/actions/review.py` the `slice_info` branch goes through `save_review_result`, so stamping there covers it. Only the fallback branch (`:265-271`) calls `format_review_markdown` directly. \"Same resolution\" in both places would resolve HEAD twice in one branch. Specify the fallback branch only, or factor out one shared helper.\n- The tests in `tests/pipeline/actions/test_review_action.py` patch `format_review_markdown` and `save_review_file` with fake cwds. Real `run_git` calls there would hit bad directories and log new WARNINGs. The task should say how the git call is isolated in those tests.",
+   "location": "src/squadron/review/persistence.py:257-267"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "T11 leaves the pipeline-path stamp optionally untested",
+   "description": "Success criterion 1 requires the stamp \"from both the CLI and the pipeline persistence paths\". T11's integration test covers \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\". Make both required. Existing tests at `test_review_action.py:510` and `:531` assert `mock_format.call_args.kwargs[...]`. That pattern extends naturally to `reviewed_sha`.",
+   "location": "tests/pipeline/actions/test_review_action.py:497-531"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Part 0 is over-split for a mechanical move",
+   "description": "Eight tasks (T1\u2013T8) and four commits move three files and add one extraction. T2, T4, T6 and T8 are verify-only tasks, and T7 (exports and docstring) is the same edit family as T1/T3. Merge T1\u2013T4 into a single move-and-verify task, keep T5/T6 (the extraction is the only real risk), and fold T7/T8 into the end of that sequence. Fewer commit markers would be fine.",
+   "location": "unverified"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "T1's updating of test imports conflicts with \"suite passes unchanged\"",
+   "description": "Tests import both moved names (`FindingRecord`, `read_findings`, `RoundDiff` and others) and staying names from the package `__init__`. `tests/metrology/test_capture_discovery.py:100` imports `GateEvidence` and `save_gate_evidence`, which stay. T1's grep pattern `findings_addressed import` matches all of these, and the task says to rewrite each to `review.addressed.models`. That is wrong for names that live in `parsing`, `screens` or `evidence`, and for the ones that stay. Say per name where each now lives, and leave the stayers alone.",
+   "location": "tests/pipeline/test_findings_addressed.py:18-28"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Minor inaccuracies in the file's claims about existing code",
+   "description": "- The baseline \"2832 passed, 2 skipped\" cannot be confirmed. `305-slice` records 2824 passed, 2 skipped.\n- T3 says `location_path` and `Verdict` are \"already in the target package\". They are in `squadron.review`, the parent of `review/addressed/`, not in the new package itself.\n- The Context Summary says \"two failure-closed rules covered in this file\" but lists only the archive rule.\n- In T9 the order of `reviewedSha` relative to `revision_number` is unspecified. This is cosmetic.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:179"
+  }
+ ]
+}

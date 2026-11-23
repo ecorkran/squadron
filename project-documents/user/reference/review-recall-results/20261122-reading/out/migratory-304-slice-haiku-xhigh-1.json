@@ -1,0 +1,572 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`step()` implementation block skips `post_tick()` when there are no entities",
+      "description": "The Implementation Details `SimulationManager.step()` keeps the original early return (`if self._entity_manager.count == 0: return`, lines 276-277) before `tick()`, with `post_tick()` after it (287-288). With no entities, `post_tick()` never runs. That contradicts line 291 (\"`post_tick()` is called even when there are no entities\") and line 408. The Technical Decisions version (lines 176-191) is correct: `tick()` alone is wrapped in `if count > 0`. The document has two `step()` bodies, and the wrong one is the one an implementer would copy into `simulation.py`. Time-varying layers such as trail decay would stop whenever the world is empty. Keep one body (the Technical Decisions form) and delete the other.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:276-288"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment is not passed to `engine.tick()`, against the parent plan and the 500 architecture, with no recorded decision",
+      "description": "The slice plan (300 slices line 27) says to \"Pass environment context to `SimulationManager` and `engine.tick()`\". The 500 architecture (500-arch lines 52, 137) and the 500 foundation slice (500-slice line 422) also name `engine.tick()`. This design instead gives the environment to force constructors and leaves `tick()` unchanged (`src/migratory/engine/tick.py:13-20` has no environment parameter). That is defensible, since it keeps the `BulkForce` protocol unchanged, but the design never says it departs from the plan. The 501+ slices need one answer. Record the decision and update the plan and 500 text, or pass the environment to `tick()`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agent-originated post-tick writes have no source and no path",
+      "description": "Line 196 says `post_tick` applies \"agent-originated writes (trails, threats)\". But `step()` calls `post_tick()` with no arguments (lines 190, 288). `Environment.post_tick(trail_deposits, threat_mutations)` needs them (`src/migratory/environment/container.py:88-101`). `tick()` returns `None` (`src/migratory/engine/tick.py:20`), so nothing produces deposits or mutations. The plan item for this slice is \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" (300 slices line 27). The design delivers the call and leaves out the data path without listing it as excluded. Say where deposits come from, or explicitly move this to 505/506.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Layers plug in without server changes\" and \"layers register themselves\" contradict the container's constructor-only registration",
+      "description": "The Overview (line 19) promises layers \"plug in without server changes\", and line 329 says \"layers register themselves\". `Environment` takes `layers` only in its constructor (`src/migratory/environment/container.py:24-30`) and has no register method. The 500 foundation slice says layers \"are passed to the `Environment` constructor\" (500-slice line 337). This design builds `Environment(bounds=..., layers={})` in `server.py` (lines 97, 303), so a layer slice must edit the server to construct its layer. Either state that the server constructs layers, or add a registration API to the 500 container as separate work. The claim as written is wrong.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design says `WorldBounds` is shared with the entity manager; it is not",
+      "description": "Line 113 says the environment's `WorldBounds` is \"shared with entity manager\". `EntityManager` receives a `WorldBoundsConfig`, not a `WorldBounds` (`entities.py:23`), and only stores it (`entities.py:27`). Nothing reads `_world_bounds` (checked by grep). The server derives a second, separate bounds object from the same config, and nothing keeps the two in step. Say they are derived independently from one config, or drop the sharing claim.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/migratory_server/entities.py:23-27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Out-of-bounds positions are unhandled on the force path this slice opens",
+      "description": "`Environment.query()` raises `ValueError` for any position outside the world bounds, even with zero layers (`src/migratory/environment/container.py:54-56`). The design's example force calls `query(state.positions)` every tick (lines 210-211). Nothing clamps or removes agents at the edge: `integrate()` updates positions with no bounds handling (`src/migratory/engine/integration.py:36-44`). The parent lists \"entities leaving world bounds\" as a future event source (300-arch line 88), so the case is reachable now. Once a force queries the environment, one agent that drifts out of bounds raises inside `tick_body` and stops the server (see the failure-mode finding). The 500 architecture says the world server \"should not pass out-of-bounds positions\" (500-arch line 66). This slice must name who keeps positions in bounds, and when, before environment-aware forces are built.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"An empty environment is a valid environment (all queries return zero-filled arrays)\" is false for out-of-bounds positions",
+      "description": "The claim holds only for in-bounds positions. Empty layers still get bounds validation (`src/migratory/environment/container.py:54-56`). Reword it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure-mode handling for exceptions raised inside the tick body",
+      "description": "The new calls can raise `ValueError` (`container.py:56` and `81-84`), and layer `pre_tick` and `post_tick` can raise too. Nothing catches them. `TickLoop.run` awaits the tick body with no handler (`src/migratory_server/tick.py:64`). `Server.run` has no try/finally, so `client_manager.close_all()` and `_shutdown()` (`src/migratory_server/server.py:133-134`) are skipped when the loop raises. The design claims \"shuts down cleanly\" (line 351) and \"environment is consistent for next tick\" (line 106). Neither holds if `engine.tick()` raises between `pre_tick` and `post_tick`: the environment stays in its pre-tick state. The design needs a stated policy (for example, exceptions are fatal, shutdown is best-effort, and the environment is abandoned) and a decision on try/finally in `Server.run`. The parent requires that \"error states\" be \"first-class concerns with defined behavior\" (300-arch line 45). The 301 slice has no exception policy either (grep found none).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The per-tick NFR is not restated",
+      "description": "This slice adds two calls to every tick. The parent sets target tick rates of 20\u201360 Hz (300-arch line 78) and an initial operating range of 10K\u201350K entities on one CPU (300-arch line 94). The design does not state the tick budget (1/tick_rate, 50 ms at the default 20 Hz), the overhead allowed for environment lifecycle calls, or the cost with no layers. It should restate these targets and say how environment work counts against them. The cost with no layers is small, so this is a restatement gap, not a performance risk.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:64-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment snapshot data is dropped although the plan and slice 305 both assign it to this slice",
+      "description": "Line 47 defers \"Environment data in client snapshots/broadcasts\" to \"future work\" with no owner. The slice plan says \"Terrain summary in snapshots deferred to (304)\" (300 slices line 29). Slice 305 says \"Environment state in snapshots \u2014 slice 304 (not yet integrated)\" (305 slice line 52). Either this slice delivers the snapshot field, or the plan and 305 are changed to name a later slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Grid resolution and layer selection config are dropped although the plan and the 500 architecture assign them to the server config",
+      "description": "Line 48 excludes grid resolution, and lines 153-155 justify leaving out layer selection. The plan item says the server config covers \"seed, grid resolution, layer selection\" (300 slices line 27). The 500 architecture says \"The server expects to configure environment via YAML (seed, grid resolution, layer selection)\" (500-arch line 137). \"No grids until layers exist\" is a reasonable argument, but it defers plan scope without an owner. Either add the keys as validated, unused config or name the slice that owns them.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment-driven forces are moved from 303 to the behavior-engine initiative without a recorded change",
+      "description": "Slice 303 excludes \"Environment-driven forces \u2014 slice 304\" (303 slice line 44). This design excludes \"Environment-aware behavioral forces \u2014 behavior engine initiative (100)\" (line 46). Either this slice owns the environment-consuming force wiring, or 303 and the plan change. The design should say which, and 303 should be updated to match.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification step 2 cannot run as written",
+      "description": "Line 80 says `config/default.yaml` gains the environment section. Step 2 then runs `--config config/default.yaml` \"with environment section omitted\". After this change that file has no omitted section. The step needs a separate fixture with no `environment` key (for example, a temp copy of the default config in a test), or it should test omission through `config.load()`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification step 3 cannot be observed from the running server",
+      "description": "Step 3 expects \"Server loads environment config with seed 12345\", but nothing logs the seed. The startup log (`src/migratory_server/__main__.py:34-43`) reports tick rate, world size, capacity, and bind address, and the design adds no environment logging. The parent's \"observable by default\" principle (300-arch line 31) applies here. Log environment creation (seed, layer count, bounds) at startup and cite that line in step 3. That also lets step 1's \"no environment-related errors\" be checked.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:375-382"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A required `environment` field on `SimulationConfig` breaks three existing test fixtures",
+      "description": "Line 83 calls the field \"optional\", but the block at lines 237-245 declares `environment: EnvironmentConfig` with no default. `SimulationConfig` is a frozen dataclass with no defaults (`src/migratory_server/config.py:65-73`). Three existing fixtures build it without that argument (`tests/test_server.py:44`, `209`, `328`), so they raise `TypeError`. That breaks the \"All existing tests continue to pass\" criterion (line 354), which the design does not address. Special Considerations (lines 405-410) covers only the `step()` change. Give the field `default_factory=EnvironmentConfig`, which matches the \"optional\" intent, and list the fixtures as updated.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:237-245"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough and Special Considerations misstate which tests change",
+      "description": "Line 385 says the existing \"entity movement tests pass unchanged.\" But `tests/test_simulation.py` calls `sm.step()` ten times (lines 137, 156, 174, 196, 214, 234, 237, 267, 303, 339), and a required `tick_number` breaks every one. Line 407 says the change \"touches multiple test files\", but only `tests/test_simulation.py` calls `step()`. Line 401 correctly says to update the existing SimulationManager tests. Fix the walkthrough sentence.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:385"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design is overweight; several elements can be cut",
+      "description": "The real change is a lifecycle wrap of about four lines plus config and tests. The design runs about 410 lines and restates the `step()` call sequence three times (lines 102-105, 176-191, 276-288). Cut:\n- `_seasonal_parameter` (line 119). Nothing reads or writes it; `step()` takes the value as an argument.\n- The `environment` property (lines 216, 268-270). See the separate finding.\n- The illustrative `TerrainResistance` class (lines 204-214). It is future-slice design, labelled \"not built here\".\n- The second `step()` body (lines 272-288). Its duplication caused the FAIL.\n- The restated tick cycle in Value (line 23), which repeats 300-arch lines 59-66.\n- Duplicate rationale for the \"always present\" and \"why not more fields\" points (lines 151, 153, 218-220). Keep one.\nRemoving the dead attribute, the property, and the duplicate `step()` body cuts roughly 30 lines and removes the cause of the FAIL.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `environment` property cannot do what the design says it is for",
+      "description": "Line 216 says the property lets \"force construction code in `server.py` pass it to environment-aware forces.\" Forces are passed as an argument to the `SimulationManager(...)` constructor (`src/migratory_server/server.py:86-92`; design lines 306-313), so the manager does not exist yet when forces are built. Server code that builds forces already has the local `environment` variable. The property is not used by the design's own flow. Remove it, or describe a real consumer.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Optional `Environment | None` contradicts the design's \"always present\" rule and its compatibility reason",
+      "description": "Line 220 keeps `Environment | None` \"for backward compatibility with existing tests that don't provide one\". Line 410 says existing tests \"continue to work without modification\". But line 407 makes `tick_number` required, so every existing `step()` call breaks anyway. The `None` path therefore buys nothing for tests. It adds two `is not None` checks (lines 177-178 and 189-190), an Optional property, and a second code path, while line 219 says the environment is \"not optional\". Make it required (`environment: Environment`) and add one argument to the 11 `SimulationManager(...)` constructions in `tests/test_simulation.py`. Those calls are already being edited.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Seed validation accepts negative values that NumPy's RNG rejects later",
+      "description": "Validation requires only that `seed` be an int (line 249), so a negative seed passes. If layer slices pass it to NumPy's `default_rng`, which rejects negative seeds, the error surfaces inside a layer slice rather than at config load. I could not run NumPy here to confirm the pinned version's behavior. The parent requires config to be \"validated before the server begins operation\", with failures \"explicit and immediate\" (300-arch line 86). Add a `seed >= 0` check and state the range.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:247-250"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"After this, the tick cycle matches the architecture\" overstates the result",
+      "description": "Step 5 of the parent also writes to the event log when logging is active (300-arch line 65), and the logging slice (307) has not started. After this slice, steps 2 and 3 are complete and steps 4 and 5 are partial. Reword accordingly.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter `interfaces` omits 504 and 507, which the design relies on",
+      "description": "The 500 foundation slice lists 504 (seasonal interpretation) and 507 (environment specification) among its interfaces (500-slice line 7). This design passes the seasonal parameter toward layers through `pre_tick` (lines 103, 119, 198) and names 507 (lines 44, 153). Add 504 and 507, or state that they are not interfaces of this slice.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:7"
+    },
+    {
+      "severity": "PASS",
+      "title": "The two-phase lifecycle API matches the container and the 500 architecture",
+      "description": "`Environment.pre_tick(tick_number, seasonal_parameter)` (`src/migratory/environment/container.py:70-72`) and `post_tick()` (`:88-92`) match the calls at lines 103 and 105. The order matches 500-arch lines 54-58 and resolves the `environment.update()` naming that 500-slice line 424 flagged. The seasonal range check (`container.py:81-84`) is compatible with the 0.0 default.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-198"
+    },
+    {
+      "severity": "PASS",
+      "title": "Prerequisites and listed interfaces exist and are complete",
+      "description": "303 is marked complete in the slice plan (line 25). 500 is `status: complete` (500-slice frontmatter line 10). Every listed interface exists: `Environment`, `WorldBounds` (frozen, with the four named fields), `EnvironmentQuery.zeros`, `EnvironmentLayer` (runtime-checkable), `SimulationManager`, and `SimulationConfig`. The dependency direction holds: `migratory_server` imports `migratory.environment`, and nothing under `src/migratory/` imports `migratory_server`. Both live in one distribution (`pyproject.toml`), so no new dependency is needed.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:50-62"
+    },
+    {
+      "severity": "PASS",
+      "title": "Server integration points match the current code",
+      "description": "`Server.run()` builds the `EntityManager` before the `SimulationManager` (`src/migratory_server/server.py:76-92`). The tick body calls `sim.step()` (`:104`). The log line \"Spawned %d entities\" exists (`:83`), so step 1's expected output is accurate. `build_profiles` (`simulation.py:13`) and `_validate_simulation` (`config.py:301`) exist where the design says.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:293-323"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`step()` implementation block skips `post_tick()` when there are no entities",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:276-288",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Environment is not passed to `engine.tick()`, against the parent plan and the 500 architecture, with no recorded decision",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Agent-originated post-tick writes have no source and no path",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-198",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "\"Layers plug in without server changes\" and \"layers register themselves\" contradict the container's constructor-only registration",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The design says `WorldBounds` is shared with the entity manager; it is not",
+      "location": "src/migratory_server/entities.py:23-27",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Out-of-bounds positions are unhandled on the force path this slice opens",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"An empty environment is a valid environment (all queries return zero-filled arrays)\" is false for out-of-bounds positions",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:151",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No failure-mode handling for exceptions raised inside the tick body",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-108",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The per-tick NFR is not restated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:64-108",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment snapshot data is dropped although the plan and slice 305 both assign it to this slice",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Grid resolution and layer selection config are dropped although the plan and the 500 architecture assign them to the server config",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:48",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment-driven forces are moved from 303 to the behavior-engine initiative without a recorded change",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification step 2 cannot run as written",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification step 3 cannot be observed from the running server",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:375-382",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "A required `environment` field on `SimulationConfig` breaks three existing test fixtures",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:237-245",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough and Special Considerations misstate which tests change",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:385",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is overweight; several elements can be cut",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The `environment` property cannot do what the design says it is for",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:216",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Optional `Environment | None` contradicts the design's \"always present\" rule and its compatibility reason",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Seed validation accepts negative values that NumPy's RNG rejects later",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:247-250",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"After this, the tick cycle matches the architecture\" overstates the result",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:23",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Frontmatter `interfaces` omits 504 and 507, which the design relies on",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:7",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The two-phase lifecycle API matches the container and the 500 architecture",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-198",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Prerequisites and listed interfaces exist and are complete",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:50-62",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Server integration points match the current code",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:293-323",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-22T21:30:29.668276",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+      "chars": 19819,
+      "sha256": "28871ecb0563710cc24b56356a05250d64ef90160611c22020610528ec2e235d",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+      "chars": 9846,
+      "sha256": "ef8a217426923004132357be1756701a2bc5fc61eeefdafa25ca3dc8ecafc7da",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory/environment/container.py",
+    "src/migratory/environment/layer.py",
+    "src/migratory/environment/bounds.py",
+    "src/migratory/environment/query_result.py",
+    "src/migratory/environment/__init__.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory_server/config.py",
+    "src/migratory_server/server.py",
+    "src/migratory_server/tick.py",
+    "config/default.yaml",
+    "src/migratory_server/entities.py",
+    "src/migratory/engine/tick.py",
+    "src/migratory_server/__main__.py",
+    "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "project-documents/user/architecture/500-arch.environment-layer.md",
+    "project-documents/user/slices/500-slice.grid-infrastructure-and-world-coordinates.md",
+    "src/migratory/engine/integration.py",
+    "tests/test_simulation.py",
+    "tests/test_server.py",
+    "tests/test_main.py",
+    "project-documents/user/slices/303-slice.behavior-engine-integration.md",
+    "project-documents/user/slices/305-slice.websocket-client-layer.md"
+  ],
+  "searches": [
+    "list_files project-documents/user/architecture/* in .",
+    "list_files project-documents/user/slices/* in .",
+    "list_files **/*.py in .",
+    "list_files **/default.yaml in .",
+    "grep \\.step\\(|SimulationManager\\(|SimulationConfig\\(|build_profiles|EntityManager\\(|tick_body in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice",
+    "grep environment|Environment|world_bounds|WorldBounds|bounds in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/src/migratory_server",
+    "grep SimulationConfig\\(|environment|EnvironmentConfig|step\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/tests",
+    "grep default\\.yaml|def test_|SimulationConfig|simulation\\. in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/tests/test_config.py",
+    "grep default\\.yaml|config\\.load|Spawned|subprocess|__main__|def test_ in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/tests",
+    "grep environment|terrain|Terrain|active_indices in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/project-documents/user/slices/303-slice.behavior-engine-integration.md",
+    "grep [Ee]nvironment|[Tt]errain|snapshot in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/project-documents/user/slices/305-slice.websocket-client-layer.md",
+    "grep migratory|dependencies|packages|\\[tool|\\[project|build-system|requires|scripts|uv in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice",
+    "grep [Ee]xception|raise|error|crash|propagat in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/project-documents/user/slices/301-slice.tick-loop-and-timing.md",
+    "grep _world_bounds|migratory_server in /Users/manta/.config/squadron/reading-20261122/wt/migratory-304-slice/src"
+  ],
+  "sections_in_document": 32,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 25,
+    "in_fences": 0,
+    "in_section": 25,
+    "surviving": 25
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 37,
+  "prompt_tokens": 962131,
+  "cached_tokens": 792892,
+  "cache_write_tokens": 169217,
+  "completion_tokens": 88779,
+  "reasoning_tokens": null,
+  "duration_seconds": 383.2792647089809,
+  "cost_usd": 0.3117007,
+  "cost_basis": "provider"
+}

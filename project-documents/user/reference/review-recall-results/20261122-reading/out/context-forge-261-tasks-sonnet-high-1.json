@@ -1,0 +1,311 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Guide fixture cannot distinguish concept, Phase 2 and brownfield prompts, or load a profile",
+      "description": "Task 9T builds the `brownfield-guide` fixture by copying this file and adding \"a `brownfield-adoption: [...]` profile line and a short `##### Brownfield Adoption` section\". Task 12 then asserts \"concept prompt\" (items 1, 2, 6, 7, 9) and \"the Phase 2 prompt\" (item 10). The source file has three problems:\n- **No concept or architecture prompt.** Its prompts are Context Initialization, Tool Usage, implementation, design, review and Task Breakdown. `SectionBuilder.buildInstructionSection` (`SectionBuilder.ts:109-117`) falls back to `Custom instruction: Phase 0: Concept`. Nothing in the output marks a \"concept prompt\" or a \"Phase 2 prompt\", so those assertions can only be \"absence of Adoption Facts\" or are impossible.\n- **No `context_profiles` block.** `ContextProfileParser.parseProfiles` (`ContextProfileParser.ts:131-150`) needs a fenced yaml block containing `context_profiles`. \"A profile line\" does not create one.\n- **No `_default` profile.** If the fixture holds only `brownfield-adoption`, `getProfileForInstruction` (`:162-176`) returns `[]` for every other instruction. `applyProfileFiltering` then blanks every artifact field on concept and Phase 2 builds.\n\nTask 9T should specify:\n- distinct `##### Concept` and `##### Architecture` sections\n- a full fenced `context_profiles:` block with a `_default` entry and a `brownfield-adoption` entry\n\nTask 12 should then assert the markers by text.",
+      "file_ref": null,
+      "category": "test-fixtures",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:1-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`generateContext` gets a required parameter after optional ones",
+      "description": "The current signature is `generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)`. Task 11 says it \"gains a required `adoptionStateWrites` parameter\" with no position. Appended at the end, TypeScript rejects it (\"a required parameter cannot follow an optional parameter\"). Task 13 calls `generateContext(..., 'persist')`, which hides the same ambiguity. Task 11 should state where it goes. Putting it first, or turning the trailing arguments into an options object, would work. It should also update the two call sites at `contextTools.ts:200` and `:264` explicitly.",
+      "file_ref": null,
+      "category": "signature",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resolver writes `in_progress` before the facts that can still fail",
+      "description": "Task 9 runs step 5, the state write, before step 6, which gathers `readHistory`, `presentPaths` and `recognizeCi`. `pathPresent` rethrows every non-ENOENT error. A candidate like `docs/adr` under a regular file `docs` gives `ENOTDIR`, and an unreadable directory gives `EACCES`. Task 4T asserts this throw. Two consequences follow:\n- **State left behind.** The build fails after `adoption.state = in_progress` is already committed to `.context-forge.toml`. This is the same \"failed build leaves state written\" hazard that D9 avoids for the guide check, and nothing undoes it.\n- **No remedy shown.** The thrown error is a plain `Error`, not `AdoptionError`. `generateContextFromProject` turns it into the error stub, so `cf build` returns a stub prompt with no override message.\n\nTask 9 should gather and render the facts first, assuming the write will succeed, and write last. Task 4 or Task 9 should also wrap the `presentPaths` and `recognizeCi` errors in `AdoptionError` with the override remedy. Task 9T should add a case where fact gathering throws and the state stays `''`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/detection/pathPresent.ts:19-31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Planning-artifact pattern `\\d{3}` is narrower than the repo's conventions, and the task's claim about them is wrong",
+      "description": "Task 6 matches `^\\d{3}-(arch|hld|slices)\\..+\\.md$` and says it follows \"the same conventions ProjectModelBuilder already parses\". The code is less strict:\n- `documentDetector.ts:34` says matching is padding-insensitive, covering both `50-arch.foo.md` and `050-arch.foo.md`.\n- `ConsistencyChecker.ts:1328` and `:1342` use `\\d+`.\n\nUnder `\\d{3}`, a project with `50-arch.x.md` is not seen as planned. It then goes through the source walk and can be falsely classified as brownfield. That is the costly misfire D1 warns about. Task 6 should use `\\d+`, or Task 6T should add an unpadded-index case if three digits is deliberate.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/documentDetector.ts:34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`adoption.state` reads fall through to user config, and Tasks 2T, 9T, 12 and 13 don't isolate it",
+      "description": "`ConfigManager.get` checks the project file, then the user config file. `readAdoptionState` goes through `get`. A user-level `adoption.state` (`cf config set --user`) would silently force or suppress brownfield in every project. The key is meant to be shared and repo-scoped. The plan neither blocks nor mentions this.\n\nExisting tests isolate the user file with `process.env.CONTEXT_FORGE_DATA_DIR` (`ConfigKeys.test.ts:54-69`, `CoreServiceFactory.test.ts:77-95`). Task 2T says only \"temp directories\". Tasks 9T, 12 and 13 also don't mention it. On a developer machine with a user-level key set, they could read real config. Tasks 2T, 9T, 12 and 13 should require setting `CONTEXT_FORGE_DATA_DIR` per test. Task 2 should either read the project file only or record the user-scope behavior as accepted.",
+      "file_ref": null,
+      "category": "config-isolation",
+      "raw_category": null,
+      "location": "packages/core/src/config/ConfigManager.ts:121-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 before/after diff procedure is ambiguous and likely to differ for the wrong reason",
+      "description": "Task 15 builds `/tmp/before.md` from \"a temporary `git worktree add` of `main`, built there\". The slice walkthrough runs both builds in this repo's registered project. A fresh worktree has no `node_modules`, so it needs a `pnpm install` first. If the CLI from that worktree builds the registered project, the output is not identical, because the project path and worktree resolution differ. If it builds the new worktree's own path, it is not a registered project. The task should say:\n- build `main`'s CLI `dist` in the worktree\n- run that CLI with this repo as cwd, then run the slice branch's CLI the same way\n- diff the two outputs",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:350-355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test volume beyond what the criteria need, and overlap between 9T and 12",
+      "description": "The file has about 34 work items. Cuts that lose no criterion coverage:\n- **Task 4T** (line 112) runs `it.each` over every entry of all three constant lists, about 21 cases that restate the constants. Keep one case per list.\n- **Task 1T** (line 61) re-tests `resolvePhaseValue` for three inputs. This is existing behavior, and `projectSchema.ts:140-141` already holds the legacy alias. One assertion that `CONCEPT_PHASE` equals `PHASE_STRINGS[0]` is enough.\n- **Tasks 9T and 12** both run the same D4 selection cases against real directories: empty, 2000 lines, resume, declined, planned, explicit, read-only, missing profile. Task 9T should keep only what an integration run can't see (no-fs spy, walk never runs, write failure, check-before-write). Task 12 should carry the end-to-end matrix.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4 leaves the barrel status of `presentPaths` itself unclear",
+      "description": "Task 4 forbids adding \"them\" (the lists) to the barrel but is silent on `presentPaths`. Task 9 doesn't say how the resolver imports them. It should say the resolver imports `presentPaths` and the lists directly from `detection/presentPaths.js`. `node.ts:58` re-exports the whole barrel, so anything added there becomes public API.",
+      "file_ref": null,
+      "category": "exports",
+      "raw_category": null,
+      "location": "packages/core/src/detection/index.ts:1-2"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Every functional criterion maps to a task:\n- scaffold-only, brownfield, shallow clone, concept-only, planned: Task 12 items 1\u20137\n- monorepo scoping: Task 12 item 5 and Task 5T\n- resume: Task 12 item 8\n- override both ways and re-detect: Task 12 item 9\n- invalid value rejected: Task 1T\n- `--phase 2`: Task 12 item 10\n- explicit instruction: Task 12 item 11\n- missing guide profile: Task 12 item 12\n- `template_preview` stays read-only: Task 12 item 13\n- CLI/MCP parity: Task 13\n\nThe technical-requirement unit tests all have `T` tasks, each placed straight after its implementation task. I found no task without a criterion behind it.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:319-345"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about existing code, sequencing and the performance NFR",
+      "description": "These claims hold:\n- `ContextIntegrator.ts` is 377 lines.\n- `resolveInitiativePlanPath` swallows every `readdir` error (`ArtifactIntrospector.ts:27`).\n- `MIN_GUIDE_VERSION` is `0.22.2`.\n- `export *` of `projectSchema.ts` already exports `CONCEPT_PHASE`.\n- `ConfigKeys` is imported by `ConfigManager`, so the cycle note is right.\n- `gitExec(args, cwd, opts)` takes `cwd` and `timeoutMs`, and its timeout text is `timed out after 5s`.\n- The existing `createContextPipeline(` callers are `build.ts:84`, `contextTools.ts:92` and the test callers `grep` finds.\n- `build.test.ts:227` holds the `toHaveBeenCalledWith('/tmp/test')` that Task 11 updates.\n- `ConfigManager.test.ts:440` counts keys dynamically, so adding one key doesn't break it.\n\nCommit markers sit at working, tested points. Dependencies run one way with no cycles. `contracts.ts` has no imports, and `adoptionOutcome.ts` uses `import type` for `SourceVolume`. No `tests/load/` directory exists, and the `tests/load` rule lives only in `rules/python.md`. The slice's own D2 says tests assert the caps rather than timings, and the plan states this, so no load or CI-gating task is required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:1-377"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-fixtures",
+      "raw_category": null,
+      "summary": "Guide fixture cannot distinguish concept, Phase 2 and brownfield prompts, or load a profile",
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:1-30",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "signature",
+      "raw_category": null,
+      "summary": "`generateContext` gets a required parameter after optional ones",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Resolver writes `in_progress` before the facts that can still fail",
+      "location": "packages/core/src/detection/pathPresent.ts:19-31",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Planning-artifact pattern `\\d{3}` is narrower than the repo's conventions, and the task's claim about them is wrong",
+      "location": "packages/core/src/introspection/parsers/documentDetector.ts:34",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "config-isolation",
+      "raw_category": null,
+      "summary": "`adoption.state` reads fall through to user config, and Tasks 2T, 9T, 12 and 13 don't isolate it",
+      "location": "packages/core/src/config/ConfigManager.ts:121-178",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 15 before/after diff procedure is ambiguous and likely to differ for the wrong reason",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:350-355",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Test volume beyond what the criteria need, and overlap between 9T and 12",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "exports",
+      "raw_category": null,
+      "summary": "Task 4 leaves the barrel status of `presentPaths` itself unclear",
+      "location": "packages/core/src/detection/index.ts:1-2",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:319-345",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Claims about existing code, sequencing and the performance NFR",
+      "location": "packages/core/src/services/ContextIntegrator.ts:1-377",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-22T21:40:50.844185",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "chars": 30105,
+      "sha256": "b55688a9f1052ec43c75cb450baf3e2486e318f6c20622a3e6be5f3a578a04a7",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+      "chars": 38107,
+      "sha256": "3ba57648169d4518ebce13a383d3ae8ab00dd784934406cfff445eaab217ea5e",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/core/src/services/ContextIntegrator.ts",
+    "packages/core/src/schema/projectSchema.ts",
+    "packages/core/src/detection/pathPresent.ts",
+    "packages/core/src/detection/index.ts",
+    "packages/core/src/config/ConfigKeys.ts",
+    "packages/core/src/guides/gitExec.ts",
+    "packages/core/src/node.ts",
+    "packages/core/src/config/index.ts",
+    "packages/core/src/config/ConfigManager.ts",
+    "packages/core/tests/config/ConfigKeys.test.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/core/src/services/SystemPromptParser.ts",
+    "packages/core/src/services/ContextProfileParser.ts",
+    "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+    "packages/core/tests/services/CoreServiceFactory.test.ts"
+  ],
+  "searches": [
+    "grep createContextPipeline\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages",
+    "list_files packages/core/src/detection/*.ts in .",
+    "grep PERMISSIVENESS_LEVELS|ARCHITECTURE_PHASE|PermissivenessFragmentError in .",
+    "grep resolveInitiativePlanPath|readdirSync|INITIATIVE|\\\\d\\{3\\} in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/introspection/ArtifactIntrospector.ts",
+    "grep ARCHITECTURE_PHASE|resolvePhaseValue|schema in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/index.ts",
+    "list_files packages/core/src/config/ConfigManager.ts in .",
+    "grep Object.keys\\(CONFIG_KEYS\\)|CONFIG_KEYS\\)|toHaveLength|\\.length\\)\\.toBe in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages",
+    "grep workflow\\.permissiveness in .",
+    "grep permissiveness in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/README.md",
+    "grep rules\\.exclude|workflow\\.setup_ci_offer in .",
+    "grep createContextPipeline|generateContext\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages",
+    "grep export function findProjectGuideFile|async function findProjectGuideFile|function findProjectGuideFile in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src",
+    "grep resolvePhaseValue in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/schema/projectSchema.ts",
+    "grep order: 3\\.5|3\\.5|permissivenessFragment in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/services/ContextTemplateEngine.ts",
+    "grep getPromptForInstruction|parseProfiles|getProfileForInstruction in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/services",
+    "grep brownfield|context_profiles|#####  in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/tests/fixtures/test-project",
+    "grep buildInstructionSection in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/services",
+    "grep buildInstructionSection in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src",
+    "grep createTestProjectData in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/tests/helpers/testData.ts",
+    "grep -arch|-hld|-slices|-concept in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/introspection",
+    "list_files project-documents/user/{architecture,project-guides}/* in .",
+    "grep MIN_GUIDE_VERSION in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src",
+    "grep ^ in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/core/src/services/ContextIntegrator.ts",
+    "grep new ContextIntegrator\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages",
+    "grep describe\\(|vi\\.mock in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/mcp-server/tests/contextTools.test.ts",
+    "list_files **/tests/load/** in .",
+    "grep tests/load in .",
+    "grep parseValue|coerce|=== ''|\\.set\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks/packages/cli/src/commands/config.ts"
+  ],
+  "sections_in_document": 7,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 47,
+  "prompt_tokens": 1305789,
+  "cached_tokens": 1196666,
+  "cache_write_tokens": 109091,
+  "completion_tokens": 26474,
+  "reasoning_tokens": null,
+  "duration_seconds": 189.86262087523937,
+  "cost_usd": 0.8239186000000001,
+  "cost_basis": "provider"
+}

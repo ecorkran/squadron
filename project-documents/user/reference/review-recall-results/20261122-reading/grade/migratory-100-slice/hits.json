@@ -1,0 +1,22 @@
+{
+ "case": "migratory-100-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Force Protocol: \"The tick loop prefers the bulk variant when available\", and Success Criteria: \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths\". The only `tick` signature in the document is `forces: list[BulkForce]`; no sentence says how a per-agent `Force` reaches `tick()`, and a tick that prefers the bulk variant \"when available\" must accept both. **VALID** (minor): self-contradiction between prose and signature. Needs: doc alone. The implementation at `05626ea` kept `forces: list[BulkForce]` and never added the per-agent dispatch.",
+   "hits": {
+    "r01": [7],
+    "r02": [5],
+    "r03": [19],
+    "r04": [0],
+    "r05": [4],
+    "r06": [2],
+    "r07": [0],
+    "r08": [2],
+    "r09": [1],
+    "r10": [2]
+   }
+  }
+ ],
+ "note": "No borderline calls. r10 i9 also mentions the unused per-agent Force, but only by pointing back to i2, so it is not counted separately."
+}

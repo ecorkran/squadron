@@ -1,0 +1,82 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The `arch` boundary is under-specified: no slice, no index, no status to attach to",
+   "description": "Line 168 says \"The `slice`, `tasks`, and `arch` boundaries follow the identical shape.\" For `arch` that isn't true. The pre-slice-plan boundary sits in the `GUARD: no-active-slice` path (lines 57, 136), where there is no selected slice and so no `SliceStatus` to set to `pending-review`/`review-failed`. TD-3 (line 222) assumes every gated state comes out of status derivation, so it doesn't cover this case. `detectDocuments(projectPath, sliceIndex, reviewType)` also needs an index. An arch review is named with the initiative/arch index (`NNN-review.arch.*.md`, arch \u00a7Initiative-level gating), not a slice index. The design never says where that index comes from, which architecture is \"current\" when there are several initiatives, or how the `review-gate` branch in `getNext()` is reached from a guard that comes before it. Since this slice absorbs 244, it now owns the arch's \"different insertion point in the cascade\" (arch line 163).\n\nFix: add a short subsection for the pre-slice-plan path. It should say how the arch index is resolved, which object carries the gated state when there is no active slice, and where in the cascade the `review`/`blocked` recommendation is returned.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:168"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gated statuses hide which review is owed and what the slice's lifecycle status was",
+   "description": "The arch's goal of first-class status representation (arch line 32) asks that \"the visualizer and runners can act on them without parsing recommendation strings.\" This design uses one `pending-review` value for all four boundaries. A runner needs to know which review agent to send work to (arch, slice, tasks or code). Here that information exists only inside the `rationale` prose (line 268). The `NextAction` type is frozen (TD-7), so runners would have to parse strings, which is exactly what the arch rules out. The status also overwrites `needs-tasks`/`in-implementation`/`complete`, so `getStatus()` consumers lose the lifecycle position underneath. The arch only defined these statuses for the \"tasks complete\" position, where that loss didn't matter.\n\nFix: give consumers a structured way to read the review type, such as an optional `reviewType`/`boundary` field on `SliceStatus`. That adds to `SliceStatus`, not `NextAction`. Alternatively, state that runners call `getStatus()` and explain how they get the review type from it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:220-222"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `review`/`blocked` recommendation vocabulary is not fixed",
+   "description": "The arch (lines 117-125, 173) defines `recommendation: \"review\"` and `recommendation: \"blocked\"` as the stable vocabulary Amoeba routes on. TD-7 instead proposes prose (`'Review required before advancing'`, `'Blocked: review verdict does not clear threshold'`) and says \"Exact strings finalized in implementation.\" Line 286 still calls these \"the stable strings runners route on.\" Downstream runners depend on this contract, so it has to be settled in the design, not left to the implementer. If the existing recommendations are prose and the arch's tokens are being deliberately replaced, the slice should say so and name the exact strings.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:255-268"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parse/read failures are merged into \"no verdict\" and the arch-required parse-failure rationale is dropped",
+   "description": "The arch's file-read failure modes section (line 149) requires that \"The rationale returned to the caller names the parse failure explicitly.\" The design leans on `parseFrontmatter` never throwing. It treats \"a read failure and a missing frontmatter both surface as 'no verdict present'\" as exactly the right behavior (line 79). TD-7's rationale contract (line 268) only requires the review type, verdict and threshold. So an unreadable or malformed review produces the same output as one with no `verdict` field, and nothing is logged. That conflicts with the project's failure-mode rule that every failure mode must be observable. The design can still tell the cases apart: `found: false` on a file that exists versus `found: true` with no `verdict`.\n\nFix: keep that distinction in what `reviewGate` returns. Require the `review-failed` rationale to name the parse/read failure. Log it at WARNING. Add a test for it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "New config read path in `cf next` has no failure handling and threatens the \"identical when off\" guarantee",
+   "description": "Today the navigator reads no config. After this change, all four surfaces build a `ConfigManager` and the navigator calls `config.get(...)` on every call. The design doesn't say what happens if `.context-forge.toml` or the user config is malformed or unreadable, or if a stored value fails validation. If `ConfigManager` construction or `get` throws, `cf next`/`workflow_next` would fail for projects that never enabled gating. That breaks the \"byte-for-byte identical\" success criterion on line 305. The arch's fail-fast principle says to surface config errors, not hide them, but the design has to say where they surface and that the gating-off path doesn't depend on them.\n\nFix: name this failure mode, choose a strategy (for example, a config load error is a clear error from the surface), and add it to the regression tests.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97-112"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Leaving `review_type` keys defined but unread silently ignores user configuration",
+   "description": "TD-4 leaves `workflow.review_gates.*.review_type` settable and validated but never read. A user who sets `pre_advance.review_type = \"slice\"` gets no error, and the setting quietly has no effect. That conflicts with the arch's fail-fast rule (arch line 48: \"an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block\"). It also conflicts with the project rule against silent fallbacks. The backward-compatibility argument is weak. These keys shipped inert in 240 with no consumer, so nobody's behavior can depend on them. Keeping them also adds config surface and documentation work for 243 that buys nothing.\n\nFix: remove the keys now; the slice already describes this as a one-line deletion plus tests. If they stay, reading a non-empty value should produce a warning. The decision should be final in the design, not left open.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:224-231"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`GateOutcome` includes a value `evaluateVerdict` never returns",
+   "description": "`evaluateVerdict(...): GateOutcome` covers `'pending'`, but line 218 says `pending` is supplied by the navigator from `review === null`. The text \"evaluateVerdict returns clears/pending/failed\" contradicts that. \"reviewGate also exposes the normalized verdict and resolved threshold\" doesn't say through what API. Narrow the return type to `'clears' | 'failed'`, or move the absent-artifact case into `reviewGate`, and specify how rationale data is returned. This may also be the natural place for the parse-failure detail.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:184-218"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The new status values are not covered by the slice's own no-magic-strings rule",
+   "description": "`STATUS` only holds the `NormalizedStatus` task values. `pending-review`/`review-failed` (and the existing `SliceStatus` values) have no constant, yet line 394 says new code uses no bare status literals. Say where the `SliceStatus` values are defined once. Also, `positionToReviewType` returns `string` rather than a `ReviewType` union taken from `BOUNDARY_REVIEW_TYPE`.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:237-251"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Parent arch document is now out of date",
+   "description": "The arch still describes configuring `reviewType` per gate (lines 30, 78-88), says pre-slice-plan is deferred to a later slice (lines 22, 141, 163), and says a present `UNKNOWN` can map to `pending-review` (line 106). The slice plan and this slice have replaced all three. Neither 241 nor 243 is assigned to update the arch, so future reviews will keep running into these differences.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Slice 910 is referenced but does not exist",
+   "description": "The sweep of about 50 pre-existing literal sites is deferred to \"maintenance slice 910,\" which is listed in `interfaces`. No 910 document exists, and it isn't in the slice plan. Make sure it is tracked so the deferral doesn't get lost.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:251"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "MCP worktree scope is assumed rather than stated",
+   "description": "Arch line 171 wants the `workflow.review_*` keys resolvable at worktree scope. Line 110 says the CLI already resolves the worktree-aware path. It doesn't say whether the two `workflowTools.ts` call sites pass a worktree-resolved `projectPath`. Say so explicitly.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:110"
+  }
+ ]
+}

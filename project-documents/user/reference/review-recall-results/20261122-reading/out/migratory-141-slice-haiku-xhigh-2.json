@@ -1,0 +1,724 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Canonical workload example fails the loader it specifies",
+      "description": "The design's `mid-flock.yaml` uses `world_size: [200.0, 200.0, 200.0]` and 3-component `cluster_centers` (design lines 366\u2013368). The loader requires exactly two `world_size` entries (`DIMS=2`, `src/migratory/__init__.py:4`), and `tests/bench/test_workload.py:122-127` pins that error. The `cluster_centers` parser reads only `c[0]` and `c[1]` (`workload.py:206-208`), so even a corrected 3D list would silently drop z. Verification steps 3 and 6 (design 615\u2013621, 641\u2013647) and success criterion line 558 all depend on this file loading. Make the example 2D and state `DIMS=2` in the schema section.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory/bench/workload.py:187-191"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The `numpy` backend runs Numba JIT forces by default",
+      "description": "`USE_JIT_KERNELS` defaults to `True`. Every BulkForce wrapper dispatches to Numba when it is set (`flocking.py:82`, `:192`, `:326`; `herding.py:32`, `:175`). The design defines `numpy` as \"today's `engine.tick.tick`\" (design 60\u201362) and promises bit-exact NumPy parity against a golden hash (463\u2013467). It also says Numba is a one-row registration that uses the same flag (341\u2013345). With the default flag, the `numpy` row already contains JIT forces, so the numba row would be identical unless the numpy backend sets `USE_JIT_KERNELS=False`. Slice 142's \"vs NumPy\" comparison and the golden hash are then ambiguous. The flag is module-global, so the deferred `--all-backends` question (763\u2013766) becomes a state-leak risk as soon as a second force-kernel backend registers. Specify the flag state per backend and the process-isolation strategy now.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory/engine/_jit_config.py:14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`mid-flock` does not match the operating point it claims to represent",
+      "description": "The design calls mid-flock the \"current default operating point ... roughly equivalent to the live-server default config\" (design 352\u2013355). The shipped default runs 100 agents (`config/default.yaml:262`, header 7\u20139), adaptive spatial dispatch (`:127`), no neighbor cap (`:181` is commented out), and wrap bounds (`:29`). The architecture's 3,500 @ 57 TPS baseline is cKDTree with k=13 (`140-arch.simulation-scaling.md:50-54`, memory table 82\u201390). The registry sets `max_neighbors=32` (`src/migratory/bench/workload.py:45`, `:58`). The workload therefore matches neither reference, and walkthrough step 9 (design 661\u2013668) compares against k=13 numbers. `SimulationManager.step` also applies `apply_bounds_policy` after every tick (`src/migratory_server/simulation.py:122-128`), which the harness omits. The harness TPS is engine-only and should be labeled that way. Name the reference (N, k, spatial backend, bounds) and record it in the workload description.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "config/default.yaml:262"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Force set omits propulsion, and the registry duplicates the server's composition",
+      "description": "The design says there are \"five existing BulkForce implementations\" (design 138\u2013141). The server engages `PropulsionForce` whenever any profile has `propulsion_weight > 0` (`force_builder.py:37`, `:60-62`), and the default profile sets 0.1 (`config/default.yaml:176`). The server also adds Flight/Pursuit and the soft-bounds repulsor (`force_builder.py:64-78`). The harness's `_FORCE_REGISTRY` already includes `propulsion` (`src/migratory/bench/workload.py:73`), but the design's mid-flock force list omits it (design 379\u2013384). The harness's flocker profile therefore carries `propulsion_weight=0.1` that never engages. Design 138\u2013141 also says the harness \"does not duplicate the engine's force list\", yet `workload.py:33-74` hand-copies profile and force registries. The harness cannot import `migratory_server`, so specify the composition rule (weight > 0 engages the force) and add a test in `tests/bench` that pins the harness registry against `force_builder`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/migratory_server/force_builder.py:31-38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile and force registry claims point to things that do not exist",
+      "description": "Design 371 says profile names \"resolve against migratory.engine.profile presets.\" Design 392\u2013394 says they map to \"constructors used in config/default.yaml.\" Design 398\u2013400 says force names resolve to \"module-level singleton instances (e.g. `flocking.cohesion_force`).\" `profile.py` is a bare dataclass with no presets. `config/default.yaml` has only a profile named `default` (`:146`). `flocking.py` defines classes (`:65`, `:175`, `:311`), and grep finds no module-level `cohesion_force`. The registries are hand-written in `workload.py:33-74`, with values copied from `default`. Correct the text to say the harness owns these registries.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/migratory/engine/profile.py:6-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "KDTree is described as the spatial backend used today, and the module path is wrong",
+      "description": "Design 136\u2013137 and 542 say the harness uses \"the spatial backend used today,\" cited as `engine.spatial.KDTreeQuery`. `engine/spatial.py` does not exist. The class is `migratory.spatial.kd_tree.KDTreeQuery` (`src/migratory/spatial/kd_tree.py:16`), and the module documents it as opt-in (`kd_tree.py:4-5`). The production default is `adaptive` (`config.py:293`, `src/migratory_server/server.py:236`). The harness therefore benchmarks a backend the server does not select by default, and the workload schema has no way to change that (see the spatial-axis finding).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:293"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `all_radii` cost is attributed to `force_total`, which the code contradicts",
+      "description": "Design 697\u2013700 says the `force_total` measurement includes the per-tick `all_radii = np.array(...)` setup. In `tick()`, that setup runs at step 3, before the query (`tick.py:58`). The force loop is `tick.py:108-111`. The design's own overhead definition (design 287\u2013290) lists profile-attribute indexing as overhead. The risk section and the phase definition disagree, and the code matches the definition. Correct the risk text.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory/engine/tick.py:56-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Phase boundaries are undefined across the two tick branches, and the names disagree",
+      "description": "Design 246\u2013248 says the phase boundaries \"correspond exactly\" to bracketed regions of `tick()`. They do not, because `tick()` has two branches. On the fast path, the cap runs inside `query_knn_batch` (`tick.py:78-83`), so cap time lands in `spatial_query`. On the general path, `apply_neighbor_cap` runs after the query (`tick.py:91-102`), so it lands in `csr_assembly`. Specify the boundary for each branch, or `spatial_query` and `csr_assembly` will mean different things across workloads. Also:\n- Architecture names this phase `self_excl_cap` (`140-arch.simulation-scaling.md:54`). The design says the architecture table calls out `csr_assembly` (design 246\u2013248).\n- `total_ns` is \"tick wall time, including overhead\" (design 284). `runner.py:25-30` brackets from `spatial_build` through `integrate`. `record_density` (`tick.py:129-130`) falls outside that bracket but inside the design's definition.\n- `PhaseTimer` is named (design 63\u201364, 162, 202) but never defined. `runner.py` has only `PhaseTimings`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "design 244-272"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The drift check misses the path production uses, and the duplication is not justified against lighter options",
+      "description": "The drift test compares `tick_instrumented` with `tick()` on the same input. Every registered profile sets `max_neighbors=32` (`workload.py:45`, `:58`), so the harness only exercises the fast path (`tick.py:74-83`). The production default has no cap and takes the general path (`tick.py:85-102`), so divergence there would not be caught. `tick()` also mutates `state` in place and the spatial object holds state, so a bit-equal comparison needs two independent `AgentState` and spatial instances. The design does not say so, and it never mentions the `active_indices` parameter (`tick.py:21`). The design also does not evaluate wrapping the spatial and force objects with timing proxies and calling the unmodified `tick()`. That keeps one tick body, but it cannot time `integrate`, `exclude_self`, or `apply_neighbor_cap`, which `tick.py` binds as module-level imports (`tick.py:7-8`). Record that reason, and require the drift test to cover both branches.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "design 682-695"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parity hash cannot serve the tolerance comparisons downstream slices need",
+      "description": "The design says a downstream consumer \"interprets [the hash] within the documented tolerance band\" (471\u2013473). A SHA-256 supports only equality. Slice 145 must compare GPU runs against the NumPy reference \"within a documented tolerance\" (`140-slices.simulation-scaling.md:36`, open question at line 78). The design also defines the hash input differently in two places: \"post-warmup\" (design 81) and \"after the measure phase\" (design 460). Store a reference artifact that tolerance comparisons can use, such as the final positions and velocities, and fix one definition of the hashed state.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "design 469-473"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The workload schema has no spatial-backend axis, so slice 143 cannot run through the harness",
+      "description": "Setup hardwires `KDTreeQuery` (design 136\u2013137, 542), and the schema has no field for the spatial backend. Plan 143 must compare `QuadrantsSpatialQuery` against `KDTreeQuery` at N=10k, 50k, and 250k, and selects backends through `spatial.backend` (`140-slices.simulation-scaling.md:32`). The server already selects among `adaptive|grid|brute|kdtree` (`src/migratory_server/config.py:293`, `:333`). Add a spatial-backend axis to the workload or as a backend parameter. As designed, the registry varies only the compute substrate, so the \"one file per backend\" integration claim (design 586\u2013591) does not hold for 143.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "design 349-390"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-force timing from the plan is deferred without a plan change",
+      "description": "Plan 141 requires \"force totals per force\" (`140-slices.simulation-scaling.md:26`). The design defers per-force timing to slice 142 (design 293\u2013296), but the plan does not assign it to 142 (`:30`). Slice 142's go/no-go depends on per-force port-effort measurements. Either keep per-force timing in 141 (the change is small: time each `force_fn` call), or update plans 140 and 142 in the same change.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "design 293-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CUDA, CSV, and config-sourced workloads are deferred without recording it in the plan",
+      "description": "Plan 141 requires Apple Silicon and NVIDIA CUDA runs, \"machine-readable (CSV/JSON)\" output, and workloads read \"from config\" (`140-slices.simulation-scaling.md:26`). The design defers CUDA to \"someone runs ... later\" (design 96\u201399), delivers JSON and Markdown only (76\u201378), and places workloads under `bench/workloads/`. Deferring CUDA is defensible, since the architecture says NVIDIA is not required below 250k (`140-arch.simulation-scaling.md:28`). But Tier 3 is gated on \"Tier 2 validated on CUDA via (141)\" (`140-slices.simulation-scaling.md:61`). Record the CUDA deferral against a plan entry with an owner, and state the CSV and config changes explicitly.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "design 96-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle and hang handling cover only setup failure",
+      "description": "- `finalize` runs only when `setup` raises (design 514\u2013515). Exceptions in `tick_once`, a KeyboardInterrupt during warmup or measure, and partial runs have no cleanup. `finalize` is the GPU-release hook (design 337\u2013339).\n- The data flow calls `finalize()` (design 205) before reading the final `TickResult` for parity (208\u2013211). If a GPU finalize releases device memory, the read happens after release. Hash the result before finalize.\n- There is no timeout or hang strategy. \"TPS < 1 \u2192 warning but writes the report\" (516\u2013517) treats a hung backend as a slow one, so a stuck kernel blocks the CLI indefinitely.\n- It is unspecified whether a `--all-backends` run that fails on backend 2 keeps backend 1's JSON.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "design 514-517"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report writes and Markdown source selection are unspecified",
+      "description": "- JSON is written without atomicity (temp file plus rename). A crash leaves a truncated file that a reader rejecting unknown versions will fail on.\n- The filename `{timestamp}_{workload}_{backend}.json` (236) can collide for two runs in the same second and silently overwrite, against \"writes a fresh result file\" (230).\n- The Markdown renderer reads \"all backends in `bench/results/`\" (440\u2013441). Accumulated runs from different SHAs produce several results per backend, so \"one row per backend\" (556\u2013557) is undefined. Specify latest per (workload, backend), or filter by SHA.\n- \"sortable on TPS\" (79\u201380) conflicts with \"the renderer is dumb\" (452\u2013456).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "design 236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Formation generation, profile assignment, and seed plumbing are unspecified",
+      "description": "The schema comments give \"uniform random in [0, world_size]\" and two cluster kinds (design 360\u2013363) with no distribution, RNG, draw order, or velocity or heading initialization. The engine has no RNG, and `AgentState.create` zero-initializes positions and velocities (`src/migratory/engine/state.py:52-54`). All seed-to-state mapping is therefore harness code, and the parity hash depends on it. Profile fractions (design 370\u2013376) are not validated to sum to 1, and nothing says how fractions become counts (for example, 0.95 \u00d7 3500) or whether `profile_indices` are contiguous or shuffled. The server's spawn path already draws positions and random headings from an RNG (`src/migratory_server/entities.py:100-110`, `:141-142`), and the design does not say whether to mirror it. Specify the generator, the RNG (`np.random.default_rng(seed)`), the draw order, and count rounding.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "design 360-368"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`dispersed` and `packed-herd` have no parameters, and their attribution to the architecture is unsupported",
+      "description": "Only `mid-flock` has parameters (design 349\u2013390). `dispersed` and `packed-herd` have no N, world size, cluster radius, centers, or profile mix. Success criterion 558 and walkthrough step 6 (641\u2013647) cannot be satisfied from the design. The design also calls these \"the architecture's named formation regimes\" (73\u201375). The names appear in the plan (`140-slices.simulation-scaling.md:26`) and in the performance journal. The architecture itself uses only \"formation-dependent\" (`140-arch.simulation-scaling.md:38`).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "design 73-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reproducibility claims are not met by the recorded metadata",
+      "description": "- `git rev-parse HEAD` is recorded with no dirty flag. A run on uncommitted engine or harness code carries the clean HEAD SHA, so \"re-run last quarter's bench on this quarter's code\" (46\u201348) cannot be reconstructed. Record a dirty flag or a diff hash.\n- The JSON omits the workload spec (formation, profiles, forces, dt, seed) and any hash of the YAML. \"Repo hash + workload name\" (184\u2013185) identifies a file, not the parameters used.\n- The behavior when `git` is missing or the tree is not a checkout is unspecified. Under \"no silent fallbacks\" (519), it must raise or record an explicit placeholder.\n- The example uses a short SHA, `fc989bf` (418), while the spec says the full `HEAD` (232\u2013233). Walkthrough step 4 says \"git_sha matches HEAD\" (627\u2013629).",
+      "file_ref": null,
+      "category": "reproducibility",
+      "raw_category": null,
+      "location": "design 232-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI surface and workload path resolution do not match the walkthrough",
+      "description": "- Walkthrough steps 1 and 2 use `--list-backends` and `--list-workloads` (design 605, 611). The CLI section defines neither (480\u2013482). Step 1 fails as written. `src/migratory/bench/cli.py:9-12` is still a placeholder.\n- `--workload mid-flock` has no defined mapping to `bench/workloads/mid-flock.yaml`. The default directory is relative to the working directory.\n- `bench/workloads/` sits outside `src/` (design 183\u2013185), and `pyproject.toml:31-32` packages only `src`. An installed copy cannot find the workloads unless the loader resolves the repo root explicitly.\n- Design 393 says `bench/workload.py`, but the module is `src/migratory/bench/workload.py` (design 163).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "design 477-487"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The loader accepts degenerate inputs that yield meaningless numbers",
+      "description": "`from_dict` casts fields without range checks on `n`, `warmup_ticks`, `measure_ticks`, or `dt`. With `n: 0`, `tick()` returns before any phase runs (`src/migratory/engine/tick.py:42-44`), so every phase time is near zero and TPS is undefined. With `measure_ticks: 0`, the run finishes warmup and then `aggregate()` raises (`src/migratory/bench/runner.py:63-64`). The design's \"no silent defaults\" (402\u2013404) covers only missing fields. Add load-time checks: n \u2265 1, measure \u2265 1, dt > 0, and fractions summing to 1.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/migratory/bench/workload.py:158-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"stable\" JSON contract has type mismatches and undefined fields",
+      "description": "`aggregate()` returns floats (`runner.py:66-78`), but the JSON example shows integer nanoseconds (design 429\u2013434). `wall_seconds` and `tps_observed` have no definitions (426\u2013427). TPS could be `measure_ticks / sum(total_ns)` or wall-clock based. The design calls this schema stable from this slice (530), so it must fix the types and the formulas.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "src/migratory/bench/runner.py:66-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several scope items can be cut or deferred",
+      "description": "- `--all-backends` and `--workload-dir` (design 481\u2013482) serve one registered backend. The subprocess question for `--all-backends` is itself deferred (763\u2013766). Cut both flags.\n- `description` is required (`workload.py:131`; design 352\u2013355), but no report reads it, and the JSON omits it (408\u2013438). Render it or drop it from the required set.\n- The Open Questions section restates decisions already made (748\u2013766).\n- Future-backend plans are repeated in four places (92\u201395, 341\u2013345, 525\u2013527, 586\u2013591). Keep one.\n- Walkthrough step 10 (670\u2013676) is informational, not a check.\n- The reserved `force_breakdown` field (293\u2013296) documents a future schema.\n- Reusing pytest-benchmark in the stub-backend tests (122\u2013124) adds nothing to accounting tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "design 746-766"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The trajectory tool is described as capturing per-tick state; it saves only the final state",
+      "description": "Design 750\u2013751 says the trajectory dump \"captures the full per-tick state.\" The tool runs the ticks and then saves only the final positions and velocities (`:86-90`). It also hard-codes N=200 by default (`:63`). The recommendation to keep the two tools separate still holds, but the stated difference is wrong.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tools/run_deterministic_trajectory.py:77-90"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`.gitignore` covers only `*.json` and `*.md` in `bench/results/`",
+      "description": "The design says the directory is gitignored (238\u2013240, 734\u2013737). The file ignores only `bench/results/*.json` and `bench/results/*.md` (`.gitignore:173-174`). Any other artifact, such as the CSV the plan mentions, would show up as untracked. Consider `bench/results/*` with `!bench/results/.gitkeep`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": ".gitignore:172-174"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test location contradicts the \"all new code\" rule",
+      "description": "\"All new code lives under `src/migratory/bench/` and `bench/workloads/`\" conflicts with the success criteria, which require tests (580\u2013582). `tests/bench/` already exists (`conftest.py`, `test_runner.py`, `test_workload.py`). Name it in the file list.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "design 573-574"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Names and signatures disagree inside the design",
+      "description": "`register_backend(name, factory)` (84\u201385) conflicts with the decorator `register_backend(name)` (305). The Scope promises a protocol that \"advances N ticks\" (58\u201359), but `tick_once()` advances one tick (331). `PhaseTimer` (63, 162, 202) is never defined, and `PhaseTimings` is what exists. `bench/workload.py` (393) conflicts with `src/migratory/bench/workload.py` (163).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "design 84-85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter status and the component list do not reflect the existing scaffold",
+      "description": "Status is `not_started`, but `src/migratory/bench/` already has `runner.py` (PhaseTimings, aggregate, BackendRunner), `workload.py` (loader), and placeholder `cli.py` and `backends/__init__.py`. `bench/results/.gitkeep` exists too. The registry, parity, reports, and CLI are not yet present. Update the status and the \"New package\" wording (155).",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "design 10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The live-server measurement principle is not assigned to any slice",
+      "description": "The architecture says synthetic benchmarks \"are supplemented with live-server measurements across formation states\" (`140-arch.simulation-scaling.md:38`). The design excludes world-server benchmarks (100\u2013103) and does not say who owns the live-server half. State that it stays manual, or assign it.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "design 100-103"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The slice 142 definition is quoted but not matched to the plan",
+      "description": "The design quotes slice 142 as \"benchmark a Quadrants cohesion force against Numba and NumPy.\" The plan's 142 entry says \"benchmarked against the existing NumPy and Numba implementations on both Apple Silicon (Metal) and a CPU fallback target\" (`140-slices.simulation-scaling.md:30`). The quote is not verbatim and drops the CPU target. Quote the plan or paraphrase it.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "design 38-41"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction: the bench package depends only on engine and spatial",
+      "description": "No engine or server module imports `migratory.bench`. The design also excludes `migratory_server` and `logging_sim` (143\u2013149), which keeps the arrow pointing from bench to engine.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "design 143-149"
+    },
+    {
+      "severity": "PASS",
+      "title": "Engine contract preserved as specified",
+      "description": "`tick()` returns `TickResult` and has no profiling hook (`src/migratory/engine/tick.py:15-22`, `:132`). The \"no engine changes\" requirement (570\u2013572) matches the code. The parallel-copy risk is covered above.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "design 570-572"
+    },
+    {
+      "severity": "PASS",
+      "title": "Runner data shapes match the design's PhaseTimings and aggregate schema",
+      "description": "`src/migratory/bench/runner.py:23-38` defines `PhaseTimings` with the six fields the design lists. `aggregate()` (`runner.py:53-79`) yields mean, median, p95, p99, and stdev per phase, matching the JSON `phases` keys (design 428\u2013435).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "design 277-285"
+    },
+    {
+      "severity": "PASS",
+      "title": "Declared dependencies and the 50 \u00b5s benchmark claim check out",
+      "description": "`pyproject.toml:14` declares pyyaml and `:73` declares pytest-benchmark in the dev group (design 122\u2013125). The 50 \u00b5s ceiling that the design says the harness must not replace (109\u2013112) is asserted in `tests/test_tick_result.py:76-90`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "design 109-112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Canonical workload example fails the loader it specifies",
+      "location": "src/migratory/bench/workload.py:187-191",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `numpy` backend runs Numba JIT forces by default",
+      "location": "src/migratory/engine/_jit_config.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`mid-flock` does not match the operating point it claims to represent",
+      "location": "config/default.yaml:262",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Force set omits propulsion, and the registry duplicates the server's composition",
+      "location": "src/migratory_server/force_builder.py:31-38",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Profile and force registry claims point to things that do not exist",
+      "location": "src/migratory/engine/profile.py:6-23",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "KDTree is described as the spatial backend used today, and the module path is wrong",
+      "location": "src/migratory_server/config.py:293",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `all_radii` cost is attributed to `force_total`, which the code contradicts",
+      "location": "src/migratory/engine/tick.py:56-63",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Phase boundaries are undefined across the two tick branches, and the names disagree",
+      "location": "design 244-272",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The drift check misses the path production uses, and the duplication is not justified against lighter options",
+      "location": "design 682-695",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The parity hash cannot serve the tolerance comparisons downstream slices need",
+      "location": "design 469-473",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The workload schema has no spatial-backend axis, so slice 143 cannot run through the harness",
+      "location": "design 349-390",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force timing from the plan is deferred without a plan change",
+      "location": "design 293-296",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "CUDA, CSV, and config-sourced workloads are deferred without recording it in the plan",
+      "location": "design 96-99",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Lifecycle and hang handling cover only setup failure",
+      "location": "design 514-517",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Report writes and Markdown source selection are unspecified",
+      "location": "design 236",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Formation generation, profile assignment, and seed plumbing are unspecified",
+      "location": "design 360-368",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`dispersed` and `packed-herd` have no parameters, and their attribution to the architecture is unsupported",
+      "location": "design 73-75",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "reproducibility",
+      "raw_category": null,
+      "summary": "Reproducibility claims are not met by the recorded metadata",
+      "location": "design 232-236",
+      "location_verified": null
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "CLI surface and workload path resolution do not match the walkthrough",
+      "location": "design 477-487",
+      "location_verified": null
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The loader accepts degenerate inputs that yield meaningless numbers",
+      "location": "src/migratory/bench/workload.py:158-169",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The \"stable\" JSON contract has type mismatches and undefined fields",
+      "location": "src/migratory/bench/runner.py:66-78",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Several scope items can be cut or deferred",
+      "location": "design 746-766",
+      "location_verified": null
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The trajectory tool is described as capturing per-tick state; it saves only the final state",
+      "location": "tools/run_deterministic_trajectory.py:77-90",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`.gitignore` covers only `*.json` and `*.md` in `bench/results/`",
+      "location": ".gitignore:172-174",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Test location contradicts the \"all new code\" rule",
+      "location": "design 573-574",
+      "location_verified": null
+    },
+    {
+      "id": "F026",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Names and signatures disagree inside the design",
+      "location": "design 84-85",
+      "location_verified": null
+    },
+    {
+      "id": "F027",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Frontmatter status and the component list do not reflect the existing scaffold",
+      "location": "design 10",
+      "location_verified": null
+    },
+    {
+      "id": "F028",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "The live-server measurement principle is not assigned to any slice",
+      "location": "design 100-103",
+      "location_verified": null
+    },
+    {
+      "id": "F029",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "The slice 142 definition is quoted but not matched to the plan",
+      "location": "design 38-41",
+      "location_verified": null
+    },
+    {
+      "id": "F030",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependency direction: the bench package depends only on engine and spatial",
+      "location": "design 143-149",
+      "location_verified": null
+    },
+    {
+      "id": "F031",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Engine contract preserved as specified",
+      "location": "design 570-572",
+      "location_verified": null
+    },
+    {
+      "id": "F032",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Runner data shapes match the design's PhaseTimings and aggregate schema",
+      "location": "design 277-285",
+      "location_verified": null
+    },
+    {
+      "id": "F033",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Declared dependencies and the 50 \u00b5s benchmark claim check out",
+      "location": "design 109-112",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-22T23:36:04.218972",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+      "chars": 30571,
+      "sha256": "10ce150e4c17336a810d204a9657ee39f47dd47e7e7aea4b61f8b9756b664893",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+      "chars": 13684,
+      "sha256": "30d85553dc6a8e1b5afcaff8c62be68411741f76d568b273eb7bab907ed67078",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/tick_result.py",
+    "src/migratory/engine/state.py",
+    "src/migratory/bench/runner.py",
+    "src/migratory/bench/workload.py",
+    "src/migratory/bench/backends/__init__.py",
+    "config/default.yaml",
+    "src/migratory/__init__.py",
+    "src/migratory/engine/forces.py",
+    "src/migratory/spatial/kd_tree.py",
+    "src/migratory/spatial/adaptive.py",
+    "src/migratory/bench/cli.py",
+    "src/migratory_server/force_builder.py",
+    "src/migratory/engine/_jit_config.py",
+    "pyproject.toml",
+    ".gitignore",
+    "project-documents/user/slices/140-slice.tick-return-type-contract.md",
+    "project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "src/migratory/engine/profile.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory/spatial/interface.py",
+    "tools/run_deterministic_trajectory.py",
+    "src/migratory/engine/forces_jit.py",
+    "src/migratory/engine/neighbors.py"
+  ],
+  "searches": [
+    "list_files **/* in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src",
+    "list_files project-documents/user/architecture/* in .",
+    "list_files project-documents/user/slices/* in .",
+    "list_files {.gitignore,pyproject.toml,config/*.yaml,bench/**,tests/**/*bench*,tools/*} in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice",
+    "grep ^(cohesion_force|separation_force|alignment_force|momentum_force|leadership_force|propulsion_force)\\b|^class \\w+Force\\b|def __call__ in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/engine",
+    "grep random|default_rng|np\\.random|seed in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/engine",
+    "grep from_numpy_state|benchmark|tick_instrumented|migratory\\.bench|bench/ in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice",
+    "list_files tests/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice",
+    "grep \\btick\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice",
+    "grep world_size|DIMS|cluster_radius|cluster_centers|flocker|leader|two-flock|packed|uniform in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/tests/bench",
+    "grep rglob|glob\\(|os\\.walk|src/migratory|perf_counter|from migratory\\.bench in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/tests",
+    "grep ^def |^class |^    def |return in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/engine/neighbors.py",
+    "grep adaptive|kdtree|KDTreeQuery|default_rng|np\\.random|max_neighbors|spatial_backend|backend in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory_server",
+    "grep def |rng|random|heading|seed in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory_server/entities.py",
+    "grep USE_JIT_KERNELS|parallel=|prange|fastmath|@njit|def \\w+\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/engine",
+    "grep dispersed|packed-herd|mid-flock|Profile Principle|formation|per-phase|per-force in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/project-documents/user/architecture",
+    "grep import|KDTree|__all__ in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/src/migratory/spatial/__init__.py",
+    "grep Profile Principle|dispersed|packed-herd|mid-flock|formation-dependent in /Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice/project-documents"
+  ],
+  "sections_in_document": 37,
+  "sections_not_covered": [
+    "Architecture"
+  ],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 33,
+    "in_fences": 0,
+    "in_section": 33,
+    "surviving": 33
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 43,
+  "prompt_tokens": 986491,
+  "cached_tokens": 847363,
+  "cache_write_tokens": 139106,
+  "completion_tokens": 112721,
+  "reasoning_tokens": null,
+  "duration_seconds": 492.8282834170386,
+  "cost_usd": 0.33541392999999997,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,131 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Section 6 reads function and class nodes, contradicting the design's own criterion and the architecture",
+   "description": "Section 6 says \"Function- and class-level edge endpoints are resolved to their owning file's layer.\" Function and class nodes are in no `layers[]` entry, so the design never says how the owning file is found. Two routes exist: the node's `filePath` (which requires reading the function node) or a `contains` edge (file \u2192 function/class, present in the graph). Success Criterion 9 (lines 332-333), Verification step 7 (lines 422-424), and the architecture (`360-arch.document-intelligence.md:107-110`, \"function- and class-level nodes are not read\") all forbid reading those nodes. The section also contradicts itself: line 216 reports only `imports` and `depends_on`, but lines 219-220 say a `calls` edge \"still counts.\" `edges[].direction` is listed as used for dependency ordering (line 86) but is not selected in row 6 (line 179). Name the `contains`-edge mechanism, reconcile criterion 9 with it, and fix the edge-type list.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"File-level\" is defined by a property every node has",
+   "description": "The verified-facts row says file-level nodes carry `filePath` + `complexity` (238 nodes, file/config/pipeline only). In the `1bfbca1` graph, `\"filePath\"` and `\"complexity\"` each occur 925 times, one per node, including the 687 function and class nodes. The function node `function:src/squadron/providers/loader.py:ensure_provider_loaded` carries `filePath`. Correction 2 (line 143) then defines \"file-level\" as \"carries a `filePath`\", which would select all 925 nodes if implemented literally, the context blow-up the design exists to prevent. Correction 1's cross-check (\"every `nodeIds` entry resolves to a node carrying `filePath`\", lines 139-140) cannot detect a function node in a layer, because function nodes carry `filePath`. Only the type check works. Correct the row and the definition, and state that the type exclusion is the sole discriminator.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:99"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Entry-point count is misstated, and function-level entry points are dropped silently",
+   "description": "Section 3 says \"27 nodes carry it in this graph.\" The string `\"entry-point\"` occurs 52 times in the graph. A 12-line multiline window anchored on `\"type\": \"file\"` finds 27. The same window anchored on `\"type\": \"function\"` finds about 24 more. The design's file-level filter therefore excludes roughly half the tagged nodes without saying so. The architecture lists entry points as a required output (`360-arch.document-intelligence.md:163`). Either state that function-level entry points are out of scope and report \"27 of 52,\" or justify excluding them. Line 104's tags row needs the same correction.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:200-204"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The exclusion selector admits unnamed types and defeats the loud-failure principle",
+   "description": "The architecture enumerates nine file-level types (`360-arch.document-intelligence.md:107-110`). The design replaces that list with `!= function and != class`, so any unlisted type passes silently. The architecture requires drift to surface loudly, \"never as a silently thinner document\" (lines 134-136). The design's backstop, \"a node surviving the filter with no `filePath` is drift,\" does not catch a future function-level `method` or `variable` node, because those carry `filePath` (see the finding above). The stated goal, keeping the two blow-up classes out, is therefore unprotected for sibling types. Use the architecture's allow-list and report any other type as drift with its name and count, or keep the exclusion and make unknown types a reported drift rather than a silent inclusion.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Prerequisite 361 is not built in this tree; the design calls its artifacts \"existing\"",
+   "description": "In this checkout, `commands/analysis/` contains only `tech-debt-audit.md`, so `understand.md` does not exist. `user/analysis/` contains 940-942 but not 943. `.understand-anything/` is absent, and git history is a single commit. The 361 slice has `status: not_started`, and the 360 plan lists 361 as `[ ]`. Consequences:\n- The \"361 skill text\" the corrections quote (lines 119-125, 143-149) and the claim that \"the generated 943 sample carries both wrong counts\" (line 136) cannot be verified here.\n- Happy-path line 367-369 says \"943 exists, so expect 944.\" From a clean start the next unused index is 943.\n- Walkthrough step 1 needs the graph, but nothing says to run `/understand` first. The 361 walkthrough has that prerequisite (361 slice lines 297-298); 362's does not.\n\nState the gate: 361 merged, graph present, and the index expectation as \"next unused.\"",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:22"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Retained unchanged\" contradicts the one-line edit, and Technical Scope says all edits are in `understand.md`",
+   "description": "Line 42 says the work is \"all within `commands/analysis/understand.md`.\" Line 258 says the reference document is \"retain[ed] unchanged.\" Lines 277-280 say it \"stays ... unchanged\" and then \"a one-line note is added.\" Success Criterion 7 (lines 329-330) and criterion 11 (lines 336-338) allow the cross-reference line. The architecture only requires that the document be \"retained, not superseded\" (`360-arch.document-intelligence.md:369-375`). Pick one wording (\"retained; gains one cross-reference line\") and update line 42 and line 258.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:258"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The reference prompt's structure is misdescribed",
+   "description": "The design says the analysis template has a \"ten-part structure (identity, architecture, build/test/deploy, code quality, security, performance, operations, and so on).\" `project-documents/user/reference/analyze-codebase-prompt.md` has eight template sections: IDENTITY & STACK, ARCHITECTURE, BUILD TEST & DEPLOY, CODE QUALITY & DEFECTS, ISSUE TRACKER & PROJECT HEALTH, AI AGENT INTEGRATION, RISKS & RECOMMENDATIONS, and DEEP-DIVE PLAN. The document says \"8-section\" itself (line 358). It has no security, performance, or operations sections. The recorded decision rests on this comparison, so correct the count and the list.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:266-267"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Section 7 of the 363 contract is not met: config nodes and tour node IDs are not in the mapping",
+   "description": "The architecture's interview table (`360-arch.document-intelligence.md:215-221`) has 363 attempt graph fields first: Initial Technical Direction uses `project.languages`, `project.frameworks`, and `config` nodes; Development Approach uses test/CI config nodes; Solution Approach uses `layers[]` and `tour[]` node ordering. The 362 mapping has no row that yields config nodes (they appear only in the layer count breakdown). The tour row (line 178) selects `order`, `title`, `description`, not `nodeIds`. The \"Provides to 363\" paragraph promises that the mapping is what 363 attempts first, so 363 cannot perform the extraction it is documented to do. Add a config-node row, or state that 363 owns it. Add `tour[].nodeIds` to row 5.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "A run killed mid-write leaves a truncated analysis document that occupies an index",
+   "description": "The design never says how the generated document is written. If the process is killed partway, a truncated `944-analysis.codebase-comprehension.md` remains with `status: not_started`. The next run takes 945, so the truncated file is never revisited or flagged, and it reads as an independent sample. State that the document is composed in full and then written once (or written to a temp name and renamed). State what a later run does with a file that lacks a Provenance block.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Walkthrough steps 5 and 6 cannot run as written",
+   "description": "- `$S` is never defined. The \"361 scratch pattern\" it claims to follow does not appear in the 361 slice doc.\n- The jq commands write `kg-empty-tour.json`, `kg-no-entrypoints.json`, and `meta-wrong.json`, but nothing swaps them in as `knowledge-graph.json` or `meta.json`. The skill reads only those names from `$PROJECT_ROOT/.understand-anything/`.\n- The scratch copy includes only `knowledge-graph.json` and `meta.json`. `config.json` and `.understandignore` are absent, so Section 7 emits gap markers in every scratch run. That contradicts \"every other section is unaffected\" (lines 408-409).\n\nSpecify the scratch repo root, the copy-in step, and the expected Section 7 state.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-411"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"361 explicitly deferred\" these three fields; the 361 slice doc does not say so",
+   "description": "The 361 slice doc (`project-documents/user/slices/361-slice.graph-contract-and-provenance.md`) never mentions `config.json`, `.understandignore`, or `analyzedFiles`. Its Interfaces Required lists only `gitCommitHash` and `lastAnalyzedAt` (lines 64-66). The architecture lists `analyzedFiles` (`360-arch.document-intelligence.md:86`), `config.json` (line 87), and `.understandignore` (line 89) as output-contract fields. For `.understandignore` it says squadron \"may reference\" it. So the Coverage section is architecturally permitted, not a deferral. Correct the attribution, or cite the source of the deferral.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:54-55"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Coverage section overreaches, and its absent-file rules are inconsistent",
+   "description": "`config.json` reporting yields only `outputLanguage`, which a comprehension document does not need. The architecture calls config \"read only\" (line 87). The design itself says absent settings are not gaps, so the section is effort with no finding behind it. Also:\n- An absent `.understandignore` gets a gap marker (line 180), but an all-comments file is \"defaults only\" (lines 234-235). Upstream's own header (`.understand-anything/.understandignore`, lines 1-7) says defaults apply, so treat absence and all-comments the same.\n- Line 234-235 says \"An all-comments file (this repo's current state has 17 active lines).\" That is self-contradictory: this repo's file is not all-comments.\n\nCut `config.json` reporting, or defer it to 363.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:228-235"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Several binding rules are under-specified",
+   "description": "- Layer order is unspecified. \"Descending file count\" (line 175) has no tie-break, and \"layer, then filePath\" (line 176) never defines the layer order.\n- \"The observed ordinal set\" (line 213) implies the set is derived at run time. Simple < moderate < complex should be stated as the contract.\n- Lines 209-212 omit `languageNotes` silently, which contradicts the rule that the fallback column \"has no third option\" (lines 186-189). The table is called binding, so this exception must be part of the rule or removed.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:206-213"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The closing-observation rule is unbound, and its test is not mechanical",
+   "description": "Each section \"carries\" a closing observation, but the mapping table (lines 172-180) has no column for it, and no success criterion covers it. The test, \"if the sentence is not derivable from the table directly above it,\" requires judgment, so \"mechanical\" is wrong. This rule is the only route by which the generating model could add inference, and it is not required by Success Criterion 3. Drop it, or add a source-field column and an explicit check.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-248"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Renamed upstream fields become a thinner document, not a loud failure",
+   "description": "The architecture requires that a renamed field \"surface as a loud failure, never as a silently thinner document,\" and that absence and malformation get different messages (`360-arch.document-intelligence.md:134-136`). The fallback column turns absence of every mapped field into a gap marker: `project.*`, `tags`, `complexity`, `summary`, `tour`. The entry-point fallback says \"re-run /understand,\" which does not fix a renamed tag. A mistyped `analyzedFiles` (a string, say) has no handling, and jq runtime errors are not covered. Fail loudly when a mapped field is absent from every node of its type, or when a top-level key is absent. Keep silent omission only for optional per-node annotations such as `languageNotes`.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:174-180"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The design is overweight for a markdown-only slice",
+   "description": "Specific cuts:\n- \"Read discipline, unchanged\" (lines 282-293) restates 361. Cut it to one sentence.\n- The verified-facts table (lines 96-109) carries rows that drive no decision: `languageLesson` (line 106) is used by no section, and the tags-coverage row (line 104) is not used. Keep the rows the decisions rest on.\n- The all-comments `.understandignore` branch and the \"unrecognized tier\" handling (lines 212-213, 234-235) cover cases this graph does not have.\n- The closing observations (lines 245-248) and config.json reporting (lines 228-231) are covered above.\n- The ten-part rationale (lines 266-271) can shrink to two sentences.\n\nKeep the extraction table, the two corrections, the nodeIds cross-check, project identity (it feeds 363), and the analyzedFiles reconciliation.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "An existing installation keeps the 361 skill text after 362 lands",
+   "description": "The installer copies skill files (`src/squadron/skills/installer.py:28`). A user who has already installed the analysis pack keeps the 361 text until `sq skills install analysis` runs again. Pre-366, the walkthrough opens the repo file, so the stale copy is not exercised. From 366 on, `/sq:analysis understand` routes to the installed copy. The design never mentions reinstalling. Add the reinstall step to the operator path.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:342-344"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Metrology audit consumes the same `*-analysis.*.md` glob",
+   "description": "`_AUDIT_FILE_GLOBS` matches `project-documents/user/analysis/*-analysis.*.md`. `find_audit_file` (lines 273-283) returns the newest match in the run window. A comprehension document written during an audit run could be returned as the audit output, and the failure would be silent. Likelihood is low (it needs overlapping runs), and the design does not acknowledge this consumer. Note it in the design.",
+   "location": "src/squadron/metrology/audit.py:56-59"
+  }
+ ]
+}

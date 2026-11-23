@@ -1,0 +1,75 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Round-trip serialization has no task, and Task 1.2 breaks existing `config_to_yaml` tests",
+   "description": "The slice (lines 224-227) says `yaml.dump` serializes a `StrEnum` as a plain string automatically. The task file takes that on trust. It has no task that touches `config_to_yaml` (its Files-touched list at lines 30-40 doesn't mention it).\n- **Why it fails:** `config_to_yaml` calls `dataclasses.asdict`, which keeps the enum instance, and then `yaml.dump`. `load()` reads with `yaml.safe_load` (config.py:630). PyYAML's default dumper emits a Python-object tag for a `str` subclass, and `safe_load` rejects that tag. The shipped code needed a `_serialize_for_yaml` helper (config.py:657-669) to fix this.\n- **Existing tests:** once Task 1.2 adds an always-present enum field, every existing `config_to_yaml` call carries it. That breaks `TestConfigToYaml.test_roundtrip_*` (tests/test_config.py:773-813) and the `logging_sim` header (logging_sim.py:69, tests/test_logging_sim.py:444). That is a red suite at the Task 1.5 commit.\n- **Task 1.4:** the round-trip test (line 88) would fail with no task to fix it.\n\nAdd a task to convert `StrEnum` to `.value` in `config_to_yaml`. Put it before Task 1.4 and list it in Files touched.",
+   "location": "src/migratory_server/config.py:657-681"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.1 \"required keyword argument\" breaks about 20 call sites and has an ambiguous signature",
+   "description": "- **Signature:** the task doesn't say where `world_bounds` goes. The constructor already has `environment: Environment | None = None` as its last parameter. A required parameter after a defaulted one is a `SyntaxError` unless the signature is made keyword-only. The task gives no placement or `*`.\n- **Call sites:** `tests/test_simulation.py` constructs `SimulationManager` 20 times (lines 137-565) without `world_bounds`. All of them fail from Task 3.1 until Task 3.4. Task 3.4 buries that update as the second-to-last bullet of a test task.\n- **Shipped code:** it made the parameter optional and falls back to `entity_manager.world_bounds` (simulation.py:72-75). That avoids the churn and contradicts the task's success criterion \"requires `world_bounds`\".\n- **Commit point:** the suite is red between 3.1 and 3.4, and no marker covers that window.\n\nEither specify the optional-with-fallback form, or move the call-site updates into 3.1 and state the parameter placement.",
+   "location": "src/migratory_server/simulation.py:57-76"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 3.4 `test_reflect_policy_flips_velocities_at_edges` can't pass as specified",
+   "description": "The engine clamps velocity to the profile's `max_speed` before integrating (`integrate` \u2192 `_clamp_velocities`). The test starts an agent at `(99, 50)` with velocity `(10, 0)`, steps once, and asserts `vx < 0`.\n- **Why it fails:** the existing `test_simulation.py` fixtures use `max_speed=5.0` and `dt=0.05`. Velocity is clamped to 5, so the agent moves to about 99.25 and never crosses 100. Reflect never fires and `vx` stays positive.\n- **Other tests:** the 50-step tests (lines 228-230) say \"near the edges\" without a distance. The WRAP and REFLECT tests need agents to actually cross within the 50 steps. The OPEN test needs the same, or it can't assert drift.\n\nThe task should fix `dt`, `max_speed`, start positions and velocities so the crossing is guaranteed. For example, start within `max_speed*dt*50` of the edge, or use a large `dt` or `max_speed`.",
+   "location": "src/migratory/engine/tick.py:59-71"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks",
+   "description": "Commit markers must be plain `**Commit**:` lines, never checkboxes. Tasks 1.5, 2.4, 3.6, 4.3 and 5.5 are each a numbered task with `- [ ] **Commit:**` items, so they add five granular tasks. Fold each into a plain marker at the end of its section. The positions are mostly reasonable, but the 1.5 position isn't a working, tested point (see the first finding).",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5.2 leaves the shipped `config/test.yaml` in a modified state if interrupted",
+   "description": "Steps 6-7 hand-edit the tracked `config/test.yaml` to `reflect`, then `open`. Only step 8, a manual edit, restores it. If the walkthrough is interrupted, `config/test.yaml` stays on `open` or `reflect`. The plan has no command that undoes this, and a later `git add` or a regression run would pick it up. Run steps 6-7 against temporary config copies passed via `--config`, or add `git checkout config/test.yaml` as an explicit final step.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The task file's claims about existing code are stale or wrong",
+   "description": "- **Line numbers:** \"WorldBoundsConfig (line 25)\" (line 46 of the task file) is actually at config.py:46. \"`_validate_world_bounds` around line 156\" (line 69) is at config.py:180.\n- **`test_clients.py`:** Task 3.5 (line 241) names it as a probable `SimulationManager` constructor. It doesn't construct one. The real remaining callers are `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`, and the second isn't named.\n- **Test class:** `TestWorldBounds` (line 80) doesn't exist. The relevant tests sit in `TestRangeValidation`, after the \"or nearest equivalent\" hedge.\n- **Re-execution risk:** `bounds_enforcement.py` is labelled \"new file\", and `BoundsPolicy`, the policy field and the loader already exist. They now also have a `SOFT` variant and a `soft_bounds` field from slice 314. Executing Tasks 1.1, 1.2, 2.1 and 2.2 literally against current main would overwrite or conflict with that work. Mark the file as describing the pre-314 state, or reconcile it.",
+   "location": "src/migratory_server/config.py:46"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Round-trip test is weaker than success criterion 5",
+   "description": "SC5 requires that reloading the emitted YAML \"produces an equal `ServerConfig`\". The task's test only asserts that `policy` matches. Assert `cfg == cfg2`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Test and verification tasks are heavier than the success criteria need",
+   "description": "- **Task 2.3:** it lists about 20 tests. `test_reflect_clamps_top_edge` and `test_reflect_clamps_bottom_edge` are \"analogous for y\" with no values, which isn't enough for a junior implementer. The diagonal-corner test already covers y reflection. The parametrized \"dispatches and does not raise\" test adds nothing over the per-policy tests. Drop the top and bottom tests and the parametrized test, or spell out their values.\n- **Missing test:** Task 2.2's criterion that helpers \"do not touch the inactive tail\" has no test. No test passes arrays from a larger buffer and checks the tail.\n- **Full-suite runs:** `pytest` runs in 3.5, 5.1 and 5.2 step 2. Merge 3.5 and 5.1, and drop the duplicate walkthrough step.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-172"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 3.2 and the Notes contradict each other on \"zero import-time overhead\"",
+   "description": "Task 3.2 asks to confirm \"zero import-time ... overhead\", but the same task adds a top-level import (line 195). Note line 329 (\"No import of `apply_bounds_policy` is avoided\") is garbled. Reword to \"no per-tick call or slicing on the OPEN path\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`np.mod` can return exactly `width` for tiny negative inputs",
+   "description": "For a position like `-1e-20`, `np.mod(-1e-20, 100.0)` returns `100.0` from float rounding. That violates the half-open `[0, width)` claim in task lines 134 and 229 and in SC7. The effect is negligible in practice. If the claim matters, add a test for tiny negative overshoot and a follow-up `positions[positions >= width] = 0`.",
+   "location": "src/migratory_server/bounds_enforcement.py:59-60"
+  }
+ ]
+}

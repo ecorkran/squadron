@@ -1,0 +1,110 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tracking `meta.json` plus comparing `gitCommitHash` to `HEAD` makes the staleness warning fire every time",
+   "description": "Step 1 warns when `meta.json`'s `gitCommitHash` is not `HEAD` (line 130). Working-tree hygiene keeps `meta.json` tracked \"so graph staleness [is] visible in review\" (lines 186-188). These two choices conflict. The graph is analysed at commit X, then committed as X+1, so `HEAD` never matches the recorded hash once the graph is committed. The warning becomes noise, which defeats the stated goal of a \"prominent\" warning (line 134).\n\nOther gaps in the same check:\n- The design asks for \"commit distance\". That is undefined when the recorded hash is not an ancestor of `HEAD` (rebase, squash merge, a graph built on another branch), and the failure behaviour is not given.\n- Uncommitted working-tree changes are not detected at all.\n\nThe slice needs a rule that works. For example, compare the files changed in `gitCommitHash..HEAD` against `analyzedFiles`, ignoring `.understand-anything/**`. Also define what happens when the hash cannot be resolved.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Verify the plugin is installed\" contradicts \"graph is an input, not a dependency\"",
+   "description": "Line 56 says squadron treats the graph as plain data. Line 127 still makes an installed plugin a precondition. A markdown skill has no supported way to check that. It would have to probe Claude Code's internal plugin directories, which differ between user and project scope (line 71 notes user scope). The check also blocks a valid case: a colleague commits the graph (which the design wants tracked, line 186) and the PM does not have the plugin installed. The only real contract is that `knowledge-graph.json` exists and parses. Drop the install check, and mention the plugin only in the \"graph missing, run `/understand`\" message.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-128"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No handling for target documents that already exist",
+   "description": "Capability 1 writes `000-concept.{project}.md` (line 148) and, after confirmation, initiative-plan candidates (lines 154-156). The design never says what happens when those files already exist:\n- **Concept.** CLAUDE.md requires \"## User-Provided Concept\" sections to be preserved exactly as written. Line 149 puts interview answers into that section. A re-run, or a project that already has a concept, would need to overwrite or merge the one section the project says never to touch.\n- **Initiative plan.** The design says it is written only \"on explicit confirmation\", but not where. Squadron itself already has `001-initiative-plan.squadron.md`. It is unclear whether confirmed candidates replace that file, get appended to it, or go somewhere else.\n- **Unconfirmed candidates.** The design does not say whether they are dropped or kept in the comprehension analysis doc.\n\nSpecify create-only, merge or refuse behaviour for each output, and say where candidates live before they are confirmed.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Deriving initiative candidates from structure conflicts with \"Never fabricate intent\"",
+   "description": "Line 46 says a graph \"describes structure, not purpose\". But candidates are \"derived from layer boundaries and complexity clustering\" (line 154). Initiatives describe work to be done, which is intent. Layer boundaries describe what already exists. The design does not say whether candidates are retroactive (what was built, as in squadron's own plan, line 34) or forward-looking (what to do next). If forward-looking, the graph cannot supply them without the invention line 47 forbids. If retroactive, they describe completed work, and the \"commitment document\" reasoning on line 155 does not apply in the same way. Pick one, and add an interview item (planned work, priorities) if forward-looking.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:154-156"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Interview can add new claims to the client document, against \"derived, not authored\"",
+   "description": "Line 51 says the client document \"restates existing approved artifacts\u2026 not a place where new claims about the project appear\". Line 234 says \"every claim traces to an input artifact\". Yet when there is no concept, purpose comes from the \"initiative plan plus interview\" (line 198). Line 199 calls this the common, tested path. So in the main use case, claims enter the document that appear in no input artifact. Either:\n- route the interview through Capability 1 so the answers land in a concept doc first, and then derive from that; or\n- record the interview answers in the overview's provenance as a named source and drop the \"every claim traces to an artifact\" rule.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:197-200"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Field schema relies on sources that are not declared inputs",
+   "description": "Inputs (lines 196-197) are only the initiative plan and, optionally, the concept. But:\n- **Scope** uses \"Initiative plan + non-goals\" (line 223). In this project, non-goals live in architecture docs (for example lines 291-303 of this document), not the initiative plan.\n- **Risks / Open Questions** uses \"Initiative plan notes\" (line 226). Squadron's initiative plan has entries, dependency notes and Future Work, but no risks section.\n- **Benefits** uses \"initiative descriptions\" (line 222). Those are one-line feature lists, such as initiative 180's \"decay-based finding dismissal\". Turning them into outcomes is what line 232 demonstrates, and it is exactly where invention creeps in.\n\nEither declare architecture docs as optional inputs, or state that Scope exclusions and Risks will usually be flagged as gaps.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The emphasis parameter is both specified and rejected",
+   "description": "Translation rules say \"Emphasis is a generation parameter\". Resolved Design Decisions (lines 328-331) say one neutral document, with an emphasis parameter \"added only if real use demonstrates the need\". The slice author cannot tell whether `/sq:overview` takes a `--for client|management|colleague` argument. Delete line 239's parameter claim.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Index-range policy contradicts itself and does not suit a regenerated document",
+   "description": "- **Range.** Lines 254-258 allow overflow into 950+. Resolved Decisions (line 332-333) say \"in the 940-949 reserved range. No new convention\". Taking slots in 950-999, which belong to whatever else the 900 band holds, is a naming-convention change in practice, despite line 244.\n- **Run model.** \"incrementing per run \u2026 independent sample\" (lines 250-252) suits tech-debt audits. It does not suit the overview, which is a derived document meant to be kept true (line 330). Each `/sq:overview` run would use up a new index from the scarce band and leave readers unsure which overview is current. That is the overflow pressure line 254 complains about, created by the design itself. The overview should update in place under one fixed index per topic.\n- **Category.** The 940 range is \"codebase analysis, research, investigation\" (line 249). A stakeholder overview is none of these, and sharing directory and docType with engineering audits weakens line 64's \"document boundary\" principle.\n- **Scope.** Line 243, \"Both capabilities write to \u2026 `user/analysis/`\", is also wrong for Capability 1's concept output (line 148, `project-guides/`).",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "An existing `/analyze` skill is not mentioned",
+   "description": "`.claude/skills/analyze/SKILL.md` is a project-local codebase-discovery workflow. It writes `user/analysis/nnn-analysis.{topic}.md` starting at 940, with topics like \"initial-codebase\" and \"architecture-review\". It also edits README. That is the same output space and the same index range as Capability 1's `codebase-comprehension` doc. Current State (lines 70-77) and Prior art (lines 263-269) mention only `analyze-codebase-prompt.md`. The design should say how `/sq:analysis understand` relates to `/analyze`, since both claim the 940 slots.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#current-state"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Naming argument contradicts itself, and the precondition message invites confusion",
+   "description": "Delivery says the plugin and squadron \"are the same concept at different stages\" (line 275). Line 323 says a synonym would add \"a second vocabulary word for one concept\". But lines 119-121 say squadron is \"prescriptive\", with \"no functional overlap\". In use:\n- The pack file `understand.md` installs as `/analysis:understand`, next to the plugin's `/understand`, so typing `/understand` in Claude Code autocompletes both.\n- `/sq:analysis understand` with no graph replies \"run `/understand`\" (line 128), which reads like the command just told you to run itself.\n- Deprecated slice 344 needed an explicit audit of `/understand` mentions inside skill text for exactly this ambiguity. Here the squadron skill body must say \"run `/understand`\", and a model can resolve that to `/analysis:understand`.\n\nThe collision is real at the prompt level, even though dispatcher namespacing avoids it at the file level. If the name stays, require the skill text to say \"the understand-anything plugin's `/understand` command\" every time.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:273-279"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Reading the graph with no code is under-specified for real repo sizes",
+   "description": "\"Grep for the needed section \u2026 never load the whole file\" assumes JSON lines up with grep. To pull every node whose `type` is in a set of nine, with `summary`, `filePath` and `complexity`, the agent has to parse structure. Grep on pretty-printed JSON (one field per line) or minified JSON (one line) cannot do that reliably, and `jq` is not a stated prerequisite. Even with perfect filtering, a repo with thousands of files gives thousands of summaries, and no budget or sampling strategy is given.\n\nSome interview-table claims are also not backed by the documented schema:\n- \"Initial Technical Direction: Graph (languages, frameworks, dependencies)\" (line 168): the node schema on line 94 has no language or framework field. Edges are internal (`imports`, `calls`), not package dependencies.\n- \"entry points\" (line 153): this has no source in the documented schema.\n\nState the extraction tool (a `jq` prerequisite, or a small read-only `sq` helper, which the [100] dependency hints at), a size cap, and the exact graph field behind each table row.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "No schema-version guard on a fast-moving upstream format",
+   "description": "The contract is pinned informally to v2.8.1 (lines 41, 71) and described as \"actively developed\". The flow never checks a version field and never says what happens when expected keys (`tour`, `layers`, `complexity`) are missing or renamed. A markdown skill reading changed JSON will not fail loudly. It will quietly write a thinner concept, which is the \"confidently wrong\" failure line 135 warns about.\n\nFurther gaps:\n- No behaviour is defined for a malformed or partial graph, for example a `/understand` run interrupted before Phase 7.\n- The design does not say whether a `.trash-*` directory or `intermediate/` from an interrupted run means the graph is in flux.\n\nRequire the skill to check for required keys, record the observed upstream version in provenance, and stop with a clear message if keys are missing.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "`intermediate/` has no stated ignore/track decision",
+   "description": "The contract table lists `intermediate/scan-result.json` (line 88). The hygiene section names what is tracked and what is ignored, but leaves `intermediate/` out, so it ends up tracked by default. Scan results change on every run, so this is probably not \"durable project knowledge\". Separately, the hygiene step itself leaves an uncommitted `.gitignore` change, a small irony next to the \"leave the working tree clean\" goal (line 49). The slice should say whether the skill commits it or reports it.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:186-188"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Dependency on [100] does not match \"no CLI change\"",
+   "description": "Dependencies cite [100] for \"CLI command registration for any command surface\". Delivery (line 279) says \"no installer, manifest, or CLI change\". Capability (b) is a markdown slash command installed by the existing `install-commands` copier. The real dependency is the `install-commands` file-copy mechanism, which is how the initiative plan's line 47 describes 340's use of 100. Rephrase so nobody reads it as needing typer registration.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:307"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Status value for generated documents is unspecified",
+   "description": "Line 260 lists the valid enum members, which match `DocumentStatus` in `src/squadron/documents/schema.py`. It does not say which value each generated document gets. A derived overview or comprehension analysis is arguably `complete` at write time, while a concept awaiting PM review might be `in_progress`. Pick one value per output, or expect inconsistent choices from one run to the next.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:260-261"
+  }
+ ]
+}

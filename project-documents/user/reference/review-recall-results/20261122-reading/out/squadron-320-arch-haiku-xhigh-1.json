@@ -1,0 +1,395 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The keystone's join key cannot be captured under the read-only principle",
+      "description": "Line 46 says 320 \"reads and annotates\" 300's record and does not change \"the result models' write semantics.\" Lines 75 and 79 require each human call to attach \"unambiguously to the specific persisted judge result,\" keyed by judge configuration. The persisted record cannot supply those keys today:\n- **Judge configuration:** `ActionResult.metadata` records the resolved `model`, `profile`, and template *name* (`src/squadron/pipeline/actions/review.py:297-301`). No template version or content hash is recorded, so an edited template looks identical to the one that was measured.\n- **Artifact:** nothing records a hash of the artifact or the injected ground truth, or whether the 300 injection cap truncated it (300-arch line 89). The review\u2192fix\u2192re-review cycle rewrites the artifact between iterations, so a call recorded later can refer to a different artifact than the one judged.\n- **Result identity:** `StepState` (`src/squadron/pipeline/state.py:77-91`) is identified only by `step_name` and `iteration`. Its `score` is hoisted from the last non-None action (`state.py:277-283`), so per-judge scores in multi-action or fan-out steps are lost at step level. Only the index into `action_results` identifies one judge call.\n- **Project:** `RunState` (`state.py:118-134`) has no project field, so the cross-project join at line 87 has no key.\n\nThe keystone \"de-risks the storage/join decisions in isolation\" (line 93), but it cannot be built read-only. Either name the specific write-side additions (artifact hash, template hash, project root, per-judge identity) as a sanctioned change to 300/140, or have 320 own a judge-time capture hook and drop the read-only claim. Until one is chosen, the keystone cannot be scoped.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:75-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The read-side principle is contradicted by the document's own requirements",
+      "description": "Line 46 says 320 does not modify \"the judging path\" and, where a latent field exists, \"320 populates or reads it.\" Populating the reserved `criteria` map (`src/squadron/pipeline/models.py:41`) changes what judges emit, which is the judging path. Lines 22 and 24 put a dispatch-side pre-emption prompt in scope, which changes implementer instructions in another component's write path. Lines 36 and 67 have 320 feed thresholds in 300's config. Non-goal line 102 (\"320 measures and configures\") describes none of these.\n\nThis also creates a feedback loop with no stability analysis: calibration \u2192 300 thresholds \u2192 gates \u2192 pipeline outcomes \u2192 tech-debt audit \u2192 140 dispatch prompt \u2192 code \u2192 audit. \"Dispatch\" is also overloaded (the 140 dispatch action, the 340 `/sq:analysis` router, and the pre-emption prompt here). Decide whether 320 is a measurement/config component. If it is, move the pre-emption prompt to the dispatch owner or a separate initiative, and remove `criteria` population from 320.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The human-verdict schema is deferred, and it decides whether calibration works",
+      "description": "Line 77 defers \"the metric choices\" to slice design, but the record the operator writes *is* the schema. The document never says whether the operator records a PASS/CONCERNS/FAIL verdict, a 0\u2013100 score, or agree/disagree.\n- The judge's output is continuous (300-arch line 24). A human verdict is probably categorical, so agreement needs an explicit mapping.\n- If agreement uses the derived verdict, it depends on the bands in force (300-arch line 51). Moving a band changes the agreement number, so calibration cannot evaluate the threshold it recommends. The store must keep the raw score and the human call so agreement can be recomputed at any band.\n- Line 75 needs the operator blinded to the judge's verdict and rationale until after they record their call. Otherwise anchoring inflates agreement. The document does not mention blinding.\n- Line 34 calls sampling ergonomics \"first-class,\" but never says what the operator sees: the artifact, the judge's score and findings (persisted as `review_file`, `review.py:284-285`), or the ground truth the judge used.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sampling design excludes the population the feedback needs",
+      "description": "Line 75 lists random, disagreement-triggered, and escalation-triggered sampling as options. The stated purpose (lines 36 and 67) is promoting a judge to auto-gate, which requires evidence on auto-PASS results. Escalation-triggered samples never contain auto-passes by definition. Disagreement-triggered samples contain them only if the trigger is inter-judge dispersion, which needs a second judge. Under the first two options, agreement looks best exactly where the gate is most trusted, and the false-PASS rate is never measured.\n\nThe document calls the sampling choice \"a slice-level decision,\" but its direction is set by the feedback's purpose, so it is architectural. Commit to stratified sampling across all verdicts with a PASS stratum and a stated rate. Name the component that draws the sample, and how skipped items are recorded. Otherwise a \"random\" sample is an operator choice, which is selection bias.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The calibration-to-threshold feedback has no contract and no evidence floor",
+      "description": "Line 36 says calibration \"is configuration, not a new gating mechanism.\" Line 20 says it \"feeds\" 300's threshold config. Line 103 says loosening is \"an operator decision made on reported evidence.\" The document never says what the calibration output *is*: a report, a generated config fragment, or a table an operator reads and hand-edits in YAML. Line 77 requires a \"minimum-evidence floor\" but gives no value, location, or behavior when it is unmet.\n\nThe floor matters at this scale. Line 52 expects \"a handful\" of spot-checks per level. Seven agreements out of eight gives a 95% Wilson interval of roughly 53%\u201398%. A floor that supports a loosening decision is far above a handful. As written, the feedback path will almost never fire. The document should say so, define the floor once (per CLAUDE.md's \"define once\" rule), and specify what the report outputs when the floor is not met.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The human oracle's own reliability is not addressed",
+      "description": "Line 20 makes \"the human, sampled\" the ground truth for judge quality. That yields agreement with one operator, which is not the same as quality. The same operator typically approves the artifacts being judged, may drift in leniency across sessions, and has no test-retest check. A disagreement could be judge error or operator inconsistency, and the report cannot tell which.\n\nThis undercuts the headline question on line 18 (\"is model X an overreacher\"). Overreach can only be defined relative to this operator. Line 52's honest-statistics principle covers sample size but not oracle reliability. Add a re-rate subset, report operator self-agreement alongside judge agreement, and state plainly that the system measures agreement with the operator, not correctness.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dispersion path depends on machinery 300 has not built, and misattributes the rest",
+      "description": "Line 81 says \"the execution machinery exists \u2014 300's multi-sample option.\" `300-slices.eval-actions-llm-as-judge-scoring.md:118` lists multi-sample judging as an unchecked Future Work item with dependencies [301, 302]. Line 62 of 320 itself calls it Future Work. The \"opportunistic\" path (\"when multi-sample ran anyway,\" line 81) therefore never runs today.\n\nThe `fan_out` attribution is also wrong. Lines 81 and 110 credit 140, but `140-arch.pipeline-foundation.md` never mentions `fan_out`, and `DEVLOG.md:1550-1564` records it as slice 182. Cross-model dispersion via `fan_out` is available. Median-reduced multi-sample is not. Name which dispersion path slice 2 depends on, and correct the attribution. Cross-judge dispersion also needs a shared artifact snapshot, which F1 says is not recorded.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The code-quality oracle is an interactive, agentic protocol, but the document treats it as a one-shot call",
+      "description": "The baseline harness (lines 22, 69, 96) must run the audit across projects. The shipped skill (`commands/analysis/tech-debt-audit.md`) has the following properties:\n- It is `disable-model-invocation: true` (line 5).\n- It is written for an interactive session: it uses `TodoWrite` (line 32) and dispatches subagents above 50k LOC (line 97).\n- It takes \"5\u201320 minutes\" per repo (line 143). Five projects run serially is roughly 25\u2013100 minutes of tool-using agent work per baseline, and each repeat multiplies that.\n\nThe document never says how the harness invokes the skill headlessly (`claude -p` with the slash command, the Agent SDK, or a squadron action), what it costs, or whether projects run in parallel.\n\nThe document also says findings are \"read once and discarded\" (line 63). The skill writes `analysis/nnn-analysis.{project}.md` into the audited repo (line 62). In repeat-run mode it reads the prior file and tags findings RESOLVED/NEW (line 103). The harness must decide whether that file is committed, excluded, or deleted before each run, and that choice changes the measurement (see the pre-emption finding).",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The normalization premise is wrong, and the LLM-normalizer option adds a second oracle",
+      "description": "Line 83 calls the audit output \"prose-shaped\" and proposes normalizing it into category, location, and severity. The skill's output is a markdown table with fixed columns: `ID | Category | File:Line | Severity (Critical/High/Medium/Low) | Effort | Description | Recommendation` (`tech-debt-audit.md` line 68), plus an executive summary. A lenient deterministic table parser fits that output. Per CLAUDE.md's parsing rules, its test fixtures must be real audit output.\n\nAn LLM normalizer would add a second non-deterministic oracle that itself needs calibration, which line 83 notes but does not resolve. Category labels are free text, so the category dimension also needs a closed set, such as the skill's nine dimensions. Choose the deterministic parser and state the closed category set.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-emption delta cannot support the claim it is meant to prove",
+      "description": "Line 85 concedes the before/after is observational, but the design still cannot show an effect:\n- **Unnormalized metric.** \"Audit-findings-per-project\" (line 22) scales with repo size. The skill targets \"30\u201380 findings\" (`tech-debt-audit.md` line 68), so counts partly reflect the audit's own instructions. Use findings per KLOC or per changed module, and severity-weighted counts.\n- **Environmental confounds.** The skill skips tools that are not installed (line 93). Dependency and CVE findings change with the advisory database, with no code change. Both move counts between runs.\n- **Anchoring.** Repeat-run mode (`tech-debt-audit.md` line 103) conditions run N+1 on run N's file. Baseline and post-intervention audits are not independent unless each runs in a clean checkout with the prior file excluded.\n- **No noise floor.** The audit is LLM output and no repeat-audit variance is planned. Without it there is no minimum detectable effect. With \"a handful of projects\" (line 52), the delta is likely indistinguishable from noise.\n- **Goodhart.** The prompt is written from the same categories the audit scores, so the intervention targets the instrument. Hold out at least one category or a project set the prompt never sees.\n- **Undefined term.** \"Prompt-chaining\" is never defined. It is unclear whether the artifact is a template edit or a multi-call chain, and that changes the pipeline's shape.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One \"metrology shape\" conflates two measurement models",
+      "description": "Line 69 says the two oracles \"share one metrology shape \u2026 so the reporting layer is built once.\" Judge calibration is paired agreement: a judge verdict and a human call on the same artifact, with chance-corrected statistics. The audit baseline has no paired oracle. It is a per-project count series over time, which needs normalization and trend handling. The two do not share a reporting model.\n\nThe slices show the gap. Slice 2 (line 94) covers agreement and dispersion only. Slice 4 (line 96) will \"report the cross-project baseline\" but reuses nothing defined in slice 2. No slice builds the shared layer. If \"one shape\" is a goal, define an oracle interface (capture, normalize, report) that both implement, and state what is shared. Otherwise the baseline gets duplicated reporting later.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The store decision is heavier than needed and points at the wrong store",
+      "description": "Line 87 says the cross-project requirement is new because \"300's persistence is per-run/per-project,\" and leaves the store open between extending existing storage and a new metrology store. Facts from the code:\n- Squadron has no SQLite today. No `sqlite` appears in `src/`.\n- Run state is Pydantic JSON in `~/.config/squadron/runs` (`src/squadron/pipeline/state.py:155`), which is already user-global.\n- 280's store is per-project (`{cwd}/.squadron/artifacts.db`, 280-arch \"Store Location\"), and 280 states \"no migrations in v1.\"\n- The plan says 320 is \"Independent of \u2026 280\" (`project-documents/user/project-guides/001-initiative-plan.squadron.md:44`), while 320 treats 280 as a \"leading\" decision.\n\nA lighter design meets the requirement. Use an append-only JSONL file of human calls under `~/.config/squadron/`, keyed by (run_id, step_name, iteration, action index), read alongside run JSON. Write each baseline as a JSON or CSV snapshot per harness run. Adopt SQLite only if slice 2 shows the joins are too slow. Decide schema evolution now, since 280's no-migration policy will not cover judge-identity fields that change over time.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependencies are undeclared or misnamed",
+      "description": "- The frontmatter `dependencies: [100, 140, 300]` (line 8) omits 340. The body says the oracle ships in \"the 340 analysis pack\" (line 22), and the plan calls 320 a consumer of 340 (plan line 45).\n- 100 is declared but never mentioned in the body.\n- 303 and 304 (line 56) are slices of 300 (`user/slices/303-slice.judge-gated-cycle-conventions.md`, `304-slice.gate-composition.md`), but the document numbers them like initiatives.\n- The skill is `tech-debt-audit` here, `tech-debt-analyze` in the 340 docs, and `commands/analysis/tech-debt-audit.md` in the repo. A harness that uses the wrong name fails at runtime in the middle of a baseline run. Pin the name in one place.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "There is no failure model for the metrology itself",
+      "description": "The \"honest statistics\" principle says an overstated calibration is worse than none. The document then has no failure model for the metrology:\n- **UNKNOWN results.** 300-arch line 89 defines UNKNOWN for parse failures, missing scores, and out-of-range scores. Do these enter the agreement denominator? Excluding them inflates agreement. Counting them as disagreement penalizes parse robustness. The document must choose and report the count.\n- **Write failures.** 280's policy (log WARNING, do not fail the step; 280-arch \"Failure Modes\") fits agent artifacts. For operator verdicts, which are the only copy of the work, silent loss is wrong.\n- **Partial baselines.** If one of N projects fails mid-audit, the baseline must be marked partial, not averaged over the successful projects.\n- **Superseded results.** 140's retry and resume re-run steps, so a judge result can be replaced after a human call points at it. The document must say whether the call binds to the first or the latest result.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The scope is overweight for what the plan asks, and it bundles a different product",
+      "description": "The plan's entry for 320 asks for judge-vs-human agreement per level, judge-vs-judge dispersion, threshold feedback, and a baseline with a delta. This architecture adds a new cross-project store, a sampling queue, trend reporting, an oracle abstraction, and a dispatch-side intervention with its own measurement. Lighter cuts that keep the plan's deliverables:\n1. Drop the cross-project SQL store (see the store finding).\n2. Make dispersion opportunistic-only in slice 2 until 300's multi-sample ships. Dedicated `fan_out` runs can be a separately scheduled activity.\n3. Trend is promised in slice 2 (line 94) and in the envisioned state (line 67). Nothing defines the time axis or the minimum n per time bucket. Defer trend until the baseline has two snapshots and enough samples per level.\n4. Make the pre-emption prompt the last slice, gated on a stable baseline (line 50 already says this), and move its ownership to the dispatch owner (see the principle finding).\n\nSequence these rather than silently dropping them.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:89-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The artifact-level grain is defined in several places, and the template already encodes it",
+      "description": "Line 30 lists three levels, and line 20 repeats them. 300-arch line 45 names the weak level \"arch concept vs. initiative blurb,\" and 300-arch line 91 encodes the level in the template name (`judge.slice-vs-arch`). The level is therefore a property of the judge template, and the grain duplicates template identity, which F1 notes is recorded only by name. Define the level enumeration once, and state whether the level is derived from the template name or stored explicitly.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:30"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The keystone's join key cannot be captured under the read-only principle",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:75-79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The read-side principle is contradicted by the document's own requirements",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The human-verdict schema is deferred, and it decides whether calibration works",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The sampling design excludes the population the feedback needs",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The calibration-to-threshold feedback has no contract and no evidence floor",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The human oracle's own reliability is not addressed",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:20",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dispersion path depends on machinery 300 has not built, and misattributes the rest",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The code-quality oracle is an interactive, agentic protocol, but the document treats it as a one-shot call",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The normalization premise is wrong, and the LLM-normalizer option adds a second oracle",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:83",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The pre-emption delta cannot support the claim it is meant to prove",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "One \"metrology shape\" conflates two measurement models",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The store decision is heavier than needed and points at the wrong store",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:87",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies are undeclared or misnamed",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "There is no failure model for the metrology itself",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The scope is overweight for what the plan asks, and it bundles a different product",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:89-97",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The artifact-level grain is defined in several places, and the template already encodes it",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:30",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch"
+  },
+  "timestamp": "2026-11-22T20:51:29.736948",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md",
+      "chars": 16279,
+      "sha256": "dfa1eaedf7feb8897ce2358a33d58ec846ec701aa27be0957756fab27f7317e7",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "project-documents/user/architecture/340-arch.skill-pack-infrastructure.md",
+    "project-documents/user/architecture/280-arch.shared-agent-artifact-store.md",
+    "project-documents/user/project-guides/001-initiative-plan.squadron.md",
+    "src/squadron/pipeline/state.py",
+    "src/squadron/pipeline/models.py",
+    "commands/analysis/tech-debt-audit.md",
+    "src/squadron/pipeline/actions/review.py"
+  ],
+  "searches": [
+    "list_files project-documents/**/*300*arch*.md in .",
+    "list_files project-documents/**/*{140,280,340}*.md in .",
+    "list_files **/CLAUDE.md in .",
+    "grep (303|304|320|340|300)\\b.* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents/project-guides/001-initiative-plan.squadron.md",
+    "grep fan_out|sqlite|artifacts\\.db|state file|run JSON|persist in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents/user/architecture/140-arch.pipeline-foundation.md",
+    "grep Future Work|Multi-Sample|multi-sample in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents/user/architecture",
+    "grep sqlite3|import sqlite|\\.squadron/|user_config|config_dir in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src",
+    "list_files project-documents/**/001-initiative-plan.squadron.md in .",
+    "grep fan_out|fan-in|fan_in in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch",
+    "grep (\\.squadron|state_dir|runs_dir|artifacts_db|sqlite) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src/squadron/config/manager.py",
+    "grep sqlite|\\.squadron/(runs|state|pipelines)|state_path|runs_dir in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src",
+    "grep ^.*\\b(182|303|304|320|340|300)\\b.*$ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents/user/project-guides/001-initiative-plan.squadron.md",
+    "grep sqlite in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src",
+    "grep def __init__|runs_dir.*=|DEFAULT|\\.squadron|expanduser|Path\\.home in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src/squadron/pipeline/state.py",
+    "grep \\bscore\\b|criteria in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src/squadron/pipeline",
+    "grep (303|304)[-. ]|judge-gated|gate composition in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents",
+    "grep template|model|iteration|provenance|step_name|class .*: in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src/squadron/pipeline/state.py",
+    "list_files **/*tech-debt* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch",
+    "grep analysis in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/project-documents/user/architecture/340-slices.skill-pack-infrastructure.md",
+    "grep metadata=|metadata\\[|\"model\"|\"template\"|template_name|resolved_model|model_id in /Users/manta/.config/squadron/reading-20261122/wt/squadron-320-arch/src/squadron/pipeline/actions/review.py"
+  ],
+  "sections_in_document": 9,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 32,
+  "prompt_tokens": 964309,
+  "cached_tokens": 874324,
+  "cache_write_tokens": 89953,
+  "completion_tokens": 72849,
+  "reasoning_tokens": null,
+  "duration_seconds": 336.8874679170549,
+  "cost_usd": 0.06390264000000001,
+  "cost_basis": "provider"
+}

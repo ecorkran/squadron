@@ -1,0 +1,103 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "The `Commit:` lines at 99, 125, 164, 185, 221, 254, 296 and 351 are all `- [ ] Commit: ...` items. Markers must be plain `**Commit**:` lines, never checkboxes. As written, 9.1's \"all checkboxes verified\" pass has to tick commits that other steps perform.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers sit after nearly every task, at non-working points",
+   "description": "Eight markers cover Tasks 1\u20137 and 8.6. The first seven sit at points where the flow can't run. After 1.2, `concept` is recognized but routes to an empty shell. After Tasks 2\u20136 the flow is still partial, and the first end-to-end run is 8.1. Only the 8.6 commit is at a tested, working point. Collapse these into one or two markers: after Task 7 (flow complete, statically checked) and after Task 8.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Task 8 sequencing: the real tree holds a concept document when 8.2 and 8.3 run",
+   "description": "8.1 writes `000-concept.squadron.md` into the real tree, and nothing commits or removes it until 8.6. 8.2 then runs \"on a scratch copy of the tree\", which now contains that document. The flow would hit the re-run rule and stop by default, so the decline path never executes. 8.3 has the same problem: the existing-document stop could fire before the guide check and mask the failure it is meant to show.\n- Take the scratch copy before 8.1, or delete the concept file in the copy.\n- State where the existing-document check sits relative to the contract checks (see the flow-order finding below).",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "8.3 has no mechanism to \"point the check at\" a scratch guide",
+   "description": "6.1 hardcodes the guide path as `project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md`. Criterion 7 also says the flow never uses a substitute layout, so the skill can't be redirected to a scratch guide. The only workable approach is a scratch tree copy with the heading renamed there. The step should say so.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327-328"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The \"only two questions plus one confirmation\" interaction inventory conflicts with the shared preflight, and 8.1 doesn't allow for it",
+   "description": "The shared staleness check asks the PM whether to proceed with a stale graph or stop. That prompt fires on any drift. The graph is at `1bfbca1` (`.understand-anything/meta.json:3`), and git status shows HEAD at `68c4cb8`, so the graph is very likely behind HEAD. Task 1.1 says preflight runs unchanged. Criterion 2 and 8.1/5.3 say \"nothing else asked\" and \"interaction inventory is exactly two questions plus one confirmation\". So 8.1's \"nothing else asked\" check will fail on this repo, or the walkthrough will silently ignore the staleness prompt. Add a task statement that the preflight's staleness prompt is a shared-contract interaction outside the concept-flow inventory, and make 8.1 and 5.3 scope their checks accordingly. The \"unchanged since design\" claim (line 8) only holds for the graph hash, not for the HEAD distance.",
+   "location": "commands/analysis/understand.md:180"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No task authors the flow's end-to-end order or the draft-and-write step",
+   "description": "Tasks 2\u20136 each author a fragment, but none places the stages in order. The stages are: preflight, preconditions, existing-document check, extraction, interview, drafting, confirmation, contract check, write. Two consequences follow:\n- Write-time check 2 (section title, 6.1) runs \"before any write\", i.e. after the PM has answered both questions. A renamed upstream heading would discard those answers. The stop path should say the answers are shown or preserved, or the check should run earlier.\n- The existing-document check (6.2) may fall after the interview. The PM would then answer questions only to be told the flow stops, which is the default.\n\nNothing states how the document body is assembled, in which section order, or how the file is written. 6.2 refers to \"Refined Concept sections\", and I couldn't confirm that heading against the guide. This is likely to produce divergent implementations, so add a short \"flow order\" step, probably in 6.1 or a new 5.x/6.x item.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:127-254"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Augment-mode interview and confirmation behavior is unspecified",
+   "description": "Augment \"appends to User-Provided Concept\", which implies new answers. It doesn't say whether the interview runs again, which conflicts with \"asked once\". It also doesn't say whether the confirmation runs. The task also doesn't say what a second augment on the same day does to the \"dated subheading\". A run killed partway through augment, after the append but before the section fills, leaves a document that a repeat augment will append to again. 6.2 should state these rules, because 8.4 can't be judged without them.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:242-246"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 7.4 contradicts the selector change in Task 1.1 and leaves stale text",
+   "description": "Lines 389 and 392\u2013393 of the comprehension flow read \"the default flow and the only one this skill implements\" and \"Any argument other than the comprehension default is unrecognized\". Both become false once `concept` exists. Task 1.1 says to \"extend the argument handling\", and 7.4's success criterion says \"no other comprehension-flow text changed\". Those two instructions conflict. Also, 7.4 doesn't name the line or section where the unrecognized-argument text actually lives, which is inside \"Flow: Comprehension Analysis\". The selector and its \"unrecognized\" rule should be moved or reworded in 1.1, with 7.4 reduced to the one sentence on line 393. The same reasoning applies to line 629, \"Concept generation is slice 363 \u2026 neither is written here\", which also reads stale.",
+   "location": "commands/analysis/understand.md:389-393"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "7.1's \"update the pointer\" doesn't match the existing Gap markers text",
+   "description": "The existing Gap markers section has no pointer to a subsection. It has three separate statements:\n- Line 291: \"This flow does not use `[INFERRED]`\u2026\" \u2014 scoped to the comprehension flow.\n- Line 304: \"A conforming comprehension document contains zero `[INFERRED]` markers\".\n- Lines 307\u2013309: \"Governance for that use belongs to 363.\"\n\n7.1 should name which of these to edit and what the new text points to. It should also say that the shared Provenance block's \"Section sourcing \u2014 graph field it derives from\" (line 329) is replaced for this flow by the nine-outcome set in 7.3. Without that, a reader sees two conflicting block definitions. The \"Source\" and \"Section sourcing\" lines in 7.3 should name the shared block as the base and the override.",
+   "location": "commands/analysis/understand.md:286-309"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Success criteria 4, 7 (partial), 10 and 12 have no verifying step; 2 of the 3 precondition stops are never exercised",
+   "description": "- Criterion 4 (dropped topics appear nowhere in the generated document): 4.2 checks only the table, and no 8.x step greps the output.\n- Criterion 10 (every `[INFERRED]` sentence satisfies the rule): 8.1 only checks that the inferred-claims line exists.\n- Criterion 12 (a PM would edit rather than discard): no step records the PM's judgment, even though the PM is live in 8.1.\n- Criterion 7 and the preconditions: only the renamed-heading failure is exercised (8.3). The absent-guide-tree stop, the unreadable-guide stop, and the no-registration stop (precondition 3) are authored but never run.\n\nAdd short checks to 8.1 and 8.3 rather than new tasks.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:298-352"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 8.6 and 9.x file-set and ordering inconsistencies",
+   "description": "8.6 asserts that the changed-file set includes the DEVLOG, but the DEVLOG is written in 9.2, after 8.6. 9.1 also edits `360-slices.document-intelligence.md`, which is not in 8.6's allowed set. The 8.6 commit message \"add generated concept document\" also misdescribes a commit that carries walkthrough fixes. The final scope check belongs after 9.2, or the 8.6 list should be reduced to what exists at that point. 8.4's augment run also mutates the 8.1 document, so the document committed in 8.6 is the augmented one; say so.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-351"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "PM interaction notice covers only 8.1, but 8.2 and 8.4 also need live answers",
+   "description": "8.2 requires declining both questions, and 8.4 requires answering \"augment\" and, presumably, new answers. Both involve the PM or a simulated respondent. The notice and Task 8 intro frame only 8.1. Extend the framing requirement to every interactive step, or say that 8.2 and 8.4 can be self-driven.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task granularity: verify tasks add little and the file is heavy for a markdown-only slice",
+   "description": "The slice is a single-file markdown edit, yet the plan has 30 tasks. Tasks 1.2, 2.2, 3.4, 4.2, 5.3 and 6.3 are diff-the-text-against-the-design checks that sit immediately after the authoring task and are largely re-reads of it. Merge each into its authoring task's success criterion, or fold 1.2/2.2/4.2/5.3 into a single \"fidelity pass\" at the end of Task 7. Task 3.4 (executing selections against the real graph) and 6.3 have real value and should stay. Task 9.1/9.2/9.3 could be a single closing task. 7.1 and 7.3 are also tied to line-level design references that a junior will copy rather than read; that is acceptable.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-125"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Anchors could not be verified in this checkout",
+   "description": "The `project-documents/ai-project-guide/` tree is absent from this worktree, so the \"concept guide contains `## User-Provided Concept` exactly once\" anchor and Task 0.2's grep would STOP here. This is likely a submodule-not-initialized issue rather than a plan error, but Task 0.1/0.2 should say which checkout they run in.\n\nVerified as correct:\n- `commands/analysis/understand.md` exists, runs to about 669 lines, and has the structure the plan describes.\n- The graph hash is `1bfbca1`.\n- `user/project-guides/` holds only `001-initiative-plan.squadron.md`.\n- `tests/skills/` exists and contains no test of the skill's text.\n- The design line references in the plan are accurate to within a line (the `[INFERRED]` blockquote is at 277\u2013279, not 278\u2013280).",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:36-46"
+  }
+ ]
+}

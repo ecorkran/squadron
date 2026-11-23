@@ -1,0 +1,21 @@
+{
+  "case": "migratory-109-slice",
+  "flaws": [
+    {
+      "id": "F1",
+      "text": "Architecture, Vectorized Force Patterns, Cohesion sketch: `center_of_mass = np.sum(neighbor_pos, axis=1) / np.maximum(counts, 1)` then `cohesion = (center_of_mass - self_positions) * weights`. For an agent with zero neighbors the sum is the zero vector, so the force is `-self_position * weight`, not zero. The section \"Handling Zero-Neighbor Agents\" says the masked reduction \"produces zero force for that agent, matching current behavior\". **VALID**: self-contradiction. Needs: doc alone. The implementation had to add `forces[~has_neighbors] = 0.0` (`flocking.py` at `f252659`).",
+      "hits": {"r01": [0], "r02": [1], "r03": [], "r04": [0], "r05": [], "r06": [], "r07": [], "r08": [], "r09": [0], "r10": []}
+    },
+    {
+      "id": "F2",
+      "text": "Verification Walkthrough step 4 runs `grep -n \"for.*agent_idx\\|for.*eval_indices\\|for.*list_idx\"` on the force modules and expects no matches, while the design's own Per-Agent Profile Weight pattern is `np.array([... for pi in state.profile_indices[eval_indices]])` in those modules. The regex `for.*eval_indices` matches that line, so the step cannot return empty if the design is followed. **VALID**: the step cannot be completed as written. Needs: doc alone. At close the author rewrote the grep.",
+      "hits": {"r01": [2], "r02": [2], "r03": [], "r04": [1, 7], "r05": [], "r06": [0], "r07": [0], "r08": [1], "r09": [2], "r10": []}
+    },
+    {
+      "id": "F3",
+      "text": "Technical Scope and Success Criteria call all five forces \"neighbor-dependent\" and include `MomentumForce`, which the document later says \"does not use neighbors at all\". **VALID** (minor): self-contradiction. Needs: doc alone. Raised by the original review (its only NOTE, \"wording inconsistency\").",
+      "hits": {"r01": [9], "r02": [15], "r03": [7], "r04": [], "r05": [3], "r06": [8], "r07": [7], "r08": [5], "r09": [12], "r10": []}
+    }
+  ],
+  "note": "F2: r03[2], r05[4] and r10[1] discuss the same grep but claim it would NOT match the comprehension (the opposite of the flaw), so they are not counted."
+}

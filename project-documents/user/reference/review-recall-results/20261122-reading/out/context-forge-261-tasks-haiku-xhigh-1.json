@@ -1,0 +1,620 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Explicit `--it brownfield-adoption` can drop an adoption back to the concept prompt",
+      "description": "On the explicit path, detection is skipped and nothing is written, so the state stays `''`. The guide's brownfield prompt then writes planning files: the concept first, then an `nnn-arch` file. On the next plain `cf build`, the default instruction is `Phase 0: Concept` (`packages/core/src/project-defaults.ts:53`). `findPlanningArtifacts` finds the architecture file, so the outcome is `already-planned` and the concept prompt returns. D1's rationale (state first, so writing concept and architecture doesn't drop the user out) only holds when a state was persisted, and this path never persists one.\n\nNo test covers the sequence. Task 12.11 (line 242) checks one explicit build. Task 12.8 (line 239) sets `in_progress` by hand rather than running build, then adding arch, then rebuilding. The only remedy the messages name is `declined` (slice line 243). Also, slice line 185 says the explicit path does no state check, but Task 9 Step 2 (line 185) reads the state. A hand-edited invalid value would then throw `AdoptionError` on the escape hatch that D4 says must not depend on detection.\n\nFix: decide the explicit path's behavior and record it in D4. The recommendation is to keep it non-writing and name `cf config set adoption.state in_progress` in the notice. Add a build \u2192 write \u2192 add arch \u2192 rebuild case, and either skip the state read on this path or make it tolerant.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:184-185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`readAdoptionState` inherits a machine-wide fallback, and the tests don't isolate it",
+      "description": "Task 2 (line 66) reads `adoption.state` through `ConfigManager.get`. `get` checks the project file, then the user config, then the default. So `cf config set --global adoption.state in_progress`, or an MCP `config_set` with `scope: \"user\"`, changes the outcome for every repo whose `.context-forge.toml` has no `adoption.state`. Those repos never get their own key, because `in_progress` returns `adoption-in-progress` without a write. That conflicts with \"adoption is a property of the repository, not of one machine\" (slice line 135).\n\nThe CLI's `set` defaults to project scope (`packages/cli/src/commands/config.ts`, `resolveScopeAndPath`), so the walkthrough's `cfl config set` is fine. The fallback itself is existing convention: `permissivenessResolver.ts:61` does the same for `workflow.permissiveness`. So this is a decision to make. Either read `getRawProjectFileValues(key).shared` (`ConfigManager.ts:244-259`), or document `--global` as a machine-wide default.\n\nSeparately, Tasks 2T and 9T read the real user config unless they set `CONTEXT_FORGE_DATA_DIR` (`packages/core/src/storage/storagePaths.ts:66-67`). The existing config tests do this, and the plan doesn't mention it.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "packages/core/src/config/ConfigManager.ts:159-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The build-time config write is non-atomic and can leave the committed file empty or truncated",
+      "description": "`writeToml` calls `writeFile` directly, which truncates and then writes. Task 9 Step 5 (line 188) and slice line 397 make a build rewrite the committed `.context-forge.toml` on first detection, so a kill or a full disk during that write is now reachable from the build. An empty file parses as `{}` with no error, which silently drops every shared setting, including `workflow.permissiveness`. A partial file fails to parse, so every build returns the error stub. Nothing in the plan detects or repairs either state, so the user has to notice and restore the settings by hand.\n\nFix: write to a temp file in the same directory and rename it into place, as a prerequisite listed in Task 2. Add a test that a failed write leaves the original bytes.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "packages/core/src/config/ConfigManager.ts:33-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`measureSourceVolume` in `detection/` imports a policy constant from `adoption/`, and `adoption/` imports back",
+      "description": "Task 3 (lines 85 and 87) has `detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts` as the stop threshold. Task 7 (line 153) has `adoptionOutcome.ts` import `SourceVolume` back. The type-only import avoids a runtime cycle. But the design says `detection/` is \"facts only, no policy\", with thresholds in `adoption/` (slice lines 84\u201386 and 106), and it never describes a `detection/` \u2192 `adoption/` edge.\n\nFix: pass the stop threshold into the walk from the resolver, for example `measureSourceVolume(root, { stopAtLines })`. That keeps `detection/` policy-free. If the signature must stay `measureSourceVolume(root)`, amend D2 to allow the edge.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`generateContext` cannot take a required parameter after its optional ones",
+      "description": "The current signature is `generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)`. Task 11 (line 220) asks for a required `adoptionStateWrites` after those. TypeScript rejects a required parameter after an optional one (TS1016), so `pnpm -r typecheck` fails as written. The call sites at `contextTools.ts:200-205` and `264-269` also need the new argument.\n\nFix: make the parameter `adoptionStateWrites: AdoptionStateWrites | undefined` in the required position, or move the optional parameters into an options object. Name which one in the task.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9 calls `getPromptForInstruction` as if it were synchronous, so the prompt-missing check never fires",
+      "description": "`getPromptForInstruction` is `async` and returns `Promise<SystemPrompt | null>`. Task 9 Step 4 (line 187) says \"a non-null `new SystemPromptParser(path).getPromptForInstruction(...)`\" with no `await`. An unawaited call returns a Promise, which is never `null`, so the D9 prompt-missing `AdoptionError` cannot fire. Task 9T's \"profile present, prompt missing\" case (line 198) would catch this, but the step text is wrong.\n\nFix: write `await` in the step.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "packages/core/src/services/SystemPromptParser.ts:186"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9 calls `ContextProfileParser.parseProfiles` as a static method",
+      "description": "`parseProfiles` is an instance method. Task 9 Step 4 (line 187) writes `ContextProfileParser.parseProfiles(content)`, which does not compile. `ContextIntegrator` already holds an instance (`ContextIntegrator.ts:96`).\n\nFix: write `new ContextProfileParser().parseProfiles(content)`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextProfileParser.ts:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The test-project guide has no profile block, so \"add a profile line\" will not parse",
+      "description": "Task 9T (line 194) says to copy the test-project prompt and add \"a `brownfield-adoption: [...]` profile line\". The fixture has no `context_profiles:` block at all. Its sections are `Context Initialization`, `Tool Usage`, `implementation`, `design`, `review` and `Task Breakdown (Phase 5)`. `parseProfiles` only reads a `context_profiles:` key inside a fenced block (`ContextProfileParser.ts:10` and `131-147`), so a lone line returns `{}`. Every positive brownfield case would then fail with the profile error, for the wrong reason.\n\nFix: the fixture needs the full fenced `context_profiles:` block plus the `##### Brownfield Adoption` section. The \"no profile\" variant must stay the untouched copy.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5T's `vi.mock` of `gitExec` applies to the whole test file",
+      "description": "Task 5T puts the real-git cases (lines 124\u2013127: three commits, shallow clone, subdirectory scoping, non-repo, no commits) and a `vi.mock` of the gitExec module (line 128) in one file. Vitest hoists `vi.mock` and applies it to every test in the file, so the real-git cases would receive the rejecting mock and fail.\n\nFix: put the timeout case in its own file, or mock with `importActual` as the default and override only the timeout test with `mockRejectedValueOnce`.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The entry-cap test creates 20,001 files under the default 5-second timeout",
+      "description": "Task 3T (line 101) creates `MAX_WALK_ENTRIES + 1` (20,001) files and then walks them. The core vitest config sets no `testTimeout`, so the 5-second default applies. Creating that many files one at a time can take several seconds, and a timeout here would look like a product failure.\n\nFix: give that case an explicit timeout, or make the cap injectable so the test can use a small limit and still prove the throw.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "packages/core/vitest.config.ts:3-8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Phase 2 \"no fs access\" test can't prove what it claims, and the walk spy mocks internal logic",
+      "description": "Task 9T (line 195) offers \"spy or a non-existent checkoutPath\" to show no fs access for Phase 2 on an `in_progress` project. A non-existent path proves nothing: `readToml` returns `{}` on ENOENT (`ConfigManager.ts:21-31`), so a read would silently see the default. The spy on `measureSourceVolume`, for the \"walk never runs\" case on the same line, mocks an internal function, which `.claude/rules/testing.md` says not to do.\n\nFix: for the Phase 2 case, put an invalid `adoption.state` such as `maybe` in the checkout. Any read would throw `AdoptionError`, so a passing test proves no read happened. For the walk, either accept the spy and say why, or inject the walk into the resolver.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:195"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The renderer tests skip outcomes the success criteria name",
+      "description": "Slice line 336 requires `renderAdoptionFacts` tests for \"every outcome\". Task 8T covers brownfield (capped), adoption-in-progress and `NOT_EVALUATED`. It has no case for `greenfield`, `already-planned`, or `adoption-closed` (`complete` and `declined`). The `never` check guards the compiler, not the rendered text.\n\nFix: add one renderer case per remaining outcome.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers the `cf build` or `context_build` error paths",
+      "description": "The success criteria (slice lines 332\u2013333) require `cf build` to exit non-zero with the `AdoptionError` text, and `context_build` to return it as an error. Task 10T (line 213) checks only the integrator rethrow. Task 11 (line 222) asserts argument values only. `context_build` probably already returns the error, since its catch turns any thrown error into `errorResult` (`contextTools.ts:210-212`), but no task asserts it. For `cf build`, no task asserts the exit status. The manual walkthrough check is in Task 15 (line 263).\n\nFix: add a `contextTools` case where the mocked pipeline rejects `AdoptionError` (expect `isError: true` and the remedy text), and a `build.test.ts` case for the non-zero exit.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkboxes, not plain `**Commit**:` markers",
+      "description": "The ten commit steps are checkbox items, for example `- [ ] **Task 2C: Commit** \u2014 feat(core): \u2026`, at lines 78, 105, 131, 148, 178, 202, 225, 251, 257 and 269. The convention requires plain `**Commit**:` lines, never checkboxes. The placement is good: each commit follows its tested group, so only the format needs changing.\n\nFix: rewrite each as a plain `**Commit**: feat(core): \u2026` line at the end of its group.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `format` check in Task 15 does not exist in this repo",
+      "description": "The root `package.json` defines `build`, `test`, `lint` and `typecheck`. There is no formatter script and no Prettier config; the only lint config is `eslint.config.mjs`. Task 15 (line 260) says \"Run format, lint, \u2026 All pass\", but the success criteria (slice line 339) list build, lint, typecheck and tests, not format.\n\nFix: drop \"format\", or name a command that exists.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "package.json:8-11"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The performance NFR has no timing or load check, and the reason given is not in this repo",
+      "description": "The design restates an NFR: \"detection adds under one second to a Phase 0 build on a local disk\" (slice line 167). The task file (line 38) declines any timing or load test because \"the `tests/load/` tier is a rule in `rules/python.md`\". Neither `rules/python.md` nor `tests/load/` exists in this repo; its rules are `.claude/rules/{sql,testing,typescript,shell}.md`. So no task verifies the NFR, and the stated reason does not apply here.\n\nFix: either add a bounded timing test for the 20,000-entry walk in the core tests, or state in Task 3T and Task 15 that the caps are the verification, as the design intends, and drop the `rules/python.md` citation.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 11 should spell out the expected build call",
+      "description": "Task 11 (line 221) says to change `toHaveBeenCalledWith('/tmp/test')` to \"expect `persist`\". The call becomes `createContextPipeline('/tmp/test', { adoptionStateWrites: 'persist' })`, so the assertion must match that full shape.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/build.test.ts:227"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1T's second option cites a case that does not exist",
+      "description": "Line 60 says \"or in `ConfigManager.test.ts`, following the permissiveness `set` case\". `ConfigManager.test.ts` has no such case. The case is in `ConfigKeys.test.ts:81-87`, which the first bullet (line 59) already names correctly.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:60"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The context summary's `it.skipIf` claim is wrong about the 260 tests",
+      "description": "The 260 detection tests (`packages/core/tests/detection/`) contain no `skipIf` and no permission logic. The pattern exists elsewhere, for example `packages/core/tests/schema/sliceDesignFiles.test.ts:157-158`. Point the task at that file instead.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`packages/electron/out/` does not exist in this tree",
+      "description": "The packages here are `core`, `mcp-server`, `context-forge` and `cli`. The design's \"stale compiled caller\" (slice line 399) is not present. The \"do not touch\" instruction is harmless, but it should be dropped or verified.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:221"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12 has an open target file and bundles many scenarios",
+      "description": "Line 230 allows either `CoreServiceFactory.test.ts` or `pipeline-integration.test.ts`, and packs 13 scenarios plus a helper into one effort-3 task. Pick one file. Splitting the filesystem-only scenarios from the git-backed ones (4 and 5) is optional.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4T creates every list entry when a sample would do",
+      "description": "The `it.each` creates all 19 entries across the three lists, including nested paths such as `.github/copilot-instructions.md`, `.cursor/rules` and `docs/adr`. The presence check needs one present and one absent case per shape. The list constants are verified by reading them against D5.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Granularity: 36 tasks plus 10 commit items for 10 new source files",
+      "description": "Candidates to merge: Task 4 and 4T into the Task 5 pair (both small, same module family); Task 7 into Task 8 (Task 7T stays a separate test group). Converting the commit items to plain markers (see the format finding) removes the rest of the overhead.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 13 runs against core's built output and doesn't say to build first",
+      "description": "`packages/core/package.json` `exports` point to `dist/`, so the MCP parity test imports the built core. Task 13 does not say to run `pnpm -r build` first, so a single-package test run would test stale code. The context summary (line 40) states the rule; Task 13 should repeat it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6 deliberately doesn't reuse `resolveInitiativePlanPath`, as D6 literally says",
+      "description": "D6 (slice line 213) says \"reusing `resolveInitiativePlanPath`\". `findProjectGuideFile` swallows every `readdir` error, which conflicts with D6's \"other read errors throw\". Task 6 extracts the pattern and reads the directory with the ENOENT-only rule, and the context summary (line 36) records the reason. The deviation is correct; keep it in the task text, not only in the summary.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:21-31"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency order and test-with pairing hold",
+      "description": "Each implementation task precedes its `T` task. Imports flow in order: contracts (Task 2) before the walk (Task 3), the outcome (Task 7) before the renderer (Task 8), and both before the resolver (Task 9). The integrator (Task 10) comes before the pipeline option (Task 11). The only back-edge is type-only (finding on `sourceVolume`). Checked code claims also hold: `ConfigManager` validates enums only on write, `gitExec` takes `cwd` second, `pathPresent` throws on ENOTDIR, and the `ContextIntegrator` constructor has six parameters.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:43"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Explicit `--it brownfield-adoption` can drop an adoption back to the concept prompt",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:184-185",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "`readAdoptionState` inherits a machine-wide fallback, and the tests don't isolate it",
+      "location": "packages/core/src/config/ConfigManager.ts:159-169",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "The build-time config write is non-atomic and can leave the committed file empty or truncated",
+      "location": "packages/core/src/config/ConfigManager.ts:33-36",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "`measureSourceVolume` in `detection/` imports a policy constant from `adoption/`, and `adoption/` imports back",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`generateContext` cannot take a required parameter after its optional ones",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:57-62",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Task 9 calls `getPromptForInstruction` as if it were synchronous, so the prompt-missing check never fires",
+      "location": "packages/core/src/services/SystemPromptParser.ts:186",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Task 9 calls `ContextProfileParser.parseProfiles` as a static method",
+      "location": "packages/core/src/services/ContextProfileParser.ts:131",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The test-project guide has no profile block, so \"add a profile line\" will not parse",
+      "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 5T's `vi.mock` of `gitExec` applies to the whole test file",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The entry-cap test creates 20,001 files under the default 5-second timeout",
+      "location": "packages/core/vitest.config.ts:3-8",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The Phase 2 \"no fs access\" test can't prove what it claims, and the walk spy mocks internal logic",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:195",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The renderer tests skip outcomes the success criteria name",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No test covers the `cf build` or `context_build` error paths",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit points are checkboxes, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The `format` check in Task 15 does not exist in this repo",
+      "location": "package.json:8-11",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The performance NFR has no timing or load check, and the reason given is not in this repo",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 11 should spell out the expected build call",
+      "location": "packages/cli/tests/commands/build.test.ts:227",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Task 1T's second option cites a case that does not exist",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:60",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The context summary's `it.skipIf` claim is wrong about the 260 tests",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`packages/electron/out/` does not exist in this tree",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:221",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 12 has an open target file and bundles many scenarios",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 4T creates every list entry when a sample would do",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Granularity: 36 tasks plus 10 commit items for 10 new source files",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 13 runs against core's built output and doesn't say to build first",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "Task 6 deliberately doesn't reuse `resolveInitiativePlanPath`, as D6 literally says",
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:21-31",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Dependency order and test-with pairing hold",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:43",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-22T21:14:03.883554",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 70,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "chars": 30105,
+      "sha256": "b55688a9f1052ec43c75cb450baf3e2486e318f6c20622a3e6be5f3a578a04a7",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+      "chars": 38107,
+      "sha256": "3ba57648169d4518ebce13a383d3ae8ab00dd784934406cfff445eaab217ea5e",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/services/ContextIntegrator.ts",
+    "packages/core/src/schema/projectSchema.ts",
+    "packages/core/src/config/ConfigManager.ts",
+    "packages/core/src/detection/pathPresent.ts",
+    "packages/core/src/detection/index.ts",
+    "packages/core/src/guides/gitExec.ts",
+    "packages/core/src/detection/ciDetection.ts",
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/core/src/node.ts",
+    "packages/core/vitest.config.ts",
+    "packages/core/src/services/ContextProfileParser.ts",
+    "packages/core/src/services/constants.ts",
+    "packages/core/src/index.ts",
+    "packages/core/tests/services/CoreServiceFactory.test.ts",
+    "packages/core/src/services/SystemPromptParser.ts",
+    "packages/core/src/services/promptFilePath.ts",
+    "packages/core/src/config/configPaths.ts",
+    ".claude/rules/testing.md",
+    ".claude/rules/typescript.md",
+    "packages/core/src/services/permissivenessResolver.ts"
+  ],
+  "searches": [
+    "list_files packages/core/src/{detection,adoption,guides,introspection,config,schema}/**/*.ts in .",
+    "grep createContextPipeline\\(|generateContext\\(|PermissivenessFragmentError in packages",
+    "grep ARCHITECTURE_PHASE|PHASE_STRINGS|resolvePhaseValue|CONCEPT_PHASE in packages/core/src",
+    "grep resolveInitiativePlanPath|initiative-plan|INITIATIVE|readdir in packages/core/src/introspection/ArtifactIntrospector.ts",
+    "grep permissiveness|workflow\\.|ConfigScope\\.Shared|'git\\.integration_branch'|export const CONFIG_KEYS|export const PERMISSIVENESS_LEVELS|export enum ConfigScope in packages/core/src/config/ConfigKeys.ts",
+    "grep order|permissiveness|3\\.4|3\\.5|3\\.3 in packages/core/src/services/ContextTemplateEngine.ts",
+    "list_files {packages/core/tests/config/ConfigKeys.test.ts,packages/core/tests/config/ConfigManager.test.ts,packages/core/tests/schema/*.test.ts,packages/core/tests/services/CoreServiceFactory.test.ts,packages/core/tests/services/ContextIntegrator.test.ts,packages/core/tests/services/ContextTemplateEngine.test.\u2026 in .",
+    "grep ErrorOptions|\"lib\"|\"target\" in packages",
+    "grep \"(format|lint|test|typecheck|build)\"\\s*: in package.json",
+    "grep PROMPT_FILE_RELATIVE_PATH|STATEMENTS_FILE_RELATIVE_PATH|MIN_GUIDE_VERSION|parseProfiles\\(|getPromptForInstruction\\(|export function resolvePromptFilePath|constructor\\(|export class SystemPromptParser|export class ContextProfileParser|export const DEFAULT_TARGET_BRANCH in packages",
+    "grep createContextPipeline|toHaveBeenCalledWith\\('/tmp/test'\\)|vi\\.mock\\( in packages/cli/tests/commands/build.test.ts",
+    "grep createContextPipeline|generateContext|vi\\.mock\\(|template_preview|context_build in packages/mcp-server/tests/contextTools.test.ts",
+    "grep CONFIG_KEYS|Object\\.keys\\(|toHaveLength\\(|\\.length\\)\\.toBe\\(|config list|toMatchSnapshot|toMatchInlineSnapshot in packages",
+    "grep Phase 0|CONCEPT|'concept'|FIXTURE_ROOT =|FIXTURE_PROJECT_PATH =|fixtureProjectPath =|instruction: '|developmentPhase: ' in packages",
+    "grep workflow\\.permissiveness|adoption in packages",
+    "grep registerProject|addProject|projectPath|instruction|permissiveness|createContextPipeline|context_build|mkdtemp|beforeAll|beforeEach|describe\\( in packages/mcp-server/tests/integration/mcpIntegration.test.ts",
+    "grep FIXTURE_PROJECT_PATH|checkout|instruction|permissiveness|describe\\(|beforeEach|mkdtemp in packages/core/tests/services/CoreServiceFactory.test.ts",
+    "grep FIXTURE_INSTRUCTION|FIXTURE_PROJECT_ID =|integration-project|FIXTURE_PATH|fixtureDir|IMPLEMENTATION_PHASE in packages/mcp-server/tests/integration/mcpIntegration.test.ts",
+    "grep workflow\\.(auto_advance|review_enabled|permissiveness|auto_fix)|git\\.integration_branch|adoption in .",
+    "list_files {packages/electron/**/*,.prettierrc*,prettier.config.*,.editorconfig,biome.json,eslint.config.*} in .",
+    "grep PERMISSIVENESS_PHASES|testTimeout|timeout in packages/core",
+    "grep permissiveness in README.md",
+    "list_files packages/*/package.json in .",
+    "grep \"(prettier|format)[^\"]*\"\\s*:|\"devDependencies\" in package.json",
+    "grep \\.option\\('--project|\\.option\\('--user|scope|'project'|'user' in packages/cli/src/commands/config.ts",
+    "grep \\.set\\(|\\.get\\(|scope in packages/mcp-server/src/tools/configTools.ts",
+    "grep extractPromptContent|generateKeyFromHeader|\\`\\`\\`|private  in packages/core/src/services/SystemPromptParser.ts",
+    "grep context_profiles|_default|implementation-phase-6|^##### |^``` in packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+    "grep context_profiles|brownfield in packages",
+    "grep \"\\./node\"|\"main\"|\"exports\"|\"types\"|\"import\" in packages/core/package.json",
+    "grep process\\.env|export function getStoragePath in packages/core/src/storage",
+    "grep getStoragePath|CF_|CONTEXT_FORGE|process\\.env|setupFiles in packages/core/tests",
+    "grep new ContextIntegrator\\(|generateContextFromProject\\(|CONTEXT_FORGE_DATA_DIR in packages",
+    "grep generateContextFromProject\\(|instruction|developmentPhase|Phase 0|it'|'build'|\\['build' in packages/cli/tests/integration/guidesVersionFlag.integration.test.ts",
+    "grep generateContextFromProject\\(|instruction|developmentPhase|Phase 0|'build'|context_build|projectPath in packages/mcp-server/tests/serverLifecycle.test.ts",
+    "grep generateContextFromProject\\(|instruction|developmentPhase|Phase 0|'build'|context_build|projectPath|mkdtemp in packages/mcp-server/tests/helpers/integrationSetup.ts",
+    "list_files {tests/load/**,rules/**/*.md,packages/*/tests/load/**,.claude/rules/**/*.md} in .",
+    "grep 50 lines|function length|300 lines|tests/load|load test in .",
+    "grep instruction:\\s*'|developmentPhase:\\s*' in packages/core/src/project-defaults.ts",
+    "grep Phase 0|CONCEPT|PHASE_STRINGS|instruction in packages/core/src/project-defaults.ts",
+    "grep skipIf|permissiveness in packages/core/tests",
+    "list_files packages/core/tests/detection/**/* in .",
+    "grep chmod|getuid|win32|skip|\\.runIf|isRoot|platform in packages/core/tests/detection",
+    "grep skipIf\\(|getuid|chmod\\( in packages"
+  ],
+  "sections_in_document": 7,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 26,
+    "in_fences": 0,
+    "in_section": 26,
+    "surviving": 26
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 71,
+  "prompt_tokens": 5187574,
+  "cached_tokens": 4949585,
+  "cache_write_tokens": 237927,
+  "completion_tokens": 164282,
+  "reasoning_tokens": null,
+  "duration_seconds": 703.4260405842215,
+  "cost_usd": 0.74350863,
+  "cost_basis": "provider"
+}

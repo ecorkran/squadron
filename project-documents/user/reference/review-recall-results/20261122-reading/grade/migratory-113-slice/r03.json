@@ -1,0 +1,117 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The density hook reads post-cap counts, which contradicts the slice plan and the design's own \"pre-cap\" rule",
+   "description": "In `src/migratory/engine/tick.py:66-77`, `filtered_counts` is reassigned by `apply_neighbor_cap` whenever any profile sets `max_neighbors`. The design adds `spatial.record_density(filtered_counts)` as step 8, after the cap, so it receives capped counts. That contradicts line 116 (\"post-`exclude_self`, pre-cap\"), line 27, line 409 (\"the cap cannot perturb backend selection\") and the slice plan entry (line 49: the decision must use pre-cap counts).\n\nOn the walkthrough config (`max_neighbors=1`), the mean would always be \u22641, below every threshold in the step-4 sweep. The dispatcher would pin to grid, including in the clustered phase where grid loses by about 30%. Fixing it means capturing the counts before line 71 reassigns them. That also breaks Technical Requirement line 342 (\"no other lines move\").",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A lighter design removes the tick.py hook altogether",
+   "description": "`AdaptiveSpatial.query_radius_batch` already receives the raw `counts` it returns. Those counts include self, and are pre-`exclude_self` and pre-cap. `counts.sum()/n_active - 1` is the pre-cap signal the slice plan asks for.\n\nRecording it inside the wrapper would remove four things:\n- the `record_density` method\n- the duck-typed `hasattr` coupling in the core engine, a hidden dependency outside the `SpatialQuery` protocol\n- the step-4 tick.py change\n- the FAIL above\n\nCut the `tick.py` change, the `hasattr` guard and its dedicated test (line 344), and the \"density signal in tick.py\" item under Provides (line 315).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#tick-integration"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick output now depends on dispatcher state, and the bit-exact parity test cannot pass",
+   "description": "The architecture's tick-determinism principle (100-arch line 34) says the same state and inputs give the same outputs. The grid returns each row in cell-then-index order (`hash_grid.py:278,293`); brute returns ascending index order (`brute_force.py:141`). The forces sum through `np.add.reduceat` (`flocking.py:53`), so the sums differ in the last bits. `apply_neighbor_cap` also breaks ties by `argpartition` input order (`neighbors.py:99`).\n\nSo tick output depends on which backend the hysteresis history selected. That history is not in `AgentState` or in snapshots, so a replay resumed from a snapshot can diverge. The design's own statements conflict with this:\n- Implementation step 5 requires \"bit-exact position equality against brute-force-only\" while switching backends. That cannot pass.\n- Line 352 treats any divergence as a dispatcher bug.\n- Line 359 waves this off as \"documented determinism caveats\" without documenting them.\n\nThe design must do one of two things:\n- canonicalize row order, for example a per-row sort in the wrapper, and state its cost\n- restate determinism as \"from tick 0 only\", persist the selected backend, and replace bit-exact with a tolerance or set-based test",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The default threshold contradicts the design's own arithmetic",
+   "description": "Line 210 computes about 132 mean neighbors for N=3100 spread uniformly over the 300\u00d7300 world. Line 211 then claims that the same uniform spread across the whole world can fall below 10. That is impossible under soft or wrap bounds: uniform over the whole world is the minimum-density case.\n\nEntry 4 addendum (journal lines 1011, 1018-1019) shows the grid winning exactly in that maximally-spread phase, so the grid wins at roughly 40-130 mean neighbors. With `t=10, h=2`, a correct (pre-cap) signal never selects grid on the reference configs. The default adaptive mode would then run brute only and deliver none of the Value section's claimed win. Derive the default from the Entry 4 data, or state that it is a placeholder and make the step-4 sweep range cover 20-200.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:208-213"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is described as operator-configurable but has no config field",
+   "description": "Line 301 says \"Make it configurable\u2026 so an operator running a scattered-start scenario can choose grid-first\", and Risk line 400 discusses \"if an operator sets `initial_backend: grid`\". But `SpatialConfig` (lines 171-176) has no such field, `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238), and line 305 says threshold and band are \"the only dispatcher parameters\". Either add the field and its validation, or drop the operator claims and keep this as a constructor-only test knob.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`world_bounds` passed to `HashGridQuery` is the wrong type",
+   "description": "`self.config.simulation.world_bounds` is a `WorldBoundsConfig(width, height, policy, soft_bounds)` (`config.py:47-53`). `HashGridQuery.__init__` requires a `(x_min, y_min, x_max, y_max)` tuple (`hash_grid.py:40,47`), and unpacking the dataclass raises `TypeError`. Interfaces Required (line 68) and `_build_spatial` never mention the conversion to `(0.0, 0.0, width, height)`, which follows the origin used by `build_world_bounds` (`simulation.py:17-22`). Specify it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:227-237"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Switching immediately in `record_density` leaves a query hazard before the next `build()`",
+   "description": "Line 110 says `record_density` \"changes the selected backend\". Line 138 says the switch \"takes effect on the next build()\". If the selection changes immediately, any `query_radius*` call between `record_density` and the next `build()` goes to a backend that was not built this tick:\n- grid that was never built raises `RuntimeError` (`hash_grid.py:148-149,196-199`)\n- a stale grid, or brute's `query_radius` (`brute_force.py:64-73`), silently answers from old positions\n\nSpecify separate pending and active selections, where `build()` promotes pending to active.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:110"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The design says brute-force `build()` does nothing, but it copies positions",
+   "description": "`BruteForceQuery.build` runs `self._positions = positions.copy()` (`brute_force.py:51-53`), and `query_radius` depends on that copy. Lines 108 and 404 call brute's build a no-op and frame the skip-build risk as hypothetical. The present-day dependency is real and is part of the finding above. Correct the claim, and base the \"one build per tick\" contract on actual behavior.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:108"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The empty active set crashes the density computation",
+   "description": "The signal is defined as `float(counts.sum()) / len(counts)` (lines 25, 116). `tick()` accepts `active_indices` (`tick.py:20`). An empty array passes the `n == 0` guard (lines 36-37) and gives an empty `counts` from `exclude_self` (`neighbors.py:134-138`). Python division then raises `ZeroDivisionError`, and NumPy division gives NaN plus a warning. Specify that an empty count leaves the selection unchanged.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:25"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Validation allows hysteresis settings that make grid unreachable",
+   "description": "The only checks are `t > 0` and `h >= 0`. If `h >= t`, the brute\u2192grid condition `m < t - h` can never hold, because `m >= 0`. With the default brute start, adaptive mode silently becomes brute forever. Either require `h < t`, or at least log a warning at load.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:198-202"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The density signal misjudges grid cost under the `open` bounds policy",
+   "description": "`open` is the default `BoundsPolicy` (`config.py:52`). Agents outside the world are clamped into edge cells (`hash_grid.py:98-99`). Those agents can be far apart, so mean neighbors stays low, while the edge cells' candidate counts, which are the grid's real cost, grow without limit. The dispatcher would pick grid in its worst case. Line 120 assumes candidate count tracks neighbor count. Either state that adaptive mode assumes bounded worlds, or force brute when the policy is `open`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:118-122"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The walkthrough's test commands and test plan don't match the test suite",
+   "description": "- **Step 1:** line 352 says tests that ran against `BruteForceQuery()` will now run against `AdaptiveSpatial`. They won't. `test_simulation.py`, `test_tick.py`, `test_flocking.py` and `test_herding.py` construct `BruteForceQuery()` directly. Only `Server.run` paths in `test_server.py` change.\n- **Step 2:** `MIGRATORY_SPATIAL_BACKEND` exists nowhere, and line 359 defers the mechanism. As written, the step runs the unchanged suite twice.\n- **Testing Strategy (line 432):** it names `test_server_tick.py` and `test_integration.py` as end-to-end spatial tests, but they test `TickLoop` timing and `integrate()` only. Neither touches spatial, so parametrizing them over backends exercises nothing.\n\nSo Functional Requirement line 335 (652 tests under all three backends) has no mechanism behind it. Name the fixture and the files it actually covers: `test_simulation.py`, `test_tick.py`, `test_flocking.py`, `test_herding.py`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:348-360"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Steps 4 and 5 rely on a `test.yaml` that doesn't match the repo",
+   "description": "The design describes `test.yaml` as \"2500 entities, `max_neighbors=1`, soft bounds\". The repo's `config/test.yaml` has 1000 entities (950 + 50) and no `max_neighbors`. `resolve_config_path` checks `~/.migratory/config/test.yaml` first (`config.py:653-656`), so `--config test` runs whatever is in the operator's home directory. The Entry 5 baseline that step 5 compares against comes from that unversioned file. Commit a dedicated config, for example `config/bench-adaptive.yaml`, and reference it by path.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:369-380"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The walkthrough depends on dispatcher log output that the design never specifies",
+   "description": "Steps 4 and 5 read the \"`grid_selected` count in the dispatcher's log output\", the `brute_selected` counts, and the grid-vs-brute tick ratio. Neither `AdaptiveSpatial` nor the server wiring defines a logger, counters, a log level or an emit interval. Specify them, for example a switch-event log line plus counters, or the steps cannot be checked.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The cell-size fallback is not in server.py today",
+   "description": "Current `server.py:127` is just `BruteForceQuery()`. The fallback exists only in the slice 105 document (lines 268-271). The helper is new code, not moved code, and \"in the same module\" doesn't say which module.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217-219"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Minor inconsistencies",
+   "description": "- The `_build_spatial` keyword arguments `threshold=` and `hysteresis=` don't match the constructor's `threshold_mean_neighbors` and `hysteresis_band` (lines 87-88).\n- Line 278 gives brute's cost as \"n\u00b2 / 2\", but line 120 and the code (`brute_force.py:127`) use the full `n_active \u00d7 n`.\n- Line 340 says `counts.sum()` is \"already known\" and \"one BLAS reduction\". Nothing in `tick.py` computes it; `offsets[-1]` is the existing post-cap equivalent, and `ndarray.sum` is not BLAS.\n- The Data Flow section (lines 240-254) repeats Tick Integration.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:238"
+  }
+ ]
+}

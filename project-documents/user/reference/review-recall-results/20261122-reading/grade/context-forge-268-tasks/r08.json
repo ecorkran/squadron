@@ -1,0 +1,138 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "3.2a commit lands on a red suite",
+   "description": "After 3.1 (`SectionBuilder.ts:160-161` stops rendering `Comprehension:`) and 3.2 (`ContextTemplateEngine.ts:112-117` stops rendering Adoption Facts), these assertions still exist and fail: `adoptionBuild.integration.test.ts:99-103` and `:120-124` (brownfield prompt plus `### Adoption Facts`); `pipeline-integration.test.ts:154-173` (probe JSON and the \"Squadron: unavailable\" statement, which come from the facts renderer, `adoptionFacts.ts:81`); and `pipeline-integration.test.ts:177-185` (the `Comprehension:` line). The probe block is deleted at 3.3 (line 107) and `adoptionBuild.integration.test.ts` at 4.1 (line 144). So the 3.2a success check (line 100) is false and the commit is not at a tested point. Delete `adoptionBuild.integration.test.ts` and the probe and comprehension cases in 3.1\u20133.2, or move the 3.2a commit to after 3.3.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "3.7 \"all four pass\" is false because an adoption test survives the seam removal",
+   "description": "The file calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`. After 3.3 the factory takes one argument, so the options are ignored at runtime. The resolver is not wired, and the brownfield case in `expectBrownfield` (lines 99\u2013103, used at 120\u2013124) fails. The file is deleted at 4.1 (line 144), after the 3.7 `pnpm -r test` check (line 132). Move that deletion into 3.2 or 3.3.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "3.3 grep check fails on a comment",
+   "description": "Line 9 is a comment mentioning `adoption/`. The 3.3 check `grep -rn \"adoption/\\|detection/\" packages/core/src/services` (line 109) matches it. Step 3.3 removes the import on line 10 but not this comment, so the check prints a line. Name the comment in 3.3.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:9"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "4.2 and 4.3 grep checks match leftover test imports that no step deletes",
+   "description": "The 4.2 grep (line 154) matches the `BROWNFIELD_ADOPTION_INSTRUCTION` and `AdoptionResolver` imports at lines 4\u20135. Step 3.3 (line 106) deletes only the cases. The 4.3 grep (line 162) matches the `writeAdoptionState` import at `packages/core/tests/adoption/adoptionState.test.ts:9` after 4.3 deletes the write cases. Name the import removals in 3.3 and 4.3.",
+   "location": "packages/core/tests/services/ContextIntegrator.test.ts:4"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "3.6 leaves `generateContext`'s `options` parameter unnamed",
+   "description": "`generateContext` takes `options?: ContextToolOptions` (line 69), spreads it into `createContextPipeline` (line 100), and forwards it at lines 214 and 281. Removing the type breaks this file, but 3.6 (lines 124\u2013125) names only `adoptionStateWrites` and the `registerContextTools` parameter. The only caller, `packages/mcp-server/src/index.ts:40`, passes no options, so \"update its caller\" (line 125) is a no-op. Name the `generateContext` options removal.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:69"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "integrationSetup keeps a `ContextToolOptions` reference that no check sees",
+   "description": "The file imports `ContextToolOptions` (line 9), types `createIntegrationClient(options?: ContextToolOptions)` (line 38), and forwards it (line 41). Step 3.6 (line 126) says only to drop the `squadronProbe` option and its comment. `packages/mcp-server/tsconfig.json:20` includes only `src/**`, so the 3.6 typecheck does not see this file. The 6.2 grep (line 198) scans only `packages/*/src`. A stale `ContextToolOptions` reference therefore survives every check.",
+   "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Export audit cannot classify live exports and leaves `measureSourceVolume` undecided",
+   "description": "After 4.1, `measureSourceVolume`'s only production caller (`adoptionResolver.ts:61`) is gone. It is not in the design's retained list (`history`, `comprehensionAnalysis`, `adoptionOutcome`), so the 6.2 rule (line 200) would require removing its export. But 4.1 keeps `outOfTreeLinks.test.ts` calling it, and the design's success criterion exempts only the three retained modules. The task does not say whether to remove the export or the function. The rule also cannot classify live exports that the design's consumer list omits: `readAdoptionState` (consumer `introspection/adoptionNavigation.ts:4`), `AdoptionError` (consumers `comprehensionAnalysis.ts:5`, `planningArtifacts.ts:5`, `sourceVolume.ts:8`), and `BROWNFIELD_MIN_SOURCE_LINES` (`sourceVolume.ts:7`). Name the outcome for each.",
+   "location": "packages/core/src/detection/index.ts:3"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "CoreServiceFactory.test.ts has no adoption or options cases to delete",
+   "description": "Step 3.3 (line 106) says to delete \"the options and adoption-wiring cases\" here. The file has none. Its cases cover the factory basics (lines 28\u201366) and permissiveness (70\u2013146). The byte-identical case at 116\u2013133 concerns the permissiveness resolver. A reader could delete permissiveness coverage. Replace the instruction with \"update the `createContextPipeline` calls\".",
+   "location": "packages/core/tests/services/CoreServiceFactory.test.ts:70"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The golden write step is never verified as removed",
+   "description": "If the write step stays in, every run rewrites the same output. The second-run check (line 76) and the `git diff` checks at 133 and 194 then pass, and the test cannot fail. Gate the capture on an explicit env var, or require a grep that finds no write call in the golden test before committing.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The purity mutation check tests the snapshot helper, not production code",
+   "description": "The check adds `writeFileSync` inside the test file. That shows the snapshot assertion works, not that the purity test catches a production write. The design requires failure \"against code that writes state.\" Add the write to production code on the path the test runs (`CoreServiceFactory.ts` or `ContextIntegrator.ts`), confirm the failure, then revert.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The purity test covers two `adoption.state` values, not \"whatever it holds\"",
+   "description": "The design's success criterion (`project-documents/user/slices/268-slice.pure-cf-build.md:189`) says \"whatever `adoption.state` holds.\" Step 5.1 runs only absent and `in_progress`. The old reader rejected out-of-enum values with `AdoptionError` (`adoptionState.ts:17-22`), so an out-of-enum run would show the build no longer reads the key. Add one run with an out-of-enum value.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The walkthrough leaves a project record in the real store",
+   "description": "Step 6.3 runs the design's step 1, which registers the scratch repo with `cf init`. `packages/cli/src/commands/init.ts:125` creates the record through `FileProjectStore`, and nothing in the plan removes it, although `cf project rm` exists (`packages/cli/src/commands/project.ts:652`). Point `CONTEXT_FORGE_DATA_DIR` at a temp dir for the walkthrough, or end with `cf project rm`.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes",
+   "description": "The commit steps (lines 79, 101, 134, 148, 155, 163, 169, 186, 206) are checkbox items (\"- [ ] \u2026 Commit\"). The convention is plain `**Commit**:` lines, never checkboxes. Their placement at working points is otherwise fine, apart from 3.2a above.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The 3.4\u21923.5 typecheck window is misstated",
+   "description": "Line 87 says only the mcp-server typecheck fails between 3.4 and 3.6. Once core is rebuilt after 3.4, `build.ts:84` passes two arguments to a one-parameter function, so the `cli` typecheck also fails until 3.5.",
+   "location": "packages/cli/src/commands/build.ts:84"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The 3.5 check runs a stale CLI binary",
+   "description": "The second `describe` spawns `packages/cli/dist/index.js`. The 3.5 success check (line 121) therefore tests the pre-change binary until 3.7's `pnpm -r build`. Build before the check.",
+   "location": "packages/cli/tests/integration/build.integration.test.ts:79"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "\"Keep the guide-warning-on-stderr assertions\" points at no such assertion",
+   "description": "The stderr assertions here (lines 138\u2013141) cover the permissiveness fragment error, not the `MIN_GUIDE_VERSION` warning. The guide-warning test is in `build.test.ts` (line 91), which 6.1 already names. Drop the sentence from 3.5.",
+   "location": "packages/cli/tests/integration/build.integration.test.ts:138"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "\"The resolver ... cases\" is ambiguous in ContextIntegrator.test.ts",
+   "description": "Step 3.3 (line 106) says to delete \"the resolver ... cases.\" The file also has integration-branch (265\u2013310) and permissiveness (312\u2013360) describes that inject resolvers. Name the adoption block (365\u2013437) explicitly.",
+   "location": "packages/core/tests/services/ContextIntegrator.test.ts:265"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Unused imports left in pipeline-integration.test.ts",
+   "description": "`cp`, `mkdir`, `PROMPT_FILE_RELATIVE_PATH`, and `createTestProjectData` are used only inside the probe block that 3.3 deletes (lines 136, 142\u2013145, 179). ESLint ignores tests (`eslint.config.mjs:9`), so no gate fails. Remove them with the block.",
+   "location": "packages/core/tests/pipeline-integration.test.ts:2"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Golden \"planned at Phase 4\" is not a phase",
+   "description": "`design` is not a phase alias (`projectSchema.ts:61\u201379` maps numbers and slugs), and Case 2 sets no `developmentPhase`. The case is a Design-prompt build, not a Phase 4 build. It also never reaches the resolver's already-planned branch (`adoptionResolver.ts:58\u201359`), which runs only at Phase 0. The design fixes two cases, so this is a coverage observation, not a required change.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73"
+  }
+ ]
+}

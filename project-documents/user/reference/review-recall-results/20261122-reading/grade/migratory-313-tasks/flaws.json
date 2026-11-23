@@ -1,0 +1,10 @@
+{
+ "case": "migratory-313-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 5 and Task 1.4 require `config_to_yaml` to round-trip the new `policy` field, and the design says \"`StrEnum` subclasses `str` so `yaml.dump` will serialize it as a plain string automatically\". `config_to_yaml` at `97c3bc4^` is `yaml.dump(dataclasses.asdict(config), ...)`; `asdict` leaves the `StrEnum` instance in place, and `yaml.dump` does not write a `str` subclass as a plain string (it emits a Python object tag, which the loader's `yaml.safe_load` rejects). No task changes `config_to_yaml` (the \"Files touched\" list shows only `config.py` enum, field and loader changes), so the round-trip test in 1.4 cannot pass as written. **VALID**: the task cannot be completed as written. Needs: code.3-1.4). Evidence: the implementing commit `97c3bc4` had to add `_serialize_for_yaml` and call it from `config_to_yaml`. I confirmed the repo side (the unmodified `config_to_yaml` and `safe_load` at line 580); the PyYAML behavior rests on my knowledge of the library, supported by that fix."
+  }
+ ]
+}

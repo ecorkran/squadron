@@ -1,0 +1,145 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Silent fallback to the host default when `cf` is unavailable",
+   "description": "Task 5.1 treats an unreachable `cf` as \"key unset\" and proceeds to `default_branch`. Test 5.2 (line 126) codifies it. This is the silent fallback CLAUDE.md forbids. It also produces the harm D1 says to avoid (design:241): with `squadron-pr` configured and `cf` down, the PR silently targets `main`. The path logs nothing, which breaks the failure-mode observability rule. Test 7.2 (line 165) requires a WARNING for `cf` unavailable, but 5.2 does not, so the two tasks disagree. Fix: an unavailable `cf` raises an explicit error naming the key and the failure, exits 1 before any write, and `--base` is the explicit escape. That changes D1 (design:242\u2013244), so the design needs the same update.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Merge written as a task item",
+   "description": "Task 16.4 says to merge `385-slice\u2026` into `squadron-pr`. CLAUDE.md says a merge or push must never appear as a task, sub-item, or success criterion. The merge belongs to Phase 7, after review. As written, an implementer could merge during Phase 6. Remove the item.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Dropped items are marked `[x]`",
+   "description": "\"Mark any dropped or skipped item `[x]`\" conflicts with CLAUDE.md: check off only items verified as done. Record drops in the DEVLOG and leave the boxes unchecked.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`PrInputs` and `gather_inputs` are never defined or completed",
+   "description": "9.1 takes `PrInputs`, but no task defines it. 7.1 builds \"the commit and slice halves of `gather_inputs`\" (line 157), and 8.1 adds the review scan to `inputs.py` without saying it joins that output. The design names `gather_inputs() \u2192 PrInputs` (design:150). One task should define the type and the join, and 8.1 should feed it.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No task supplies the local head sha",
+   "description": "6.1 takes `local_sha`, but 3.1 adds only `current_branch` and `commits_in_range` (lines 77\u201383), and 13.1 does not say where the sha comes from. Add a `head_sha(cwd)` helper (`git rev-parse HEAD` via `run_git`) with a test in 3.2, and name it in 13.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The prompt has no owner",
+   "description": "The design assigns \"the prompt\" to body composition (design:77) and requires the model to receive facts only (design:308\u2013311). Task 10.1 covers only the call sequence. 11.1 says \"request prose per section,\" and 10a.1 says the title prompt gets \"commit subjects and nothing else,\" but no task builds either prompt or tests its contents. Add a prompt builder to 10.1 with a test that it carries the facts and nothing else.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:215"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The slice's human name has no reader and no real-format fixture",
+   "description": "10a.1 takes the name from the design's H1. But 9.1's `PrFacts` carries only the design path, and no task reads the H1. The H1 parser is new, and the project parsing rule requires a fixture in the real format. 10a.2 uses none. Have 7.1 read the H1 into `PrInputs`, and add a case from the real 385 design file.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:239"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The composer's broad catch cites the wrong rule, and the exit path is unspecified",
+   "description": "10.1 calls the composer's catch a \"process-boundary handler,\" which is what permits catching broadly. The process boundary is the CLI command, and `pr/body.py` is library code. D8 (design:489\u2013491) makes the same claim. The rule that fits is: log with `logger.exception` at ERROR and re-raise. The task also does not name the exception the composer raises or where exit 1 is produced, so 10.2's \"exits non-zero\" cannot be checked at the composer. Have the composer log and re-raise a named error, have 13.1 map it to exit 1, and have 10.2 assert the log and the re-raise.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The dry-run equality test would pass without the binding the design requires",
+   "description": "The design requires a test that the body is bound once and passed to both paths, not compared as two strings (design:672\u2013673). 13.2 instead compares dry-run output with a separate real run. The fake composer is deterministic, so two separate compositions would also match, and the test passes either way. Assert that the composer runs once per invocation and that the body passed to `open_pull_request` is the value dry-run printed.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Three success criteria lack unit coverage",
+   "description": "(a) Criterion 1 (design:534\u2013536) requires that the body cite the design, list checked items under verification and unchecked items under gaps, and name the review path and reviewed sha. 11.2 asserts only that a commit sha appears. Add an assertion for each fact in its section.\n(b) Criterion 2 (design:537\u2013538) requires that creation succeed with no slice and no review. 13.2 does not name that case, and 16.2 step 4 (line 355) is dry-run only. Add the case to 13.2: one write, three no-input lines.\n(c) Criterion 5 (design:543\u2013544) requires the printed source. 13.2 does not assert it.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:268"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "\"Newest in the range\" is undefined",
+   "description": "8.1 takes the survivor whose sha is \"newest in the range,\" and 8.2 (line 187) asserts \"the newer sha wins.\" Neither defines \"newer.\" Pick one, for example the earliest position in `git rev-list base..head` output, and state it. The design (design:452) has the same gap.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:180"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "`--model` and `--profile` have no default source",
+   "description": "13.1 lists the flags and 10.1 takes `profile: str` (line 217), but no task says where the default comes from. The design says the review default is `sdk` (design:49\u201350). An implementer would likely hard-code it. CLAUDE.md requires defaults at the config level. Name the config key the review command reads and reuse it.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:297"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The five `CodeHostError` wrappings have no implementation owner",
+   "description": "14.1 asserts that all five call sites use the `except CodeHostError` \u2192 `render_code_host_error` \u2192 `typer.Exit(1)` pattern. But 14 is test-only, and no implementation task (5, 6, or 13.1) says to write it. Add it to 13.1 or to each implementation task, so 14 tests code that exists.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:324"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "An unresolved slice branch produces a false \"no task records\" line",
+   "description": "7.1 degrades a slice-named branch that `cf` cannot resolve to \"no slice\" with a WARNING. The design does not specify this. The body would then say \"No task records for this branch\" for a branch that has records, which is the silent omission the design forbids (design:352). Either fail explicitly, or give this case its own no-input line that says the slice could not be resolved.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:160"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "`body.py` mixes provider I/O with pure assembly and will likely exceed the size guideline",
+   "description": "Tasks 10.1, 10a.1, 11.1, and 12.1 all land in `body.py`: provider dispatch, a model call for the title, pure section assembly, and a pure check. That is more than one reason to change, and the file likely passes the ~300-line guideline. Move the one-shot call into a separate injectable composer module, and keep sections, title selection, and the check in `body.py`.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Git timeout constant is defined in two places",
+   "description": "`GIT_QUERY_TIMEOUT_SECONDS = 30` is defined separately in `src/squadron/codehost/refs.py:28` and here. Tasks 6.1 (line 141) and 14.1 (line 322) describe one constant that both modules \"use.\" Name one import source in 6.1 so the slice does not add a third definition. Task 3.1 is correct that `run_git` uses `GIT_COMMAND_TIMEOUT_SECONDS` (`src/squadron/review/git_utils.py:24`). The task should say the two git bounds are separate on purpose.",
+   "location": "src/squadron/codehost/remotes.py:29"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Task file and design disagree on return type and dependencies",
+   "description": "The design says `check_head_pushed() \u2192 refusal or HeadState` (design:149), but 6.1 says `-> None`. The design also lists [100] as a prerequisite (design:124), while the task frontmatter lists only 381 (line 6). Pick the return type, and either add [100] or note that it is already merged.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Test 2.2 reads a live project document",
+   "description": "The test reads a task file from `project-documents/user/tasks/`, which moves or gets archived when the slice closes. Copy a snapshot into `tests/fixtures/`. The \"384 until then\" fallback is unnecessary, since this file exists now.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Test 6.2's `ls-remote` no-match case has no expected outcome",
+   "description": "\"`ls-remote` returning no matching ref\" does not say whether it refuses or passes, or with which message. The design's \"not a silent pass\" rule points to a refusal. State it.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:147"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "Count is high but justified",
+   "description": "There are 17 top-level tasks (about 73 effort units) for eight new modules. The count follows the design's implementation order and its parser-first rationale, so no change is required. Optional merge: 11 and 12, which share a source file and a test file.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:193"
+  }
+ ]
+}

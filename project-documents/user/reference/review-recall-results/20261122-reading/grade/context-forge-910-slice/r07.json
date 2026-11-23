@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator sites are SliceStatus sites, which TD-3 excludes",
+   "description": "The table lists `WorkflowNavigator.ts` with 3 `=== 'complete'` checks to sweep, and Order of work step 4 repeats this. The actual literals are `slice.status === 'complete'` at lines 312 and 345, and `{ ...base, status: 'complete', taskProgress }` at line 588. These compare and assign the `SliceStatus.status` workflow-position union, because `slice` is the current-slice status. They are not `NormalizedStatus` values. TD-3 and the Excluded list say that union must not be swept, since sweeping it \"implies the two unions are related.\"\n\nThe one genuine `NormalizedStatus` comparison in that file, `taskResult.inferredStatus === STATUS.Complete` at line 577, already uses `STATUS`. As written, the slice either violates its own TD-3 or the `WorkflowNavigator.ts` row is wrong. Fix: remove `WorkflowNavigator.ts` from the sweep, which drops step 4. Alternatively, reverse TD-3 deliberately and justify it.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The site inventory and \"no tests assert literals\" claim do not match the code",
+   "description": "Several stated facts are wrong, and the sweep is driven from them:\n- **Tests:** The doc says \"grep confirms zero `.test.ts` files assert against these literals.\" Tests live under `packages/core/tests/` (for example `ConsistencyChecker.test.ts` and `statusNormalizer.test.ts`) and contain many such literals. The doc's grep is rooted at `packages/core/src` and never reaches them. The conclusion that no test changes are needed is still sound, because runtime values are unchanged, but the stated evidence is false. Restate it as \"tests keep literals, which is fine because `STATUS.X === 'x'`.\"\n- **Excluded site:** The doc says `ProjectModelBuilder.ts` line 179 holds a literal `'unknown'`. Line 179 is a comment that mentions `'not-started'`, and the `'unknown'` fallback is on line 181. No sweep is needed, but the reasoning for excluding it is wrong.\n- **Counts:** The per-file counts (36, 16, 8 and the total of ~65 across \"6 files\" while the table lists 7) and the \"Before: ~75\" figure do not reconcile with a grep of production core source, which finds 63 matching lines. Re-derive the inventory from the code.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-51"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A production site outside `packages/core` is not accounted for",
+   "description": "The Migration Plan says no consumer updates are needed outside `packages/core`, and scope is limited to `packages/core/src`. `packages/cli/src/commands/arch.ts:189` has `init.slices.filter((s) => s.status === 'complete')`. The slice must either sweep it, if that status is a `NormalizedStatus`, or list it under Excluded with the reason. Otherwise the Functional Requirement \"no bare literals remain in production code\" fails at the repo level, and the sweep leaves a drifting definition behind.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Success-criteria grep cannot return the stated result",
+   "description": "The grep claims \"zero matches in the six swept files,\" but it cannot reach zero. It uses `-o` without `-n`, so the `types.ts:[3-6]:` exclusion never matches. `types.ts:269` (the `SliceStatus` union), the `ProjectModelBuilder.ts:179` comment, and `frontmatterSchema.ts` would all still match. Walkthrough step 1 then gives a different expected figure (\"4 + 3 + 4\"). Define a single verification command, with line numbers, that lists exactly the allowed leftovers: the `STATUS` definition, the `STATUS_MAP` keys, `frontmatterSchema.ts`, the `SliceStatus` union, and comments. Include `packages/cli/src` in its scope.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Proportionality: restated rationale and redundant verification can be cut",
+   "description": "For a find-and-replace sweep, the doc is heavier than it needs to be.\n- The reasoning for excluding `frontmatterSchema.ts` and `SliceStatus.status` appears twice, in the Excluded list and again in TD-2 and TD-3. Keep it once.\n- Verification steps 2 (a deliberate typo spot-check) and 4 (live `cf status` and `cf list` runs) add nothing beyond `pnpm -r build && pnpm -r test`, since `STATUS.X === 'x'` by construction. Cut them.\n- The slice-912 `ConsistencyChecker.ts` file-size exclusion is stated in three places. Keep one line.\n- The Technical Requirements section repeats the baseline pass counts from the Migration Plan.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45-52, 100-106, 145-165"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Retyping `inferredStatus` to `NormalizedStatus` is reasonable",
+   "description": "This removes a second definition of the same values and matches the \"define once\" rule. It widens the type to include `'deprecated'`, which the field never takes. The slice should confirm that no exhaustive switch on `inferredStatus` exists, so the widening cannot produce a new compile error. The build check in step 1 would surface this.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:43"
+  }
+ ]
+}

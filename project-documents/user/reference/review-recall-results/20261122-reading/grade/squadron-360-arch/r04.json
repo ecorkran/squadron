@@ -1,0 +1,89 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Index allocation contradicts itself and sanctions collisions with the 950+ band",
+   "description": "Lines 249-252 and 332-333 say generated documents use the reserved 940-949 range. Lines 254-258 then sanction overflow into 950+ and the \"900 band\" generally, without saying which slots are free. Lines 254-255 count \"ten slots with three consumed\" (940-942), so only seven remain. Each comprehension run and each overview run consumes one more slot, and the doc itself says each run is an independent sample, so exhaustion is quick. The 900 band is described as \"heavily used\", and nothing says how a skill picks the next free index. Two skills (`understand`, `/sq:overview`) plus `tech-debt-audit` would all increment from the same counter. `commands/analysis/tech-debt-audit.md:81` says \"nnn starts at 940\" and has no coordination mechanism. Defining the allocator (scan `user/analysis/` for the highest index \u2265940) is load-bearing. The doc defers it, while \"no gate change, no new convention\" in Resolved Design Decisions presents it as settled. Dumping the overflow onto the naming convention as \"a known future concern\" is an unresolved dependency.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The \"frontmatter gate validates docType against a fixed enum\" rationale doesn't match the codebase",
+   "description": "The doc says reusing `analysis` matters because \"the frontmatter gate validates `docType` and `status` against a fixed enum.\" In `src/squadron/documents/frontmatter.py`, the squadron-side check only validates the top-level `status`. `schema.py:7-9` says Context Forge owns the schema and validation (`cf validate frontmatter` in pre-commit). The `docType` enum (`DocType`, `schema.py:35`) is mirrored here only for emitted values, and `test_schema_drift.py` asserts cf accepts them. So the real constraint is cf's schema, not a squadron gate. That doesn't change the decision to reuse `analysis`. It does mean the doc names the wrong enforcement point. The doc also doesn't say that generated documents will be checked at write time. Its \"Never fabricate\" and \"Squadron-native output\" goals depend on valid frontmatter, but nothing says the skills run `cf validate frontmatter` or a drift test on their output. Skills that are markdown prompts will produce frontmatter by LLM generation, which is fragile.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:243-247"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Overview document has no provenance, staleness, or input-version model",
+   "description": "Capability 1 requires staleness provenance (lines 130-135). Capability 2 has no equivalent. The overview is \"derived\" from the initiative plan and concept, but nothing records which source revisions it was derived from. Initiative statuses change continuously. The Status and Roadmap fields (lines 224-225) go stale the moment the plan changes, and the document is handed to clients. The doc claims \"Status is honest\" (line 236) but provides no regeneration, supersession, or dating mechanism. The overview also has no frontmatter spec: the doc doesn't give its `status` value, a source list, or a generated-date field. The naming rule `{index}-analysis.overview.md` with an incrementing index (line 204) means each regeneration creates a new file, while the `{topic}` suffix is described as the way to have more than one. These two mechanisms conflict. Is a second run a new index, a new topic, or an overwrite?",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:196-240"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Derive, never invent\" is asserted but not mechanically enforceable as specified",
+   "description": "The translation rules require every claim to trace to an input artifact, and also require rewriting features as outcomes. Line 222 says Benefits are \"derived from initiative descriptions\", while the example at lines 231-232 turns a feature into an outcome (\"converges without human babysitting\"). That rewrite is inference, and it is exactly where fabrication enters in a client-facing document. The doc offers no verification step, no claim-to-source trace in the output, and no PM review gate. The PM review gate is applied to initiative-plan candidates (line 156) but not to the overview, which has a higher external-liability profile. The Risks field is sourced from \"initiative plan notes\" (line 226), which may be thin for retroactively planned projects, and this is the stated tested path. Under the rule, \"flag the gap\" would leave most fields empty. The doc doesn't say what a mostly-empty document looks like or whether the skill refuses to emit it.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:228-240"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Capability 1 reads the graph through grep-before-read, which conflicts with the structured-data extraction it needs",
+   "description": "The doc says \"Grep for the needed section before reading; never load the whole file into context\", yet step 3 needs `layers[]`, `tour[]`, and all file-level nodes with `summary`, `filePath`, and `complexity`. That is most of the file for any real codebase, and node-type filtering (file, config, service, \u2026 skipping function/class) is a JSON query. `grep` on a JSON file that may be minified or pretty-printed on one line is unreliable. The document defines no extraction mechanism. A small deterministic extractor (e.g. a Python script using `jq`-style filtering) is the obvious fit for a stack that already has Python. The design avoids it only because of the \"skills only, no code\" scope (lines 29-30). The doc doesn't evaluate whether that constraint is tenable, and the context-budget claim has no size estimate. Complexity clustering and \"layer boundary\" derivation for initiative candidates (lines 154-155) are also hand-waved. \"Step 5: Draft\" is where the hard part, mapping graph to initiative proposals, is under-specified.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-109, 138-139"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Upstream contract is pinned to one version with no schema-version or drift handling",
+   "description": "The output contract (fields, node types, `tour[]` produced by Phase 6, 5-15 steps, `meta.json` fields) is taken from the plugin v2.8.1 and described as \"the plugin's own reference\". The doc also calls the plugin \"actively developed\" (line 41). It specifies no check on the graph's `version` or schema field, no behavior when a required key is missing (e.g. `tour[]` absent, `layers[]` empty, `gitCommitHash` null for a non-git or dirty analysis), and no list of tested plugin versions. \"Graph is an input, not a dependency\" (lines 56-58) sounds loose, but the skill is tightly coupled to the upstream JSON shape. Failure on contract drift will look like silently wrong output, which the doc elsewhere says is the key failure mode. Staleness also compares only `gitCommitHash` to `HEAD`. Uncommitted working-tree changes and `.understandignore` edits are invisible, and the commit distance is computed against a hash that may no longer exist after a rebase or shallow clone.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-105"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Gitignore edit makes squadron write to a user file as a side effect of an analysis skill, and the tracking decision is questionable",
+   "description": "Step 2 modifies `.gitignore` unconditionally before the interview. This changes tracked repository state, which conflicts with \"Leave the working tree clean\" (line 49). The stated purpose of that goal is that the user doesn't hand-manage scratch output, yet the edit itself dirties the tree and isn't mentioned in any confirmation. It also only takes effect once the user runs `/sq:analysis understand`. Anyone who ran `/understand` earlier, or who never runs squadron's skill, still accumulates trash. Tracking `knowledge-graph.json` is also questionable: the doc calls it \"large\" (line 107), so committing it on every refresh grows repository history, while `meta.json` tracking \"makes staleness visible\" (line 187) but the same commit hash it records can never equal the commit that contains it. `meta.json.gitCommitHash` will always point to the parent of the commit that stores the graph. This is a design flaw in the staleness argument: after committing the graph, the check will always report \"1 commit behind\". The doc should say whether the ignore entry is a recommendation shown to the PM or an automatic edit, and should handle this off-by-one.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:136-137, 174-190"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Two capabilities bundled under one initiative with no shared component; delivery surface is split inconsistently",
+   "description": "Line 17 admits the two capabilities \"share that shape and nothing else\". They have different inputs, different outputs, different dependencies (Capability 2 has none external), and different delivery mechanisms: a pack skill behind a dispatcher versus a first-party command. Packaging them as one initiative with the name \"Document Intelligence\" couples schedule and risk for no shared component. Capability 2 is nearly independent and lower risk, and it's the one needed for retroactively planned projects. The delivery rationale is also inconsistent. Capability (a) joins a bundled pack that reads squadron's own `project-documents/` layout and writes concept docs, yet the doc argues that (b) can't go in the analysis dispatcher because it doesn't audit a codebase. By that logic, a skill that writes a `000-concept` planning artifact doesn't \"audit\" either. The `understand` skill also writes `docType: concept` and initiative-plan candidates, which are planning documents, not analysis, so the dispatcher name is just as inaccurate for (a). Line 272-273 also lists `understand` under \"Capability (a)\" but the rest of the doc numbers capabilities 1 and 2. The doc switches between \"Capability 1/2\" and \"(a)/(b)\".",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:16-27, 271-289"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Concept document ownership and overwrite behavior are undefined",
+   "description": "The skill writes `000-concept.{project}.md` and says the User-Provided Concept section is \"sacred \u2026 never rewritten\". What happens when `000-concept` already exists (re-run after graph refresh, or a project that has a concept but no graph)? The doc says nothing about it: no merge, abort, or write to a different filename. A re-run after the initial interview would either re-ask all the questions or clobber the sacred section. The interview table gives \"Solution Approach: Graph + interview confirmation\" and \"Initial Technical Direction: Graph (languages, frameworks, dependencies)\". The graph schema in lines 94-99 lists no language or framework field. Node `languageNotes?` is function-level, and dependencies come from `depends_on` edges, so derived tech direction must be inferred from file extensions and tags. That contradicts \"never fabricate\" unless the inference is flagged. The `[INFERRED]` convention is parked in Open Questions (lines 341-342), although it is the mechanism that makes the \"attributing structural claims to the graph\" step (line 143) work. That is a load-bearing decision left open.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:148-151, 158-172"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Scope of generated outputs exceeds what \"skill-level\" and the stated non-goals imply",
+   "description": "The doc has three output types from capability 1 (concept, analysis, initiative candidates), five audience-parameter statements for capability 2 (lines 238-239 describe \"emphasis as a generation parameter\" while line 328-330 resolves \"one neutral document, no variants\"), and a naming scheme for multiple topics (`overview.{topic}`, line 209-210) that nothing requires. The `{topic}` suffix and the emphasis parameter are speculative. Line 238-239 (\"Audience variants share one document. \u2026 Emphasis is a generation parameter\") contradicts the resolved decision (lines 328-331: no parameter until demonstrated). Cut the `{topic}` convention and the emphasis language. Initiative-plan candidates also sit awkwardly with the non-goal \"Automatic initiative-plan generation\" (line 302): the output is generation with a confirmation step. Where candidates are held before confirmation isn't defined, either in chat only or in a file.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:29-30, 146-157, 299-303"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Dependency on [100] is stated for \"any command surface\" but nothing here registers a CLI command",
+   "description": "Line 279 says no installer, manifest, or CLI change is required, and the scope bans engine changes. Line 307 still lists [100] \"CLI command registration\" as a dependency. Either drop it or say which command needs it. `commands/sq/analysis.md` is a markdown dispatcher, and `/sq:overview` is a new markdown file, so no CLI registration appears necessary. Also check that `commands/sq/` files are actually installed by whatever copies them. The doc asserts \"no installer \u2026 change\" for the `analysis` pack but doesn't verify that a new first-party `commands/sq/overview.md` is picked up.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:279, 305-310"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Dispatcher edits describe a pattern that only partially fits",
+   "description": "The current `commands/sq/analysis.md` (lines 7, 11-14, 18-29) delegates to `/analysis:tech-debt-audit` and shows an \"analysis pack not installed\" message. The doc lists \"three edits\" (valid-skills line, usage block, skill section), which matches the file. The pack-not-installed message is specific to `tech-debt-audit`'s pack install flow, and the plugin-absent message for `understand` is a second, different failure mode. The doc doesn't say how the dispatcher distinguishes them. The existing skill is installed as `commands/analysis/tech-debt-audit.md`, so adding `understand` needs a new file at `commands/analysis/understand.md`. The doc says \"a new pack file\" without naming the path.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:271-279"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The arch (pre-slice-plan) boundary has no specified mechanism",
+   "description": "The design says the arch gate extends \"the no-active-slice / pre-slice-plan path\" and that it follows \"the identical shape\" as the other boundaries (line 168). Three things make that shape not apply, and none is addressed:\n\n- **Unreachable branch.** TD-3 (line 222) says `getNext()` only routes, through the reserved `LIFECYCLE: review-gate` branch. Per slice 240 TD-4, the pre-slice-plan state is handled by `GUARD: no-active-slice`, which returns before any `LIFECYCLE:` branch. The arch gate needs its own routing point inside that guard, with a stated order relative to the first-run and create-slice-plan recommendations.\n- **No status carrier.** `pending-review` / `review-failed` are `SliceStatus` values, and at this boundary there is no active slice. The design does not say what object carries the status, or what `cf status` shows.\n- **No index.** `detectDocuments(projectPath, sliceIndex, reviewType?)` needs an index (line 78). The design never says which index locates `NNN-review.arch.*.md` when no slice is selected.\n\nThe slice plan assigns all four boundaries to 241, so this cannot be left to implementation. Specify the index source, the status carrier and the routing point.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gate statuses do not carry the boundary or review type as structured data",
+   "description": "The architecture's \"First-class status representation\" goal says runners and the visualizer act on status \"without parsing recommendation strings\". In the arch, `pending-review` meant only \"tasks complete, code review missing\". Here the same two statuses cover four boundaries and replace `needs-tasks`, `in-implementation` and `complete`.\n\n- A consumer of `getStatus()` can no longer tell where the slice is or which review is owed (arch, slice, tasks or code).\n- The review type exists only in rationale prose (line 268), so Amoeba cannot pick a review agent without parsing it.\n- The hand-off inside the navigator is also undefined. Line 218 says `reviewGate` \"exposes the normalized verdict and resolved threshold\", but nothing says how those values, or the boundary, get from `deriveSliceStatus()` to the `getNext()` branch that builds the rationale.\n\nAn optional structured field on `SliceStatus` (boundary, review type, verdict, threshold) would close both gaps. It is additive and leaves `NextAction` unchanged.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The recommendation vocabulary runners route on is left to implementation",
+   "description": "The architecture specifies `recommendation: \"review\"` and `recommendation: \"blocked\"`, and Related Work says Amoeba depends on \"structured `recommendation` values with a stable vocabulary\". This design is inconsistent with that and with itself:\n\n- Integration Points (line 286) promises \"the stable strings runners route on\".\n- TD-7 shows sentence-form values (\"Review required before advancing\", \"Blocked: review verdict does not clear threshold\") introduced with \"e.g.\".\n- TD-7 ends with \"Exact strings finalized in implementation\" (line 268).\n\nA cross-project contract cannot be both stable and undecided. Fix the exact two values in the design, matching the arch tokens or recording the deviation. Define them once as constants, in line with the design's own \"no magic strings\" rule.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Read and parse failures are indistinguishable from an absent verdict",
+   "description": "The architecture's file-read failure-mode consideration requires that an unparseable review file is treated as `UNKNOWN` and that \"the rationale returned to the caller names the parse failure explicitly\".\n\n- The design gets the `UNKNOWN` half right (lines 216, 310).\n- It deliberately collapses read failure, malformed YAML and missing frontmatter into \"no `verdict` present\" (line 79).\n- TD-7 requires the rationale to name only review type, verdict and threshold. A permission error and a review with no verdict field both report \"verdict UNKNOWN does not clear threshold\".\n- Under `review_unknown_as = pass`, an unreadable file clears the gate with no signal at all. That is a silent failure path.\n\n`parseFrontmatter` already returns a `found` flag. Use it to separate \"unreadable or no frontmatter\", \"frontmatter without `verdict`\" and \"unrecognized verdict value\". Carry that reason into the rationale, and into `warnings` when the policy clears it. Add the reason assertion to the unparseable-file test already listed at line 314.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`resolveGateConfig` contract is contradictory and omits invalid-config handling",
+   "description": "This is the function slice 242 imports, and the design describes it three incompatible ways:\n\n- **Who reads config.** Line 109 says the navigator \"calls `this.config?.get(...)` and hands raw values to `reviewGate`\". Lines 56 and 191 say `resolveGateConfig(config)` reads the `ConfigManager` itself. Line 112 lists \"resolving config inside the navigator\" as a rejected alternative.\n- **Missing boundary input.** The signature `resolveGateConfig(config)` takes no boundary, yet line 191 says it resolves the boundary-specific threshold. The data flow (line 149) calls it before the boundary's review type is looked up.\n- **Undefined pieces.** The `ResolvedGate` type is never defined. The mapping from `Boundary` members (`preSlicePlan`) to the shipped config key segments (`pre_slice_plan`) is not stated.\n\nThe config read is also a new I/O path inside status derivation with no failure handling. The architecture's \"Fail-fast on configuration errors\" principle requires an invalid `review_threshold` to be \"a config error surfaced immediately, not a silent pass or silent block\".\n\n- Slice 240 enforces enums when a value is set. This design does not say what happens to an out-of-enum `review_threshold` or `review_unknown_as` read from a hand-edited `.context-forge.toml`.\n- The `=== true` narrowing (line 275) turns a mistyped `review_enabled` into gating silently off.\n- A config read error (malformed TOML) during derivation has no stated outcome.\n\nState one owner, add the boundary parameter, define `ResolvedGate`, and specify an explicit, observable result for invalid or unreadable config.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:191"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "A user-set per-gate `review_type` is silently ignored",
+   "description": "The slice plan lets this design choose between leaving the `review_type` keys inert and removing them, so leaving them is in bounds. The cost is that a user who sets `workflow.review_gates.pre_advance.review_type = \"slice\"` gets a `code` lookup with no feedback until 243's docs land. Removal is the lighter option, and TD-4 calls it \"a one-line deletion\". The \"shipped in a released version\" rationale is asserted, not shown, and 240's keys have had no consumer.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:228"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`STATUS` does not cover the statuses this slice adds",
+   "description": "`STATUS` holds `NormalizedStatus` values (task-file completion). The values this slice introduces and branches on, `pending-review` and `review-failed`, are `SliceStatus` values and stay bare union literals. That is the pattern TD-6 calls a \"define once\" violation. The data flow (lines 150, 164) also uses `STATUS.Complete` for the slice-level status, which works only because the two unions share the string `complete`. Either add a small `SLICE_STATUS` const for the new values or drop the \"never a bare literal\" claim at line 394.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:237-251"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Some sections restate each other and can be trimmed",
+   "description": "Overall weight is proportionate to a 4/5-effort slice covering four boundaries, and no mechanism needs cutting. The restatement can go:\n\n- TD-5 repeats the \"Boundary \u2192 signal\" paragraph (line 141) and the slice-plan note almost verbatim.\n- \"Special Considerations\" (lines 391\u2013395) restates TD-2 and \"Patterns and Conventions\".\n- The position-to-type mapping appears as a table (lines 21\u201326), a const (lines 120\u2013125) and again in TD-4.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:233-235"
+  }
+ ]
+}

@@ -1,0 +1,131 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`cf config unset` cannot clear the stale shared-file copy the design relies on",
+   "description": "Data Flow (line 89) says delete \"deletes from whichever project file the key's scope maps to.\" For personal `git.integration_branch`, `cf config unset git.integration_branch --project` therefore removes the value from `.context-forge.local.toml`, not from `.context-forge.toml`. Step 9 (line 259) and the collision rule (line 146) both assume the same command clears the stale shared copy. Trace: the shared file holds `another-legacy-value` and the personal file holds `legacy/value`. Unset removes the personal value, the read falls through to the shared copy, and `cf check` still warns (line 142). `ConfigManager.delete` routes by scope (`packages/core/src/config/ConfigManager.ts:187-204`), so no command in the design can remove a personal key from the shared file. Recommendation: make `unset` remove the key from both project files, since a project-scope unset that leaves a shadowed value is not an unset. Then correct lines 146 and 259.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:259"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Migrated projects get no gitignore protection for the personal file",
+   "description": "The only gitignore write is in `cf init` (lines 157\u2013159; Technical Scope line 32). `migrate-personal` (lines 144\u2013146) creates `.context-forge.local.toml` in a project that was initialized before this slice. Nothing re-runs `cf init` or flags an unignored personal file, so the next `git add -A` commits personal settings. The design also does not require the `.gitignore` change to be committed, and `cf init` in a worktree returns before setup (`packages/cli/src/commands/init.ts:71-74`), so worktrees inherit the line only through a commit. Recommendation: have `migrate-personal` and personal-key `set` both ensure the ignore line through one helper, and have `cf check` warn when the local file exists and is not ignored.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A corrupt or partly written personal file breaks the read path the design calls recoverable",
+   "description": "Line 149 calls a failed migration step \"recoverable via the same read-time fallback.\" The fallback (line 79) runs only when the key is \"not found.\" `readToml` rethrows anything that is not ENOENT (`ConfigManager.ts:21-31`), so a truncated personal file (the disk-full case line 149 names) makes `get()` throw for every personal key. `branchGuard.ts:85-94` swallows that error and uses `main` as trunk. On `main`, the guard then returns `proceed` (`branchGuard.ts:102-103`), so a configured integration branch stops protecting `main` with no message. The design needs a read-failure rule for the new file that names the local file in the error and does not fail open in the guard.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:149"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Migration and the consistency rule need raw file access the design does not provide",
+   "description": "Line 93 says `readToml`/`writeToml`/`resolveKey`/`setKey`/`deleteKey` are \"reused as-is.\" They are module-private (`ConfigManager.ts:21, 33, 38, 48, 66`), and `packages/core/src/config/index.ts:1-3` exports none of them. `packages/cli/src/commands/config.ts:3` imports only `ConfigManager`, `FileProjectStore`, and `CONFIG_KEYS`. Line 153 says every reader goes through `ConfigManager.get()`, but the consistency rule (line 142) must read the shared file raw, and `migrate-personal` (line 144) must remove a personal key from the shared file, which `ConfigManager.delete` cannot do. Interfaces Required (line 49) says the API is unchanged, so an implementer would have to invent a raw-file API. Specify it under Interfaces Required and API Contracts.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:93"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The rule placement and surfacing claims do not match the checker",
+   "description": "The design says the rule is \"added alongside the existing config-hygiene-style checks\" and surfaces through `cf check` and `workflow_check` \"since both already run the full ConsistencyChecker suite.\" Two problems:\n- No config-hygiene checks exist. The `ConsistencyChecker` rules are slice, plan, task, gate, and schema rules (`packages/core/src/introspection/ConsistencyChecker.ts:141-176`). The only config touchpoint is review gating (lines 47, 66, 116, 575, 637).\n- `cf check --slice N` and MCP `workflow_check` with `sliceIndex` call `check()`, not `checkAll()` (`packages/cli/src/commands/check.ts:217-222`; `packages/mcp-server/src/tools/workflowTools.ts:284-289`). A project-level rule placed in `checkAll()` will not appear in single-slice runs.\n\nThe design should say the rule is project-level, lives in `checkAll()`, and is absent from `--slice` runs. It should also say how the rule handles a parse error in the shared file: the rules called from `checkAll` (lines 141\u2013176) have no wrapper, so an uncaught error would abort the whole check.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`cf init` placement is undefined for `--lite`, re-runs, and worktrees",
+   "description": "The walkthrough runs `cf init --lite` (line 227) and expects the ignore line (line 239). In `init.ts`, the only `--lite` gate is `if (!opts.lite)` at line 85, which wraps guides, commands, and IDE setup. The design does not say whether the gitignore step runs in the `--lite` path, in the already-registered path (Detection 2, `init.ts:62-65`), or in worktrees (early return at `init.ts:71-74`). It should specify an unconditional step that runs on all three.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The init test harness will write a real `.gitignore` during test runs, and no test is planned",
+   "description": "`packages/cli/tests/commands/init.test.ts` mocks `existsSync` to return false for everything except `.git` (lines 20\u201330, 68) and does not mock write calls. A new create-or-append step would write into the directory vitest runs in. The planned tests (lines 221\u2013223) cover ConfigKeys, ConfigManager, ConsistencyChecker, and migrate-personal. They do not cover the `cf init` gitignore requirement (line 216), the MCP `configPaths` change, or the new `source` value. The design should specify test isolation for the init step and add an init test.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:221-223"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Reusing the pattern already used for personal ignores\" refers to code that does not exist",
+   "description": "Line 32 says the gitignore line reuses \"the pattern already used for personal ignores.\" Line 159 says no gitignore-writing logic exists anywhere. A search of `packages/` finds no gitignore reference in code, and `CLAUDE.md` has no personal-ignore convention. Remove the reuse claim; the implementer is writing new code, so the estimate and test plan should reflect that.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Read precedence is stated more broadly than the data flow implements, and the `get()` contract is misdescribed",
+   "description": "Line 126 states precedence as a general rule: project-personal \u2192 project-shared \u2192 user \u2192 default. Data Flow (line 78) consults the personal file only for `personal` keys, so a local-file entry for a shared key such as `workflow.review_enabled` is silently ignored. The design does not say whether that is intended. Line 30 says callers keep passing `scope: 'project'`, but `get(key)` has no scope parameter (`ConfigManager.ts:121`). Line 60 says `list()` needs a precedence change, but `list()` is `get()` per key (`ConfigManager.ts:206-217`), so it needs none. Line 79's condition (\"only if \u2026 OR \u2026\") reduces to \"always check shared when personal is absent.\" Restate precedence per key and fix the wording.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:78"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Classifying `guide.source` as shared rests on an unverified assumption",
+   "description": "Line 113 says every key except `git.integration_branch` is team policy. The registry describes `guide.source` as \"URL or path\" (`packages/core/src/config/ConfigKeys.ts:18`). A machine-local path committed to the shared file would break teammates the same way `git.integration_branch` does. Either restrict the accepted values or record an explicit decision for the path case.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:102"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Migration failure handling can truncate the committed file, and the command has no exit contract",
+   "description": "`writeToml` re-serializes the whole file with `stringify(parse(...))` and uses a non-atomic `writeFile` (`ConfigManager.ts:33-36`). Migration therefore rewrites the committed shared file: comments and formatting are lost, and a kill during the delete-from-shared write truncates the team's committed config. Line 149 covers only a failure between the two steps. Also unspecified: the exit code for `skipped` and `failed` outcomes and how `handleError` maps them. Specify an atomic write (temp file plus rename) for both files and an exit code per outcome.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:149"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Overweight for a 3/5 slice; cuts to make",
+   "description": "- Behavior verification (line 155) repeats the walkthrough, and Functional Requirements (213\u2013218) repeat it again. Keep the walkthrough only.\n- \"Consumers to update\" (line 153) repeats Interfaces Required (line 49).\n- Overview and Value (lines 17\u201323) re-narrate 916. One sentence is enough.\n- File-naming alternatives (lines 119\u2013122) and the `.env.local`/Next.js rationale (line 113) are decision-record text. Keep one line each.\n- API Contracts (lines 161\u2013200) restates TypeScript already given in Technical Scope. Keep only the `ConfigResult.source` change.\n- The per-key `failed:` continue-and-report machinery (line 149) is heavy for a one-time migration of one or two keys. Let the command stop on the first error and rely on idempotency for re-runs.\n- The `project-personal` source variant is not required by the plan. Keep it only if the UX need is explicit.\n\nKeep the migrate command, the read fallback, and the detection rule.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:155"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Dependency record disagrees with the parent plan",
+   "description": "The frontmatter lists `dependencies: [914]`, and Prerequisites (line 45) cites 914. The parent plan's slice 915 entry says \"Dependencies: none.\" Slice 914 is complete, so nothing is blocked, but the dependency should be recorded in one place.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The review-gate threshold row is a wildcard for four concrete keys",
+   "description": "`workflow.review_gates.*.threshold` names four keys (`ConfigKeys.ts:55, 62, 69, 76`). The table does cover all 14 keys, but the classification is per registry entry, so list the four explicitly.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:109"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The migrate command's flag shape differs from its siblings",
+   "description": "`-p, --project <id>` is required here. `config get`, `set`, and `unset` use `-p, --project [id]`, where a bare flag resolves from CWD (`packages/cli/src/commands/config.ts:68, 110, 140`). Match the sibling form.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The MCP `config_get` description and response are described loosely",
+   "description": "`configPaths` appears only in the list-all branch (`packages/mcp-server/src/tools/configTools.ts:36-41`), not in key lookups (lines 31\u201334). The tool description (lines 13\u201315) states the old resolution order and will be stale after the change. Say which response gets the new path, and update the description.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The consumer list is incomplete",
+   "description": "Other code also constructs or consumes `ConfigManager`: `packages/mcp-server/src/tools/workflowTools.ts` (lines 154, 201, 258), `guideTools.ts` (60, 114, 157), and core `GuideManager.ts` and `reviewGate.ts`. None needs a change because routing is internal, but the design says \"every current caller,\" so the list should be complete.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "No parent NFR applies to this slice",
+   "description": "The parent plan states no non-functional requirement for this slice, so none needs restating.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:5"
+  }
+ ]
+}

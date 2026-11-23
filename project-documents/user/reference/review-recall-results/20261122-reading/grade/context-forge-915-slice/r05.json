@@ -1,0 +1,75 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`cf config unset --project` cannot clear a stale shared-file copy; the design contradicts itself",
+   "description": "Line 89 says delete \"mirrors write\" and removes from whichever file the key's scope maps to, so `delete('git.integration_branch', 'project')` targets `.context-forge.local.toml`. Lines 146 and 259 then name `cf config unset <key> --project` as the way to clear the stale copy in `.context-forge.toml`. As written:\n\n- **Collision case (step 9):** `unset` deletes the developer's personal value, which is the one the collision rule exists to protect. The stale shared copy stays, `get` now resolves to it, and `cf check` still warns.\n- **Pre-migration case:** the value lives only in the shared file, so `unset` removes nothing. The CLI still prints `Unset \u2026 (project)` (`packages/cli/src/commands/config.ts:148`) and the value keeps resolving through the fallback. Because `ConfigManager.delete` writes unconditionally (`ConfigManager.ts:201-203`), it also creates an empty `.context-forge.local.toml`.\n- **Resulting state:** a key in both files with different values has no designed exit. `migrate-personal` skips it, `unset` hits the wrong file, and `set` only writes personal. Only hand-editing `.context-forge.toml` ends it.\n\nFix: define project-scope delete of a personal key as removing it from both project files. Alternatively, have project-scope `set` of a personal key also drop the shared copy. Either removes the collision state and most of the collision handling in `migrate-personal`.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification Walkthrough steps 4\u20138 cannot produce their stated results",
+   "description": "Step 1 writes `git.integration_branch = \"dev/erik\"` to `.context-forge.local.toml`. Step 4 adds `legacy/value` to the shared file \"while leaving `.context-forge.local.toml` untouched\" and expects `legacy/value` with `source: project`. Under the design's precedence (line 126) the personal value wins.\n\n- Step 4 returns `dev/erik` / `project-personal`, not `legacy/value` / `project`.\n- Step 6 reports `skipped (personal value already set)`, not \"moved\".\n- Step 7 still shows the finding.\n- Step 8 resolves `dev/erik`.\n\nThe walkthrough needs the personal value removed between steps 3 and 4, which depends on the delete semantics fixed above.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:241-257"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Gitignore coverage is only applied by `cf init`, so existing and non-CLI projects leak the new file",
+   "description": "The migration audience is projects that already ran `cf init`. Their `.gitignore` never gets the line. Projects registered through MCP `project_create` (`packages/mcp-server/src/tools/projectTools.ts:99`) or Electron (`packages/electron/src/main/ipc/projectHandlers.ts:40`) never run `cf init` at all.\n\nIn those projects, `cf config migrate-personal` or `cf config set git.integration_branch \u2026 --project` creates an un-ignored `.context-forge.local.toml`. The next `git add -A` commits it, which is the leak the Value section (line 23) says this slice prevents. Nothing in `set`, `migrate-personal` or the new checker rule looks at ignore coverage, and the design never tells an existing user to re-run `cf init`.\n\nFix: ensure the ignore line at the point the personal file is first written, or have the new rule also flag an un-ignored personal file.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `cf init` gitignore step is unplaced, and its failure-handling claim does not match `init.ts`",
+   "description": "- **Placement:** the design does not say where in `init.ts` the step runs. Walkthrough steps 1\u20133 use `cf init --lite` and expect the line, so it must sit outside the `if (!opts.lite)` block (`init.ts:85`). It must also run on the \"already registered \u2014 running setup steps\" path (`init.ts:63-65`), or re-running `cf init` will not repair an existing project.\n- **Failure handling:** line 151 says a failure aborts `cf init`, \"consistent with how other `cf init` file-write failures are already handled\". The existing setup steps (guides, commands, IDE) each catch and `warn(...)`, then continue (`init.ts:87-115`). Only registration errors reach `handleError`.\n- **Append rule:** \"append that one line if not already present (substring/line check)\" leaves two cases open. A file with no trailing newline yields a fused, non-matching pattern. A substring match on `# .context-forge.local.toml` or `!.context-forge.local.toml` counts as covered. Both leave the file un-ignored silently.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:151"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No core API is specified for reading or deleting a personal key in the shared file",
+   "description": "Both `migrate-personal` and the new checker rule must act on `.context-forge.toml` for personal keys. The design says `ConfigManager` has \"no signature changes\" (line 181) and that `index.ts` gains only the path helper (line 61). That does not work as written:\n\n- `ConfigManager.delete(key, 'project')` routes away from the shared file by design.\n- `readToml`, `resolveKey` and `deleteKey` are module-private in `ConfigManager.ts` (lines 21-89).\n- `smol-toml` is a dependency of `packages/core` only (`packages/core/package.json:59`); the CLI has no TOML access.\n\nA new exported core method or helper is required and is not designed. The rule is also under-specified:\n\n- Which entry point runs it? `checkAll()` only, or also `check()`, which `cf check --slice` and MCP `sliceIndex` use.\n- Does it run when the checker's `config` is absent? The second constructor argument is optional (`ConsistencyChecker.ts:47`).\n- What happens on a malformed shared file? `readToml` rethrows non-ENOENT errors, while every other rule swallows parse failures.\n- What are the finding's `location` and required `suggestedFix` (`types.ts:235-237`)? `cf check` prints `suggestedFix` (`check.ts:84`), which is where the migrate command must be named.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142-144"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Worktree projects get one finding per worktree, and one migrate run does not clear them",
+   "description": "`cf check` and MCP `workflow_check` run `checkAll` once per worktree view (`check.ts:210-213,247`; `workflowTools.ts:278-281`). `applyWorktreeOverlay` replaces `projectPath` with the worktree path (`packages/core/src/utils/worktree-overlay.ts:9`). A committed `.context-forge.toml` exists in every worktree checkout, so a rule that names \"both file paths\" emits a distinct finding per worktree. The dedupe key (`rule|location|description`, `check.ts:52`) will not collapse them.\n\n`migrate-personal` resolves a single path (`config.ts:20-25`), so the other worktrees keep warning until the deletion is committed and reaches their branches. The criteria \"exactly one `warning`-severity finding\" (line 217) and \"a subsequent `cf check` no longer reports the finding\" (line 218) do not hold for multi-worktree projects. The design calls the key \"per-developer/per-worktree\" (line 111) but never addresses worktrees.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:217-218"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "One developer's migration silently removes the value for teammates",
+   "description": "`migrate-personal` deletes the key from the committed shared file. Once that commit is pulled, a teammate who has not migrated loses the value: no personal copy, no shared copy, and no `cf check` warning left to explain it. `git.integration_branch` reverts to empty, so `evaluateBranchGuard` treats `main` as trunk (`packages/core/src/guides/branchGuard.ts:82-88`).\n\nThis contradicts line 79 (\"must still resolve, not silently disappear\") and the risk statement that \"nothing breaks silently\". The design should state the intended outcome for teammates. At minimum, the migrate report should say that the shared-file change affects everyone once committed.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:264"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Required tests omit the branches that protect data",
+   "description": "Line 222 requires `migrate-personal` tests for \"happy path + no-op path\" only. Three things the design defines have no listed test:\n\n- The collision rules at line 146: skip on a different value, delete-shared on an identical value.\n- Continue-past-failure at line 149.\n- The `cf init` gitignore create / append / already-present handling at line 159.\n\nThe skip branch is the one that prevents overwriting a developer's value, and it is covered only by manual walkthrough step 9. No test is listed for project-scope `delete` of a personal key either.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:222"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Inaccurate statements about existing code",
+   "description": "- **Line 49:** the list of \"every current caller\" omits `GuideManager.ts:172,187`, `reviewGate.ts:118,180`, MCP `guideTools.ts:60,114,157` and MCP `workflowTools.ts:154,201,258`. None of them need changes.\n- **Line 32:** \"reusing the pattern already used for personal ignores\". No gitignore logic exists in `packages/`, as line 159 itself says.\n- **Line 142:** \"alongside the existing config-hygiene-style checks\". `ConsistencyChecker` has no config rule; `ruleStaleWorktreePath` is the nearest non-document rule.\n- **Line 93:** \"flat dotted-key TOML tables\". `setKey` writes nested tables (`ConfigManager.ts:48-59`), and `ConfigManager.test.ts:396` asserts `[workflow.review_gates.code]`.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "CLI and MCP surface details left open",
+   "description": "- **Option form:** `migrate-personal [-p, --project <id>]` uses a required-value option. `get`, `set` and `unset` use `-p, --project [id]`, where the bare flag resolves from CWD (`config.ts:68,110,140`).\n- **No project:** behaviour when no project resolves is not stated. `resolveConfigProjectPath` returns `undefined` in that case.\n- **`configPaths` key:** the name for the new path in the MCP response is not given.\n- **Stale descriptions:** `config_get` says \"project config \u2192 user config \u2192 built-in default\" (`configTools.ts:15`), and the `config_set` scope text (`configTools.ts:58,66`) is similarly out of date.\n- **Test mock:** the mock at `packages/mcp-server/tests/configTools.test.ts:13-23` needs the new export.\n- **Set message:** `Set \u2026 (project)` (`config.ts:133`) will not tell the user which file was written.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+  }
+ ]
+}

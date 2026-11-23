@@ -1,0 +1,110 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`generateContext` cannot gain a required trailing parameter",
+   "description": "`generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)` has three optional parameters at the end. Task 11 (line 220) adds \"a required `adoptionStateWrites` parameter\" without saying where it goes. Task 13 (line 248) calls it as `generateContext(..., 'persist')`, which means last position. A required parameter after optional ones is a TypeScript error (TS1016), so the obvious reading of the plan does not compile. Task 11 should name the position, for example second (`generateContext(projectId, adoptionStateWrites, overrides?, \u2026)`), or use an options object. It should also update both call sites at `contextTools.ts:200` and `:264` and Task 13's call to match.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The guide fixture claims about `test-project` are wrong; Task 12's expected outputs cannot be asserted",
+   "description": "That prompt file has only these sections: `Context Initialization`, `Context Initialization Monorepo`, `Tool Usage`, `implementation`, `design`, `review`, `Task Breakdown (Phase 5)`. It has **no `context_profiles` block, no Concept prompt and no Architecture prompt**.\n- Task 9T (line 194) says to add \"a `brownfield-adoption: [...]` profile line\". There is no block to add a line to. `ContextProfileParser.parseProfiles` (`ContextProfileParser.ts:131-150`) needs a fenced block holding `context_profiles:\\n`, and `parseProfilesYaml` (`:50`) only reads indented keys. The fixture needs a whole fenced YAML block.\n- Task 12 expects \"concept prompt\" (cases 1, 2, 5, 7, 9) and \"the Phase 2 prompt\" (case 10). With this fixture, `getPromptForInstruction` finds no match and `SectionBuilder.buildInstructionSection` falls back to the custom-instruction statement (`SectionBuilder.ts:109-115`). Nothing then tells the concept prompt apart from a missing prompt.\n- Fix: the brownfield fixture also needs `##### Concept` and `##### Architecture` sections with marker text, plus a fenced `context_profiles` block. Task 9T's \"profile but no prompt\" variant also needs a defined source: a second fixture, or a step that edits the copied file.",
+   "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The parity test compares builds from two directories, but the history fact includes the absolute path",
+   "description": "Task 13 (line 248) builds \"from identical copies\" and asserts identical prompt strings. When the temp fixture is not a git repo, `readHistory` returns `unknown` with gitExec's message, which is `git rev-list \u2026 failed in ${cwd}: \u2026`. That includes each copy's absolute path, so the two prompts always differ. CI matches are also absolute paths (`ciDetection.ts:27`) if the fixture has CI. Fix: make the fixture a committed git repo so history is `known`, keep CI out of it, or build both paths from one directory and reset `adoption.state` to `''` between the builds.",
+   "location": "packages/core/src/guides/gitExec.ts:96-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The history `reason` brings in gitExec's network/DNS hint and command text",
+   "description": "Task 5 (line 118) uses the error message as `reason` and notes that gitExec's timeout message \"already reads 'timed out after 5s'\". But `/timed out after \\d+s/` is one of the `NETWORK_ERROR_PATTERNS` (`gitExec.ts:26`). So `withNetworkErrorHint` adds a second line: \"This looks like a network/DNS problem reaching the remote. \u2026\" plus the guide offline remediation. For a local `rev-list`, that text is wrong. It would appear inside the Adoption Facts history bullet and also break the one-line bullet. Task 5T's mocked error (line 128) doesn't go through this code, so it would not catch the problem. Task 5 should reduce the message to a short reason, such as the first line without the `git \u2026 failed in <cwd>:` prefix, or map a timeout to the design's \"git timed out after 5s\". Task 5T should test with a message shaped like gitExec's.",
+   "location": "packages/core/src/guides/gitExec.ts:45-53"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Lines 78, 105, 131, 148, 178, 202, 225, 251, 257 and 269 are `- [ ] **Task NC: Commit** \u2014 \u2026`. Commit markers must be plain `**Commit**:` lines, never checkboxes. Their placement is fine: each one follows a tested task pair, and Task 11C follows the full `pnpm -r test`. Only the format needs to change.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Renderer tests don't cover every outcome",
+   "description": "The Technical Requirements (slice line 336) require `renderAdoptionFacts` tests for \"every outcome\". Task 8T (line 174) covers brownfield, adoption-in-progress and `NOT_EVALUATED`, but not `greenfield`, `already-planned` or `adoption-closed`. Task 8 (line 168) requires an exhaustive `never` switch, so those branches exist and are currently untested. Add one `it.each` case per remaining kind that checks the outcome bullet.",
+   "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Name the module `resolvePromptFilePath` is imported from, to avoid a cycle",
+   "description": "Task 9 step 4 (line 187) calls `resolvePromptFilePath` without naming its module. `CoreServiceFactory.ts` re-exports it, and after Task 11 that file imports `createAdoptionResolver`. Importing it from the factory would create a cycle: `CoreServiceFactory \u2192 adoptionResolver \u2192 CoreServiceFactory`. The factory's own comment says resolvers should import from `services/promptFilePath.js`. The task should say so.",
+   "location": "packages/core/src/services/CoreServiceFactory.ts:11-14"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`readAdoptionState` also reads the user-level config, so tests need isolation",
+   "description": "`ConfigManager.get` falls back to the user config file. Tasks 2T, 9T, 12 and 13 should set `CONTEXT_FORGE_DATA_DIR` to a temp directory, as `CoreServiceFactory.test.ts:79-80` does. Otherwise a developer's own `adoption.state` (for example after `cf config set --global`) changes results such as \"No `.context-forge.toml` \u2192 `''`\".",
+   "location": "packages/core/src/config/ConfigManager.ts:159-169"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Walkthrough step 1 may not exercise the planned check",
+   "description": "Task 15 (line 262) builds `/tmp/before.md` \"there\" in a temporary worktree of `main`. `cfl build` picks the project from the current directory, so running it inside an unregistered worktree may fail or pick up different worktree fields. Run the main-branch CLI (`node <worktree>/packages/cli/dist/index.js build`) from the repo root instead. Also, the resolver returns early unless the instruction is the concept phase. A second before/after diff with `--phase 0` would actually test \"planned project unchanged\".",
+   "location": "packages/cli/src/commands/build.ts:44-45"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Partial or differently cased instructions can select the brownfield prompt without facts",
+   "description": "`getPromptForInstruction` lowercases the instruction and matches it as a substring. So `--it brownfield` or `--it Brownfield-Adoption` matches the brownfield prompt. Task 9 step 1 compares `instruction === BROWNFIELD_ADOPTION_INSTRUCTION` exactly, so such a build gets the prompt with no Adoption Facts, which D8 calls \"impossible by construction\". The guide prompt stops when the facts section is missing, so this fails safe. A case-insensitive comparison in step 1 would narrow the gap.",
+   "location": "packages/core/src/services/SystemPromptParser.ts:186-212"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "A failure after the step 5 write keeps the state but never shows the notice",
+   "description": "If step 6 throws a raw filesystem error from `presentPaths` or `recognizeCi`, or the process is killed after `writeAdoptionState`, the state stays `in_progress` and the build returns the error stub. Later builds resume normally, and `cf config set adoption.state` can still change the state, so this can be recovered. But the state-set notice is never shown. This follows the design's step order, so it is informational only.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:113-118"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "No load test, and the reason given is accurate",
+   "description": "The tests/load rule exists only in `rules/python.md`, and the repo has no `tests/load/`. D2 explicitly says \"Tests assert the caps, not timings\". The bounding cap tests are Task 3T's early exit and `MAX_WALK_ENTRIES`. The Context Summary's reasoning (line 38) holds.",
+   "location": "project-documents/ai-project-guide/project-guides/rules/python.md"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The skip-pattern precedent is not in the 260 detection tests",
+   "description": "Context Summary line 39 says to skip permission tests \"as the 260 detection tests do\". `packages/core/tests/detection/*` has no `skipIf`. The pattern is at `setupCiOffer.test.ts:70` and `guideTreeDiff.test.ts:101-102`. Point the tasks there.",
+   "location": "packages/core/tests/introspection/setupCiOffer.test.ts:70"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Choice of file for the Task 12 integration fixtures",
+   "description": "`pipeline-integration.test.ts` is at `packages/core/tests/`, not under `tests/services/`. Thirteen fixture cases plus helpers would also push `CoreServiceFactory.test.ts` (now 147 lines) well past the ~300-line guideline. A dedicated file next to these would keep both readable.",
+   "location": "packages/core/tests/pipeline-integration.test.ts"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "`context_build`'s error result for `AdoptionError` relies on existing generic handling",
+   "description": "The success criterion \"`context_build` returns it as an error\" holds because any thrown error becomes `errorResult`. No task tests it directly. Task 10T and Task 12 case 12 check the rejection one layer down. That is enough, given the catch already exists.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:210-213"
+  }
+ ]
+}

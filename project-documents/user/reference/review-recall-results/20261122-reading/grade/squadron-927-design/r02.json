@@ -1,0 +1,180 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "D4's failed-call subtraction is unreachable on the SDK path, so SC4's `== failed_tool_calls` case cannot hold",
+   "description": "D4 computes `successful = tool_calls_made \u2212 failed_tool_calls` (design line 131), and SC4 (line 289) requires that the all-calls-failed case yields CONCERNS. On the SDK path, `failed_tool_calls` is only incremented inside `elif isinstance(sdk_msg, ToolResultBlock)`. The stream the SDK yields has the union `UserMessage | AssistantMessage | SystemMessage | ResultMessage | StreamEvent | RateLimitEvent` (claude_agent_sdk `types.py:1499-1505`), so tool results arrive inside `UserMessage.content`. Neither `_translate_and_track` nor `translate_sdk_message` (`translation.py:26-42`) handles `UserMessage`. The counter stays at 0, a review whose every tool call errored counts as having read the omitted diff, and the cap does not fire. The `sdk` profile is the one the walkthrough's own commands use. The existing tests (`tests/providers/sdk/test_agent.py:900`, `:919`) pass a bare `ToolResultBlock` into the stream, a shape the SDK does not produce, so they stay green. The OpenAI path counts correctly (`providers/openai/agent.py:479-481`). Required before implementation: count failed results inside `UserMessage` content, add a test on that shape, and list the change in the Component Structure table. The sandbox SDK copy I read has no confirmed version; `uv.lock` pins 0.2.152, and the shape should be checked against that version.",
+   "location": "src/squadron/providers/sdk/agent.py:178-180"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D6's motivating case cannot occur, and the render change would mislabel derived verdicts",
+   "description": "D6 (line 160) says \"A PASS parsed with `fallback_used=True` (verdict read, findings not)\". The parser sets `fallback_used` for a stated verdict with no findings only in the `mismatch` branch, which is limited to CONCERNS/FAIL (line 1023). The only PASS with `fallback_used=True` is a derived PASS (lines 972-993), and that one has findings. So:\n- SC7 (line 292) tests a state the parser cannot produce.\n- For the state that can occur, the findings branch already hides the notice before the cap (`persistence.py:517-528`). Rendering the notice \"whenever `fallback_used` is set\" would print \"no findings could be extracted\" (`persistence.py:533-540`) and the terminal's \"findings did not\" (`cli/commands/review.py:188-189`) beneath findings that were extracted.\n- The change also alters every existing derived-verdict artifact and terminal, not only capped ones, and the design does not say so.\n\nKey the notice on the actual condition, render text that matches it, and test a derived PASS with findings.",
+   "location": "src/squadron/review/parsers.py:1023-1025"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"pipeline stops for a human either way\" rationale is false for on-fail pipelines",
+   "description": "D4's justification (line 137) says CONCERNS \"is already what `CheckpointTrigger.ON_CONCERNS` pauses on, so a pipeline stops for a human either way.\" Only `on-concerns` steps pause on CONCERNS (`checkpoint.py:22`). `P4.yaml:16`, `P5.yaml:16`, `P6.yaml:16`, and `implement.yaml:13` use `checkpoint: on-fail`, which pauses only on FAIL/UNKNOWN (`checkpoint.py:23`). In those pipelines an imposed CONCERNS lets the run continue, and the artifact is the only signal. Walkthrough step 4 covers only `review.yaml` (`on-concerns`). Either correct the rationale and state that on-fail pipelines continue, or justify why the gate-only signal is enough there.",
+   "location": "src/squadron/data/pipelines/P6.yaml:16"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The synthetic finding omits `location`, which breaks the 904 contract",
+   "description": "Design line 152 says the finding \"has no `location` because it cites no file.\" Slice 904 (plan entry 3, architecture doc lines 65-76) requires `location:` on every finding, PASS included, with `unverified` as the explicit \"I don't know\" token. The parser already enforces that for model findings: `global` and empty values normalize to `unverified` (`parsers.py:31`, `232-245`). The synthetic finding therefore lands in frontmatter with `location: null`, which 904's merged-finding dedupe was built to avoid. Use `unverified`, or amend 904's contract explicitly.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The synthetic finding enters the next dispatch's fix prompt and can block `review.pass` loops",
+   "description": "`ActionResult.findings` carries every structured finding (`pipeline/actions/review.py:414`). `_resolve_prompt_from_prior_review` turns each one into \"Address the following findings from the prior review\" (`dispatch.py:391-400`). The imposed \"Diff truncated; the omitted part was never read\" therefore becomes a defect the implementer is asked to fix, and an implementer cannot fix it except by changing config. Two consequences follow:\n- `LoopCondition.REVIEW_PASS` (`executor.py:230`, `244`) cannot be satisfied while the diff stays over the limit, so `until: review.pass` loops run to exhaustion.\n- Loops that use `checkpoint: on-concerns` (for example `findings-addressed-cycle.yaml:38`) pause every round.\n\nThe design does not mention loops or the prompt feed. It needs to state the intended behavior, for example by excluding the synthetic finding from the feedback path or documenting the loop outcome.",
+   "location": "src/squadron/pipeline/actions/dispatch.py:382-400"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "One synthetic-finding template covers two causes, and the total-limit case gets the wrong cause and remedy",
+   "description": "The template says \"the first 256000 reached the model (review.max_file_size_bytes)\" and advises raising `review.max_file_size_bytes`. D3 (line 125) makes a diff skipped by the total budget a truncation to zero, and that cause is `review.max_total_injection_bytes` (`review_client.py:378-384`). SC2 (line 287) requires the same CONCERNS outcome. For that case the text would say \"0 reached the model\" under the per-file key and give the wrong remedy. Parameterize the cause or use a second template.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:141-150"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "D4 uses `or 0`, which the design's own convention forbids",
+   "description": "Line 131 writes `(tool_calls_made or 0) - (failed_tool_calls or 0)`. The Patterns section (line 216) says \"`is None` checks, never `or 0`, for counts.\" The result is numerically the same today, but this expression gates the verdict, and the spec as written invites copying the idiom elsewhere.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The Value claim overstates what the rule checks",
+   "description": "Line 27 says a PASS \"means the model either saw the whole diff or read files with its tools.\" D4 is satisfied by any successful tool call. Code review templates allow `read_file`, `list_files`, and `grep` (`code.yaml:57`), so a directory listing counts as a read. Plan entry 25 (architecture doc line 442) says \"a truncated diff where the model did read files stays a normal verdict,\" which is narrower than the rule. Either state \"made at least one successful tool call\" in the gate-facing text, or decide that listing does not count.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"No existing key changes meaning except `aiModel`\" is wrong",
+   "description": "Several existing keys change meaning:\n- JSON `model` is `self.model` (`review/models.py:219`), which becomes the answering model.\n- `ActionResult.metadata[\"model\"]` (`pipeline/actions/review.py:420`) feeds the executor's step display (`executor.py:101`).\n- The PR comment's `**Model:**` line (see the `pr_comment.py` finding below).\n\nThe Integration section names only `aiModel`. List all of these, and state whether each is intended.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The PR comment is posted to GitHub with the answering model and no substitution note",
+   "description": "`_model_line` posts `result.model` as `**Model:** \\`X\\` \u00b7 **Reviewed:** ...`. After this slice, a substitution appears in the artifact header (`**Model:** X (requested Y)`) but not in the comment on GitHub, which is outward-facing. The component table omits this module, and the walkthrough never reviews a PR. Decide whether the comment shows the requested id too.",
+   "location": "src/squadron/review/pr_comment.py:61-64"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Consumers that record the requested id are outside the design's inventory",
+   "description": "The findings-addressed judge leg calls `run_review_with_profile` (`addressed/judge.py:107-112`) and records `model=model_id`, the requested id, in `JudgeLegResult` (lines 120, 130, 134). `metrology/audit.py:675` creates a provider agent directly, so it never reaches `run_review_with_profile` or `collect_turn`, and it gets no answering-model stamp. Design line 101 claims parity is structural, which holds only for the artifact path. `sq review pr` (`review_pr.py:461`, via `_run_review_command`) inherits the change but is not named. State whether each of these keeps the requested id and why, or thread the answering model through.",
+   "location": "src/squadron/review/addressed/judge.py:134"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Renaming the judge model identity orphans accumulated metrology evidence with no stated policy",
+   "description": "Line 196 accepts that OpenAI-direct judges move from `gpt-5` to `gpt-5-2025-08-07` as \"the correct calibration identity.\" Metrology matches on exact model (`store.py:97-101`, `graduation.py:44`), so records under the old id silently stop matching, and graduation restarts. `metrology/identity.py` names resetting accumulated evidence as the failure mode it guards against for thresholds. The design should state whether old evidence is kept under the old key, migrated, or deliberately orphaned. The consequence also omits OpenRouter, whose dated forms (D9, line 181) change the same way.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "D9 defers the OpenRouter \"differs\" decision that the plan requires the design to make",
+   "description": "Plan entry 25 (architecture doc line 443) says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter).\" D9 decides the dated-suffix form and asserts without evidence that OpenRouter's dated forms fit it. Routed variants (a dropped `vendor/` prefix, a `:free` suffix, a local server's `:latest` tag) are deferred to Phase 6 captures. Under \"when unsure, the rule reports a substitution\" (line 183), each one produces a WARNING and `requestedModel` on every run for that profile, which the Risk section (line 359) acknowledges. Decide the accepted forms now, or name the captures that would block merge.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "D11's \"not reported\" signal depends on a default the design does not specify",
+   "description": "D11 keys the digest line on `answering_models == []` and reserves `None` for hand-built results. But `TurnCapture` documents `None` as \"not reported\" and survives to `ReviewResult` as such (`review/turn_capture.py:44-45`), and every other telemetry field there defaults to `None`. If `TurnCapture.answering_models` follows that convention, Codex (which emits no metadata, `providers/codex/agent.py`) produces `None`, the digest line is suppressed, and Codex artifacts lose the signal D11 exists to add. The design must state that the default is `[]`, and that `run_review_with_profile` assigns the list.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:202"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "D12's \"last model reported\" cannot be recovered from a deduplicated, first-seen list",
+   "description": "Line 206 defines `aiModel` as \"the last model reported, the one that wrote the review.\" Lines 105 and 205 say the list is distinct, first-seen, and deduplicated on append. A sequence A, B, A leaves `[A, B]`, so `answering_models[-1]` is B although A wrote the review. The OpenAI agentic loop can produce that sequence when a router changes model between requests. Track last-occurrence separately from the distinct list.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:206"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "SDK per-message state resets the tool counters but not `_reasoning_chars`, so the recovery turn double-counts",
+   "description": "State Management (line 105) says the new per-message list resets \"like `_tool_calls_made`.\" `handle_message` resets `_tool_calls_made` and `_failed_tool_calls` (lines 108-109) but not `_reasoning_chars` (initialized at line 81, accumulated at line 177, stamped at line 186). On the #92 recovery turn, a second `handle_message` on the same agent stamps a cumulative count, and `collect_turn` sums it (`turn_capture.py:118`), so the first turn's reasoning is counted twice. The Run Digest reports the wrong number (`persistence.py:237`). This predates the slice, but the slice's per-message state and its recovery-turn test sit on the same path. Fix it here or name it as a dependency.",
+   "location": "src/squadron/providers/sdk/agent.py:108-109"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Subagent tool calls count toward D4 while D8 excludes subagent messages from identity",
+   "description": "D8 (line 170) excludes messages with `parent_tool_use_id` from the answering model because subagent messages \"did not write the review.\" The tool counter D4 consumes counts `ToolUseBlock`s in every `AssistantMessage` with no parent filter (lines 172-175), so a subagent's read satisfies \"a successful tool call.\" Plan 916 Part E (architecture doc, slice 916 entry) notes that SDK reviewers keep the full default tool set, so subagent tools are reachable there. Either filter the counter the same way, or state that subagent reads count as the review's reads.",
+   "location": "src/squadron/providers/sdk/agent.py:172-175"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 6 cannot run as written",
+   "description": "The step says to run once per profile (sdk, openai, openrouter, local), but the command is `sq review slice 927 --model sonnet -v` with no `--profile`. `--model` resolves the alias to its own profile (`cli/commands/review.py:590-598`), so every iteration runs the SDK profile. `--profile` alone would send an SDK alias to a different provider. The step also omits `--output json`, which the expectation says it records in the DEVLOG. Give each profile a command with a model id that profile accepts.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 1 leaves a persistent project override with no undo if the run stops early",
+   "description": "Step 1 writes `review.max_file_size_bytes 20000 --project`, and only step 5 removes it. If the operator stops after step 1 or a step fails, every later code review in that project truncates at 20000 and is imposed to CONCERNS. Wrap the set/unset pair with a restore-on-exit instruction, or use a per-invocation override. Step 3 also says \"Record which occurred\" without naming where.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:317"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "D2 cannot be implemented as written for an empty diff",
+   "description": "D2 says the key is always written when a diff was part of the review. `_inject_file_contents` calls `_add_injection` only when `diff_content` is truthy (`review_client.py:421-424`), and D3 covers only a `False` return. An empty diff under a present `diff` key therefore produces no `DiffInjection`, which is the state D2 reserves for non-diff reviews and pre-927 artifacts. Specify `DiffInjection(total_chars=0, injected_chars=0)`, and how the function returns it on the early `return prompt` path (`review_client.py:447-448`).",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:119"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "The OpenAI `chunk.model` read has no absence handling, and the design's `continue` placement is unstated",
+   "description": "D8 says the last non-empty `chunk.model` is read \"from every chunk, including choice-less ones.\" Today `_stream_turn` skips choice-less chunks before reading anything (`providers/openai/agent.py:287-288`), so the read has to move above that `continue`, and the design does not say so. The design also does not handle a chunk without `model`. The SDK type declares it required, but OpenAI-compatible servers are not all conformant, and the access would surface as an attribute error rather than the \"not reported\" degradation D11 promises. State the absence-tolerant read, and test a model-less stream.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:171"
+  },
+  {
+   "i": 21,
+   "severity": "CONCERN",
+   "title": "`verdictSource`'s closed contract is extended on the basis of a no-reader grep",
+   "description": "Slice 919 defined `verdictSource` as a closed `stated | derived` contract for context-forge's review gate and Amoeba (`project-documents/user/slices/919-slice.verification-that-verified-nothing.md:333-334`), and it made cross-repo coordination a success criterion (lines 535-538). `review/models.py:29-31` documents it as \"A closed two-value vocabulary.\" D5 adds `imposed` on the strength of a grep that found no reader (line 156), while the Integration section (line 273) lists the gates as consumers of `verdictSource: imposed`. The design contradicts itself on whether consumers exist, and it changes the contract without the coordination 919 required. It also drops `derived` when a derived PASS is capped, so the derivation record is lost. Either coordinate and state the consumer contract for `imposed`, or record the cap in a different field.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:156"
+  },
+  {
+   "i": 22,
+   "severity": "CONCERN",
+   "title": "The `_inject_file_contents` call-site inventory is wrong, and the tuple return rewrites about 22 test call sites",
+   "description": "Line 370 says \"its two `review_client` call sites.\" There is one (`review_client.py:154`). It lists `test_injection_decision.py` as a direct caller, but the only mention is a comment (`tests/review/test_injection_decision.py:283`). Changing the return to a tuple breaks 22 direct assertions (19 in `test_content_injection.py`, 3 in `test_convention_root.py`) and the `side_effect=lambda p, *a, **k: p` mock (`tests/review/test_review_client.py:224`). A lighter option is to leave `_inject_file_contents` returning a string and expose the facts through a sibling function or keyword-only recorder that only `run_review_with_profile` uses. That leaves the existing tests unchanged.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370"
+  },
+  {
+   "i": 23,
+   "severity": "CONCERN",
+   "title": "The design carries scope it can cut or defer",
+   "description": "- **D12's multi-model machinery** (distinct list, digest enumeration, multi-model WARNING) handles a case no profile is shown to produce. The recovery turn reuses the same agent and model. Keep last-reported plus one WARNING, and defer the digest enumeration until a capture shows the case. The JSON list (line 263) is in the contract already.\n- **Restated conventions:** Prerequisites (line 53), Patterns and Conventions (lines 212-217), and Consumes (lines 277-280) restate other slices' rules. One line each is enough.\n- **Footprint:** the design touches 11 existing modules, adds 2, edits 4 test files, adds 6 JSON keys, and needs live captures for 4 profiles. Plan entry 25 rates it 3/5 (architecture doc line 444). The call-site rewrite above is the largest avoidable part.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+  },
+  {
+   "i": 24,
+   "severity": "NOTE",
+   "title": "`impose_diff_coverage` is described as pure but mutates the result",
+   "description": "Line 69 calls it \"pure and unit-testable,\" but it sets `verdict`, `verdict_source`, and prepends to `findings` on the passed `ReviewResult` (a mutable dataclass, `review/models.py:105`). Describe it as a deterministic mutation, or return a new result if purity matters.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69"
+  }
+ ]
+}

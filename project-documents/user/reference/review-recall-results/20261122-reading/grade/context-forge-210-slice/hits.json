@@ -1,0 +1,76 @@
+{
+ "case": "context-forge-210-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope names the helper `isManagedCopilot(filePath)`; Files Changed names it `isManagedCopilotFiles(projectPath)`, a different name and parameter (and the Sequence checks two files). **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     6
+    ],
+    "r04": [],
+    "r05": [
+     16
+    ],
+    "r06": [
+     8
+    ],
+    "r07": [
+     8
+    ],
+    "r08": [
+     2
+    ],
+    "r09": [
+     5
+    ],
+    "r10": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The parent plan's success criteria (200-slices, entry 210) require the \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design\". The file exists at `25498dee`; the design never mentions it. **VALID** (minor): leaves out something the parent criterion required. Needs: doc (design plus parent plan).",
+   "hits": {
+    "r01": [
+     8
+    ],
+    "r02": [
+     11
+    ],
+    "r03": [
+     21
+    ],
+    "r04": [
+     9
+    ],
+    "r05": [
+     20
+    ],
+    "r06": [
+     10
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [
+     8
+    ],
+    "r09": [
+     4
+    ],
+    "r10": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "F1: r04[0] mentions isManagedCopilotFiles only as a duplicate of the Claude helper, not the name/parameter contradiction; not counted."
+}

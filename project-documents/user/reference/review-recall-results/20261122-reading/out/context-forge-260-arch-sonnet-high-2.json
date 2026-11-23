@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adoption cannot run end to end: cf's only deliverable is a prompt for an unbuilt orchestrator",
+      "description": "The amendment (lines 24\u201333) makes `sq onboard` the only adoption entry point (line 41, 129). It also parks the real adoption run (273) until `sq onboard` exists. Meanwhile cf has already shipped 260\u2013267, and `adoptionCompletion.ts` and `adoptionNavigation.ts` are still in `packages/core`. No user can currently adopt a brownfield repo. The design is validated only against an outline of a flow in another repo (lines 85\u201392), which says \"so squadron and the guide can design against it.\" The risks that matter most are the contract between cf and squadron and the quality of the prompt. Neither can be tested until squadron builds `sq onboard`.\n\nLine 129 also drops the CF-only fallback, so the guide's \"adoption guide\" has no consumer. Scope that cf has already built (the guide prompt, the retroactive marker, reconciliation, docs mapping) now rests on one cross-repo dependency with no date.\n\nRecommendation: state a contract test or fixture, owned by cf, that exercises the 271 primitives the way `sq onboard` would. Without one, 271 is untestable until squadron ships.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Adoption flow, under sq onboard (amended 20261025)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no persisted state\" claim conflicts with the opt-out and with the derivation rule",
+      "description": "Line 48 says \"Nothing persists the outcome.\" Line 79 says the only stored value is the opt-out. The check order puts opt-out first, so a user who opted out stays greenfield forever, even after real planning artifacts exist. Nothing says how the opt-out is cleared, where it lives (config, a marker file, project registry?), or whether it is scoped to a monorepo subfolder. Line 79 scopes detection to the project folder, so the opt-out location must be scoped the same way.\n\n\"Already planned\" (line 76) is defined as \"any initiative plan, architecture doc or slice plan.\" A repo with one hand-written architecture doc but a ten-year-old codebase is therefore classed as planned. That is a false \"already planned\" and is silent, whereas the cost analysis (line 133) only considers false greenfield versus false brownfield. A project that has already been adopted but then deletes its plan files is re-detected as brownfield. That is acceptable, but it should be stated.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48, 74-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-repo contract is described only by filename and `docType` and has no versioning",
+      "description": "The amendment says cf \"never parses squadron output\" and finds the comprehension doc \"by filename and `docType`.\" Line 119 adds \"squadron 361's provenance block.\" Resolving `fileComprehension` therefore depends on:\n- a squadron naming convention (`{n}-analysis.codebase-comprehension.md`, line 136);\n- a frontmatter field; and\n- a provenance block that cf's guide prompt also parses (line 136: \"the prompt detects 363's provenance block\").\n\nNone of this is versioned, unlike the probe, which had `probe_version`. The document removes the versioned contract and keeps a looser one. Line 94 says cf \"neither knows nor tests\" squadron's surfaces, so a rename on the squadron side would silently produce a prompt with no comprehension input. Line 136 says \"cf passes nothing (never a placeholder),\" so the agent would proceed from the repo alone and produce a lower-quality architecture without any warning to the PM.\n\nRecommendation: have `sq onboard` pass the comprehension doc path explicitly to the 271 primitive. Then cf never searches for it, and that coupling disappears.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:50, 119, 136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The retroactive marker's gate-bypass defense is only a convention, plus a checker that runs advisorily",
+      "description": "The marker is \"set only by the adoption flow\" (line 100), but it is a property of a slice-plan entry in a markdown file. Anyone or any agent can write it. The defense is that \"a retroactive entry with a slice design or task file is a checker error.\" The defense has several gaps:\n- The ordering is real work first, then marker. An agent can mark an unbuilt slice retroactive before any design exists, and it then counts as complete for all \"done\" checks (CF's and squadron's pipeline gates, lines 100 and 121). That skips planning and review for work that was never built.\n- Squadron's pipeline gates read slice status. The document has no mechanism making squadron honor \"skip review rather than pass it,\" only the assertion at line 121.\n- Line 100 claims the marker \"can't be used to bypass the gate.\" That is true only after files exist. It says nothing about the case where files are never created.\n\nPossible mitigations: confine retroactive entries to indices below the first non-retroactive entry (line 99 states the relative order but doesn't make it a checker rule), or require the derived-architecture provenance to exist.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:51, 100, 121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection thresholds, the heart of the false-brownfield risk, are deferred while the doc says they ship",
+      "description": "Line 133 admits the cost asymmetry (false brownfield writes wrong artifacts) but leaves \"signals and thresholds\" to slice design. Slice 261 shipped, so the thresholds exist in code and the architecture doc is stale. Line 73 describes \"source volume (a floor, because counting stops at the threshold)\", which is an implementation detail with no stated floor.\n\nAlso missing:\n- how detection treats vendored directories, generated code, `node_modules`, or monorepo siblings (line 79 scopes to a subfolder, but the ignore rules are not stated);\n- the cost bound on counting in a very large repo;\n- how it behaves for a project whose source is mostly in non-code formats.\n\nThe override (line 133, \"the safety valve\") is in effect the only mitigation. But line 104 says an unadopted brownfield repo gets \"one line\" with how to opt out. The user sees that line only if they run `cf next`, and `sq onboard` is not guaranteed to surface it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73, 133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Document is a historical log, with superseded designs retained inline in normative sections",
+      "description": "\"Technical Considerations\" carries the full original probe contract (line 135, a very long run-on paragraph) and the original guide contract (line 136) \"for history.\" The \"Anticipated Slices\" list (lines 147\u2013153) still describes shipped-then-superseded slices (\"persisted adoption state,\" \"adoption steps while in progress,\" \"reading the probe\") next to the rework list. A reader implementing slice 271 cannot tell which statements are normative. Specific conflicts:\n- Line 148 says `cf build` selects the brownfield profile; line 81 says it does not run detection.\n- Line 137 retains a fail-fast rule with a parenthetical saying it \"moves to the primitive,\" with no restatement of what the new behavior is.\n- Line 159 says cf releases \"that select the brownfield profile require v0.22.2,\" but cf no longer selects it (it only delivers it). The guide dependency is stale in the same way.\n- Line 9 says `status: in_progress` and line 8 says `dateUpdated: 20261025`, but the document is being reviewed after that date. This is minor.\n\nMove the history to an appendix or the slice plan, and restate the 271 primitive's contract in the current-state sections.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135-137, 143-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The 271 primitives are the only cf/squadron interface, yet this document does not specify them",
+      "description": "Slice 271 is cited as the contract in lines 81, 91, 118, 136 and 160, but this document gives only prose:\n- the detection report is \"JSON\" with \"facts\"; no schema is given, and neither is versioning or error semantics;\n- prompt delivery says \"with the comprehension doc's path filled in,\" while line 136 says \"slice 271's design settles how the profile's variables are delivered\";\n- there is no statement of how the missing-guide-prompt error surfaces through the CLI and MCP (line 53 says it is an error, never a fallback);\n- no ownership of the monorepo case: whether the CLI command takes a project path or reads the registered project.\n\nThe architecture needs at least the shape of this interface, because it is the one thing squadron will code against. Principle line 48 also says `cf init` and `cf next` consume the same function. The first-run logic in `WorkflowNavigator.detectFirstRunContext` (line 59) is not stated to be replaced or reconciled, so there may be two classifiers.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81, 89-91, 136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope retention: conventions reconciliation and docs mapping are heavy for a read-only-primitives posture",
+      "description": "Reconciliation (line 108) and docs/ADR mapping (line 109) are no longer tied to the core goal. Line 145 says they are \"not needed for the core goal.\" Reconciliation adds a persisted store of resolutions keyed by rule file identity, enumeration of rule sources across composites and standalone directories, and coupling to `setup-ide` and issue #123. The document admits this is sequenced with #123. With adoption parked, cutting or deferring these two would reduce the active surface. Per lines 138 and 144, they also expand the number of write paths into existing project files. That conflicts with the \"additive and reversible\" principle (line 52) whenever resolutions change what `setup-ide` writes to CLAUDE.md. Either defer them explicitly or say what justifies them without `sq onboard`.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:106-109, 138-139, 152-153"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Concept: Shared\" ownership relies on convention and has no enforcement",
+      "description": "\"Exactly one writer per run, and nothing overwrites an existing concept without the PM saying so\" is a rule with no mechanism. The writers (squadron 363 and the guide prompt) are both agents in the same session. The \"already planned\" check (line 76) ignores a concept on its own, so a concept written by one flow is invisible to detection. A re-run will not know it is mid-adoption. That is a consequence of removing the state machine and should be acknowledged, since line 136 relies on \"a re-run resumes from whatever artifacts exist.\"",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three-copy onboarding consolidation and the `/setup-ci` move are unrelated to brownfield",
+      "description": "Onboarding consolidation (rendering one source to three entry points) and the `/setup-ci` relocation to `cf next` (with `recognizeCi`) are cleanups bundled into this initiative. They are reasonable as hygiene, and they are already shipped. Putting a CI-offer in `cf next` (line 69) also contradicts the \"recommends only\" principle less than adoption did, but it remains a navigation side effect owned by a brownfield initiative. No action needed beyond recording that it has no dependency on the adoption design.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:57, 61, 69, 147"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Adoption cannot run end to end: cf's only deliverable is a prompt for an unbuilt orchestrator",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Adoption flow, under sq onboard (amended 20261025)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The \"no persisted state\" claim conflicts with the opt-out and with the derivation rule",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48, 74-79",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Cross-repo contract is described only by filename and `docType` and has no versioning",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:50, 119, 136",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The retroactive marker's gate-bypass defense is only a convention, plus a checker that runs advisorily",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:51, 100, 121",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Detection thresholds, the heart of the false-brownfield risk, are deferred while the doc says they ship",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73, 133",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Document is a historical log, with superseded designs retained inline in normative sections",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135-137, 143-153",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The 271 primitives are the only cf/squadron interface, yet this document does not specify them",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81, 89-91, 136",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scope retention: conventions reconciliation and docs mapping are heavy for a read-only-primitives posture",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:106-109, 138-139, 152-153",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "\"Concept: Shared\" ownership relies on convention and has no enforcement",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Three-copy onboarding consolidation and the `/setup-ci` move are unrelated to brownfield",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:57, 61, 69, 147",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-22T23:45:14.797005",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+      "chars": 25593,
+      "sha256": "bf853913212f41db7b03d0137a11acd8453ab176a997fc673ce701e21f9c10b3",
+      "whole": true
+    }
+  ],
+  "files_read": [],
+  "searches": [
+    "list_files project-documents/user/**/26* in .",
+    "grep detectFirstRunContext|review-gate|retroactive in .",
+    "grep 26[89]|27[0-4] in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/project-documents/user/architecture/260-slices.brownfield-adoption.md"
+  ],
+  "sections_in_document": 16,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 55205,
+  "cached_tokens": 42053,
+  "cache_write_tokens": 13146,
+  "completion_tokens": 5267,
+  "reasoning_tokens": null,
+  "duration_seconds": 43.822738707996905,
+  "cost_usd": 0.11057229999999998,
+  "cost_basis": "provider"
+}

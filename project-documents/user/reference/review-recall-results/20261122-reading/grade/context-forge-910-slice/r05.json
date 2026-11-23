@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "All three WorkflowNavigator sites are `SliceStatus.status` values, which TD-3 excludes",
+   "description": "The table (line 36), the component table (line 75) and step 4 (line 90) all plan to sweep 3 `=== 'complete'` sites in `WorkflowNavigator.ts`. The three bare literals there are:\n- `packages/core/src/introspection/WorkflowNavigator.ts:312`: `slice.status === 'complete'`\n- `packages/core/src/introspection/WorkflowNavigator.ts:345`: `slice.status === 'complete'`\n- `packages/core/src/introspection/WorkflowNavigator.ts:588`: `return { ...base, status: 'complete', taskProgress }`\n\nIn all three, `slice` is a `SliceStatus`. The same function compares `slice.status` to `'needs-design'`, `'needs-tasks'`, `'pending-review'` and so on (lines 109\u2013302). Line 588 builds a `SliceStatus`. These are exactly the `SliceStatus.status` union that line 49 and TD-3 (lines 104\u2013106) exclude because they are \"a distinct union\". The `NormalizedStatus` comparisons in this file already use `STATUS` (lines 319, 577, 695).\n\nAs written, the design tells the implementer both to sweep these sites and to leave them alone. Fix: move WorkflowNavigator to Excluded with 0 sites, drop step 4, and recount the totals.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Most ConsistencyChecker sites are raw frontmatter tokens, the vocabulary TD-2 says not to conflate",
+   "description": "Line 33 calls all 36 ConsistencyChecker sites \"`=== 'complete'` / `'in-progress'` comparisons\", and line 17 calls them `NormalizedStatus` comparisons. Here is how the 36 grep hits actually break down:\n\n- **6 are real `NormalizedStatus` comparisons.** They compare `taskResult.inferredStatus` or `computed`, at lines 286, 325, 352, 392 (right-hand side), 519 (right) and 535 (right).\n- **15 compare raw frontmatter.** `fmStatus`, `planStatus` and `archStatus` are `frontmatter.data.status.toLowerCase()`, a plain `string` that never goes through `normalizeStatus()` (lines 351, 463, 715, 811, 884, 962). The comparisons are at 357, 373 \u00d72, 392 (left), 469, 485, 519 (left), 535 (left), 717, 733, 814, 830, 885, 967 and 983.\n- **12 are values written back into frontmatter files.** These are `detail: { key: 'status', value: 'complete' | 'in-progress' }`, which `updateFrontmatterField` writes to disk (line 213\u2013214), at 368, 384, 403, 480, 546, 728, 744, 825, 841, 914, 978 and 994. Line 530 writes `'in_progress'` in the same kind of fix. That shows the write side is the raw-token vocabulary, which `VALID_STATUSES` in `packages/core/src/schema/frontmatterSchema.ts:29-35` validates.\n- **3 are in a comment** (line 514), so there is nothing to sweep.\n\nTD-2 (lines 100\u2013102) excludes raw frontmatter tokens because mixing them with `NormalizedStatus` \"would be a correctness bug\". Relabelling 27 raw-token sites as `STATUS.*` does exactly that. A future change to `STATUS.InProgress` would then silently change what `cf check --fix` writes into documents.\n\nThere is also a latent issue the sweep would hide. Line 373 compares raw `fmStatus` to `'in-progress'` and `'not-started'`, but frontmatter normally holds `in_progress` and `not_started` (this slice's own frontmatter has `status: not_started`). So that branch rarely fires.\n\nFix: classify each site. Sweep the 6 typed comparisons. Then either leave the raw-token comparisons and write values alone, or name a separate frontmatter-token constant for them. The slice plan's \"~40\" estimate does not make this decision for the design.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Success-criteria grep cannot pass as written, and its exclusion filter does nothing",
+   "description": "Line 135 requires that no bare literals remain \"outside types.ts's own STATUS definition\", checked by a grep that must return \"zero matches in the six swept files\". This fails in several ways:\n- `grep -roE` without `-n` prints `path:match` with no line numbers. So the filter `grep -v 'introspection/types.ts:[3-6]:'` matches nothing, and all 4 `STATUS` definition lines still show up.\n- The quoted alias keys `'in-progress':` and `'not-started':` in `statusNormalizer.ts:9,13` must stay literal, per line 48. They will always match.\n- The design excludes the `SliceStatus` `'complete'` at `types.ts:269`, the ProjectModelBuilder comment at line 179 and the ConsistencyChecker comment at line 514. All of them remain after the sweep.\n- The sentence \"outside types.ts's own STATUS definition\" contradicts the stated exclusions of `frontmatterSchema.ts` and `SliceStatus`.\n\nFix: give a criterion that excludes these sites explicitly, or list the expected surviving matches by file and line.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Site counts in the table and the walkthrough are wrong",
+   "description": "Checked against `grep -oE` on the current tree:\n- **types.ts (line 35):** the doc says \"5 of 8, 4 definition\". The real split is 4 definition + 3 in `inferredStatus` (line 44) + 1 in `SliceStatus` (line 269). The retype removes the 3; nothing in types.ts gets swept to `STATUS.*`.\n- **statusNormalizer.ts (lines 34, 78, 89):** the doc says \"13 values, 3 alias keys\". The real split is 14 values (lines 5\u201318, one per line) and 2 quoted keys. Unquoted keys such as `complete:` do not match the pattern.\n- **ProjectModelBuilder (lines 39, 50):** the doc says its one literal is `'unknown'` at line 179. The grep hit at line 179 is a comment containing `'not-started'`. `'unknown'` is at line 181 and does not match the pattern.\n- **Total (lines 41, 82):** \"~65 across 6 files\" includes the 3 WorkflowNavigator `SliceStatus` sites and 30 ConsistencyChecker sites that are not `NormalizedStatus` values. Only about 24 typed `NormalizedStatus` literal sites exist (6 + 14 + 4 + 0 more after removing the inferredStatus union).\n- **Walkthrough \"After\" (line 151):** it expects 4 + frontmatterSchema (3) + `SliceStatus` (4). There is only 1 `SliceStatus` literal. The comment hits and the 2 alias keys are left out.\n\nThe \"Before ~75\" figure does match the current tree (75 occurrences).",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:34-41"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Claim that no tests assert against these literals is false",
+   "description": "Line 51 says \"grep confirms zero `.test.ts` files assert against these literals directly\". Tests live in `packages/*/tests/`, not under `src/`. They contain 68 `toBe('complete'|\u2026)`-style assertions across 17 files, for example:\n- `packages/core/tests/introspection/ConsistencyChecker.test.ts` (12)\n- `WorkflowNavigator.test.ts` (10)\n- `ProjectModelBuilder.test.ts` (9)\n- `taskFileParser.test.ts` (5)\n\nThis doesn't break the sweep, since tests keep literal expectations. But the stated reason why no test changes are needed is wrong. The real reason is that runtime values are unchanged. Restate it on that basis.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The reason for coupling the retype and the taskFileParser sweep is false",
+   "description": "Lines 86\u201387 say that retyping `inferredStatus` alone \"would leave `taskFileParser.ts`'s still-bare-string assignments failing to compile\". The assignments at `packages/core/src/introspection/parsers/taskFileParser.ts:62-68` use literals like `'not-started'`, and these can be assigned to `NormalizedStatus`. The variable is declared as `TaskFileResult['inferredStatus']` (line 60), so it widens automatically.\n\nEvery step can land on its own, in any order. Remove the \"must land together\" constraint and its reason so the sequence is described correctly.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:86-87"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The import pattern credited to statusDerivation.ts differs from the one described",
+   "description": "Line 113 says `statusNormalizer.ts` should keep a separate `import type` and add a second value import, \"matching the pattern already established in `statusDerivation.ts`\". But `packages/core/src/introspection/statusDerivation.ts:1` uses one combined import: `import { STATUS, type NormalizedStatus } from './types.js';`. Either form works; cite the right pattern.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:113"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Several sites the Value section counts were already type-checked",
+   "description": "Line 23 says a typo like `'in-progres'` \"becomes a compile error instead of a silent runtime mismatch\". At sites already typed `NormalizedStatus`, TypeScript already reports a typo:\n- `STATUS_MAP` is a `Record<string, NormalizedStatus>`, so a mistyped value fails to compile.\n- `inferredStatus === 'in-progres'` raises TS2367 (no overlap).\n\nThe new compile-time protection mostly applies to untyped `string` comparisons. Most of those are the raw-frontmatter sites the previous finding says should not become `STATUS.*`. Single-point definition is still a valid reason for the slice. The safety argument is just narrower than stated.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:23"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Test baseline counts are pinned but could not be checked here",
+   "description": "Lines 85, 92 and 142 pin core 931/934, cli 428/432 and mcp 184/184 with named pre-existing failures. I did not run the suite, so I could not confirm these numbers. If the baseline has moved, the \"identical baseline\" criterion fails for reasons unrelated to the sweep. Capturing a fresh baseline before step 1 would make the criterion self-contained.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:142"
+  }
+ ]
+}

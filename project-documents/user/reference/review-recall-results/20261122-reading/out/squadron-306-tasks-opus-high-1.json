@@ -1,0 +1,395 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Part 0 relocation adds the review\u2192pipeline import F002 forbids, plus a likely circular import",
+      "description": "The design moves the core so that `review/` never imports `pipeline/` (slice lines 141\u2013155). The moves as written break that rule twice:\n- **T1 (task lines 78\u201392)** moves `models.py` \"verbatim\". Line 14 is `from squadron.pipeline.models import ActionResult`, and `read_findings` (models.py:93) takes an `ActionResult`. The moved file would import `squadron.pipeline.models`, which loads the whole `squadron.pipeline` package (`pipeline/__init__.py:15-35` pulls in actions, resolver, sdk_session and steps).\n- **T3 (task lines 109\u2013113)** keeps `verification.py:17` `from squadron.pipeline.actions.findings_addressed.screens import RoundDiff`. The task calls this the \"pipeline\u2192review direction\", but a file under `review/addressed/` importing `pipeline.actions` is review\u2192pipeline.\n- **T5** has the same problem: `judge_residue_core(..., diff)` needs `RoundDiff` (judge.py:21).\n\nThis is also a real import cycle. Importing `squadron.review.addressed.verification` loads `screens`. That first runs `pipeline/actions/findings_addressed/__init__.py`, which (until T7) imports `verify_outcomes` back from the half-loaded `review.addressed.verification`. After T7, `review/addressed/__init__.py` exports `verify_outcomes`, so any import of `review.addressed.*` goes round the same loop. T2/T4 won't catch it, because the 305 tests import the pipeline package first. It shows up in file 2 when `review/resolution.py` imports `review.addressed` first.\n\n**Fix:** move the `RoundDiff` dataclass into `review/addressed/` and leave `compute_round_diff` in `screens.py`. Keep `read_findings(ActionResult)` in the pipeline layer, or make it accept a list of finding dicts. Then add a check, for example a test that imports `squadron.review.addressed` in a fresh interpreter and asserts no `squadron.pipeline` module was loaded.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+    },
+    {
+      "severity": "FAIL",
+      "title": "T5's extraction moves the model call out from under the mocks in the 305 tests; T6's \"pass unchanged\" check then fails",
+      "description": "Both `test_findings_addressed_judge.py:32` and `test_findings_addressed_e2e.py:27` patch `\"squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile\"`. T5 (task lines 124\u2013141) moves the `run_review_with_profile` call into `review/addressed/judge.py`. After that, patching the pipeline module no longer intercepts it. Five judge tests (lines 176\u2013248) and three e2e tests (lines 190, 253, 297) would then fail, or try to reach a real provider.\n\nT6 (lines 149\u2013151) says that if any test needs rewriting, \"stop and reconcile with the design\", so following the plan as written stops the work. T1 also already rewrites imports in the four test files (lines 89\u201391), which contradicts the \"unchanged\" wording of T2, T6 and success criterion line 377.\n\n**Fix:**\n- In T5, name the patch-target problem and choose a remedy: either update `_JUDGE_TRANSPORT` in both files (and allow that edit in T6), or have the wrapper pass the model-call function into the core so the existing patch still works.\n- Spell out that import-path and patch-target edits are allowed under \"unchanged\".",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The overwrite guard goes into `save_review_file`, which `sq review code` never calls",
+      "description": "T12 (lines 233\u2013256) puts the archive step only in `save_review_file`. Every CLI review command saves through `save_review_result` instead: `cli/commands/review.py:451, 523, 610, 746` (code review at 746). That function writes directly with `path.write_text` (persistence.py:300, 303) and never calls `save_review_file`. The pipeline review action also uses `save_review_result` whenever `slice_info` exists (`pipeline/actions/review.py:253-263`). It only falls back to `save_review_file` when there is no slice info (lines 264\u2013278).\n\nSo success criteria line 364 (\"Re-running `sq review code <N>` \u2026 archives the prior content\") and line 372 (F003, fail-closed) stay unmet for the path the slice is about. The design text names `save_review_file` too, but the plan has to fit the actual code.\n\nKnock-on effects:\n- `save_review_result` returns `Path` and has no `None` contract, so its four CLI callers need the abort case handled (print the content, exit non-zero). The slice requires \"the review content is still printed to the terminal\" (line 328); T12 doesn't mention it.\n- `tests/cli/test_review_save.py:117-127` (`testsave_review_result_overwrites_existing`) will start producing an archive copy and should be updated to assert it.\n\n**Fix:** put the guard in a shared helper used by both save functions, and test it through `save_review_result`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257-314"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 (cf archive-scanning check) comes after Part D's commit",
+      "description": "The slice requires the cf `archive/` check \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme\" (slice lines 381\u2013383). In the plan, T14 comes after T13, and T13 carries the commit `fix: archive prior review content\u2026` (line 272). The plan relies on a \"don't mark T12 done\" note (lines 253\u2013255, 293\u2013295) instead of the order of tasks. A junior agent working top to bottom will commit Part D before the answer is known. Move T14 ahead of T12 and drop the workaround notes.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The archive path is relative to the process's working directory, and a second archive overwrites the first",
+      "description": "- **Wrong location:** T12 line 236 hard-codes `project-documents/user/reviews/archive/{original filename}`. `save_review_file` resolves its target as `Path(cwd) / _REVIEWS_DIR` (lines 241\u2013245). A literal relative path would land under the process's working directory, not `cwd`. In tests that pass `cwd=tmp_path` (test_persistence.py:235-259), archives would be written into the real repo. Use `path.parent / \"archive\"`.\n- **Second overwrite destroys the first archive:** with the plain original filename, re-review #2 replaces `archive/X.md`, which holds review #1's hand edits. That is exactly the silent loss success criterion line 365 forbids (\"nothing is silently destroyed\").\n  - Add a non-colliding suffix, such as a timestamp or `-a{n}`, chosen to fit T14's outcome.\n  - Add a T13 case that overwrites twice and checks both archived versions survive.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:241-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T5 doesn't account for model resolution needing the template first",
+      "description": "`_resolve_model(context, template.model)` needs the template loaded first (judge.py:106-116). T5 puts template loading inside `judge_residue_core` but has the wrapper resolve the model before calling the core. The wrapper therefore has to load the template too, or the core needs a different signature. T5 should also say what stays in the wrapper:\n- the `if not residue` early return (needed so `test_empty_residue_produces_zero_transport_calls` makes no call);\n- the `ModelResolutionError` \u2192 `JudgeLegResult(failed=True)` mapping.\n\nIt also omits updating `policy.py:13`, which imports `JudgeLegResult` from the pipeline judge module that T5 moves it out of.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:103-119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T10 doesn't say which working directory the SHA comes from, and the pipeline path would stamp twice",
+      "description": "T10 (lines 203\u2013211) calls `run_git([...], cwd=...)` inside `save_review_result`, but that function has no `cwd` parameter. It writes relative to the process's working directory or `reviews_dir`. The pipeline action calls `save_review_result` without passing `context.cwd` (review.py:255-262), while the code review itself runs in `review_cwd` (cli review.py:722).\n\nThe plan should state where the SHA is resolved and whether the signature changes. If it changes, all five callers need updating. T10 should also note that the pipeline action's `slice_info` branch already goes through `save_review_result`. Only the fallback branch (review.py:265-271) needs separate resolution; doing it in both places would resolve HEAD twice and log the warning twice.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257-267"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Too many tasks for the slice's size",
+      "description": "- The slice is rated 3/5 with Part 0 described as \"mechanical\", yet Part 0 takes 8 tasks. Four of them (T2, T4, T6, T8) are run-the-suite steps of effort 1/5, and T7 is a 1/5 export and docstring task.\n- Fold each verification run into its move task (T1+T2, T3+T4, T5+T6), and merge T7 into T8. That gives about 4 Part 0 tasks with the same commits.\n- Across both files the plan has 40 tasks for a 3/5 slice. Trimming Part 0 here is the clearest cut.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T14's first source doesn't exist in this repo",
+      "description": "T14 line 281 says to consult `ai-project-guide/tool-guides/context-forge/`, but nothing matches `**/tool-guides/context-forge/**` in this repo. The fallback (ask the Project Manager) still works. Give the guide's real location, or say it is external.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T8's baseline count can't be checked and doesn't fit that point in the plan",
+      "description": "\"2832 passed, 2 skipped\" (line 179) appears in no 305 document I found. \"Plus this slice's later additions\" doesn't apply at T8, because nothing has been added yet. Use \"same count as recorded before T1\".",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are bullets rather than `**Commit**:` lines; the count wording in the Context Summary is off",
+      "description": "- The commit markers (lines 99, 121, 152, 183, 226, 272) are written as `- Commit:` bullets. They aren't checkboxes, and each sits at a tested point, which is fine.\n- Line 55 says \"Two failure-closed rules covered in this file\" but lists only F003.",
+      "file_ref": null,
+      "category": "formatting",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T9's test comes after T10, not straight after T9",
+      "description": "The unit test for T9 is in T11, after T10. Testing the two together is reasonable, so this is not a defect.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load-test task needed",
+      "description": "The slice states no NFR, so no `tests/load/` task or CI gating task is required.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about the code that check out",
+      "description": "- T1's list of source importers is correct (`__init__`, evidence, judge, parsing, policy, screens, verification).\n- `discover_judge_results` uses the non-recursive glob `*-review.*`.\n- `test_unwritable_reviews_directory_warns_and_returns_none` exists (test_findings_addressed_evidence.py:183).\n- `run_git` exists with signature `run_git(args, *, cwd)`.\n- `JUDGE_BLOCK_PARAM` is pipeline-specific.\n- `format_review_markdown` currently ends its metadata block with `dateUpdated`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/squadron/metrology/discovery.py:46"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every task traces to a success criterion",
+      "description": "- T9\u2013T11 \u2192 criterion line 349.\n- T12/T13 \u2192 lines 364 and 372 (but see the third FAIL above).\n- T1\u2013T8 \u2192 line 377.\n- T14 \u2192 the Phase 5 note.\n- Criteria for Part B and Part C are deferred to file 2, as the file says.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Part 0 relocation adds the review\u2192pipeline import F002 forbids, plus a likely circular import",
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "T5's extraction moves the model call out from under the mocks in the 305 tests; T6's \"pass unchanged\" check then fails",
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The overwrite guard goes into `save_review_file`, which `sq review code` never calls",
+      "location": "src/squadron/review/persistence.py:257-314",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T14 (cf archive-scanning check) comes after Part D's commit",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "The archive path is relative to the process's working directory, and a second archive overwrites the first",
+      "location": "src/squadron/review/persistence.py:241-249",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T5 doesn't account for model resolution needing the template first",
+      "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:103-119",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T10 doesn't say which working directory the SHA comes from, and the pipeline path would stamp twice",
+      "location": "src/squadron/review/persistence.py:257-267",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Too many tasks for the slice's size",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "T14's first source doesn't exist in this repo",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "T8's baseline count can't be checked and doesn't fit that point in the plan",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "formatting",
+      "raw_category": null,
+      "summary": "Commit markers are bullets rather than `**Commit**:` lines; the count wording in the Context Summary is off",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "T9's test comes after T10, not straight after T9",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load-test task needed",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Claims about the code that check out",
+      "location": "src/squadron/metrology/discovery.py:46",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Every task traces to a success criterion",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-22T21:55:47.713430",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "chars": 17119,
+      "sha256": "3e1c22b4339fc986214026a7cb12566c56f6ff59dd2a5ac2241066c8c7468212",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+      "chars": 21813,
+      "sha256": "fb05b28864f3458d760c8eb537e60366fa6b6d0a83a3a1ac418d6c631606f0e6",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/pipeline/actions/findings_addressed/__init__.py",
+    "src/squadron/pipeline/actions/findings_addressed/models.py",
+    "src/squadron/pipeline/actions/findings_addressed/verification.py",
+    "src/squadron/pipeline/actions/findings_addressed/parsing.py",
+    "src/squadron/pipeline/actions/findings_addressed/judge.py",
+    "src/squadron/pipeline/actions/findings_addressed/screens.py",
+    "tests/pipeline/test_findings_addressed_judge.py",
+    "src/squadron/review/persistence.py",
+    "src/squadron/pipeline/actions/review.py",
+    "src/squadron/review/git_utils.py",
+    "tests/cli/test_review_resolve.py",
+    "tests/review/test_persistence.py",
+    "tests/cli/test_review_save.py",
+    "src/squadron/cli/commands/review.py",
+    "src/squadron/metrology/audit.py"
+  ],
+  "searches": [
+    "list_files src/squadron/pipeline/actions/findings_addressed/*.py in .",
+    "list_files tests/**/*findings_addressed* in .",
+    "list_files src/squadron/review/**/*.py in .",
+    "grep ^from|^import in src/squadron/pipeline/actions/findings_addressed",
+    "grep findings_addressed in .",
+    "grep save_review_file|save_review_result|format_review_markdown in src",
+    "grep save_review_result|save_review_file|format_review_markdown|write_text in tests",
+    "grep def test_|save_review_file|dateUpdated|caplog|archive in tests/review/test_persistence.py",
+    "grep def test_|caplog|\\.write_text|reviews_dir in tests/cli/test_review_save.py",
+    "grep def discover_judge_results|glob\\( in src/squadron/metrology",
+    "list_files **/tool-guides/context-forge/** in .",
+    "grep def test_unwritable_reviews_directory_warns_and_returns_none in tests",
+    "grep 2832 in project-documents",
+    "grep records_from_frontmatter|_yaml_safe|safe_dump|RoundDiff|review/addressed|archive in project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+    "grep ^from|^import in src/squadron/pipeline/actions/__init__.py",
+    "grep ^from squadron|^import squadron in src/squadron/pipeline/models.py",
+    "grep ^from|^import in src/squadron/review/__init__.py",
+    "grep import in src/squadron/pipeline/models.py",
+    "grep import in src/squadron/pipeline/__init__.py",
+    "grep assert_called_once_with|assert_called_with|call_args in tests/pipeline/actions/test_review_action.py",
+    "grep not any\\(|caplog.records == \\[\\]|len\\(caplog.records\\)|\"WARNING\" not in|caplog.text == in tests",
+    "grep JudgeLegResult|JUDGE_TEMPLATE_NAME|_render_findings|judge_residue in src tests",
+    "grep JudgeLegResult|JUDGE_TEMPLATE_NAME|_render_findings|judge_residue\\b in .",
+    "grep _JUDGE_TRANSPORT|patch\\( in tests/pipeline/test_findings_addressed_e2e.py"
+  ],
+  "sections_in_document": 6,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 40,
+  "prompt_tokens": 1743695,
+  "cached_tokens": 1657729,
+  "cache_write_tokens": 85916,
+  "completion_tokens": 19455,
+  "reasoning_tokens": null,
+  "duration_seconds": 200.36618033330888,
+  "cost_usd": 1.4099839,
+  "cost_basis": "provider"
+}

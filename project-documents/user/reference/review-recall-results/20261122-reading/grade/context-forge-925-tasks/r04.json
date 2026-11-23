@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Real-git fixture tests are placed in test files that module-mock `fs` and `gitExec`",
+   "description": "- **Tests that can't run where they're placed:** T18 puts its fixture tests in `GuideManager.test.ts` (\"fixture `cloned()`, assert directory populated\"). T12 and T16 add fixture tests next to the existing detector and strategy tests. But `GuideManager.test.ts:7-48` uses hoisted `vi.mock` for `fs`, `gitExec`, `GuideDetector` and `SubmoduleStrategy`. `GuideDetector.test.ts:7-12` and `SubmoduleStrategy.test.ts:5-10` mock `fs` and `gitExec` too. A real temp repo can't work in those files.\n- **Wrong pointer:** the Context Summary (line 50) and T9 (\"extend it rather than duplicating\") say `SubmoduleStrategy.test.ts` already has a real-git temp-repo pattern. It doesn't: no file in `packages/core/tests/guides/` uses `mkdtemp` or real git.\n- **Fix:** name a separate integration test file, e.g. `packages/core/tests/guides/checkout.integration.test.ts`, with no module mocks, for the fixture cases in T12, T16 and T18. Correct the pointer in the Context Summary.\n- **Missing detail in T9:** git 2.38.1 and later refuses local-path submodules unless `protocol.file.allow=always` is set. The fixture's `submodule add`, and the `submodule update --init` inside `SubmoduleStrategy.init()`, will fail with \"transport 'file' not allowed\" unless the test sets it. Because `gitExec` builds on the process environment, the test can set it through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0`. T9 should say so.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-277"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T13/T14 assume a `/timed out/i` network pattern that doesn't exist",
+   "description": "- **The claim:** T13 says \"the `/timed out/i` pattern already matches\", repeating design D10. T14 expects the timeout rejection to contain `GUIDE_OFFLINE_REMEDIATION`.\n- **The code:** `NETWORK_ERROR_PATTERNS` has `/connection timed out/i` and `/etimedout/i`, not `/timed out/i`. A message like \"git command timed out after 60 seconds\" matches neither, so no remediation text is appended and T14 fails.\n- **Fix:** T13 should either word the message to match an existing pattern or add a single `/timed out/i` entry to the list. Adding the entry is one line and matches what the design intends.",
+   "location": "packages/core/src/guides/gitExec.ts:20-30"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T11 makes `detect()` throw on `'error'`, which the design does not specify",
+   "description": "- **The mismatch:** the design's Data Flow throws on `'error'` inside `ensureCheckout()`. T11 instead throws from `GuideDetector.detect()`.\n- **Why it matters:** `detect()` backs read-only commands (`cf guides info`, `guide_status`, setup-ide). With T11, a submodule project on a machine where `git submodule status` fails would break `cf guides info`, which works today. That cuts against the design's \"a user can always inspect first\" mitigation.\n- **Hidden test fallout:** `detect()` gains a new `gitExec` call, but `GuideDetector.test.ts` mocks `gitExec`. Existing submodule-method detect tests will get a mock result they weren't written for, and no task says to update them.\n- **Fix:** have T11 record the error state, or leave `checkout` null with a reason, and keep the throw in T17's `ensureCheckout()`. Add a T12 bullet to adjust the existing mocked detect tests.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-195"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Contradictory rules on where the `manual` literal may appear",
+   "description": "- **Three versions of the rule:**\n  - T1 says `normalizeGuideMethod()` is \"the only place the `manual` alias is spelled in source outside the `ConfigKeys` enum\".\n  - T7's grep allows the MCP zod enum entry and the deprecation-message text.\n  - T32 re-checks the design's stricter \"no `'manual'` outside the alias table and enum\".\n- **Result:** the implementer will get a failing check in T32 for code that T7 told them to write.\n- **Fix:** have T7 build the MCP enum and the deprecation message from `GUIDE_METHOD_DEPRECATED_ALIASES`, so the literal really exists in one place. Or state one allowed list and use it in T1, T7 and T32.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:62-65,143-144,421-423"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T5 doesn't cover the path with no `configManager`",
+   "description": "- **The gap:** `resolveStrategy()` and `resolveSource()` only read config `if (this.configManager)`. When there is no manager they return the literal default.\n- **Why it matters:** T5 says to delete the `'submodule'` literal because \"an unset key already yields the `ConfigKeys` default\". That's only true when a manager exists. A junior implementer will either leave the function with no return or bring back a hidden fallback.\n- **Fix:** T5 should say to read `ConfigKeys['guide.git_strategy'].default` directly in the no-manager branch (D6). T6(a) should cover both \"unset key\" and \"no manager\".",
+   "location": "packages/core/src/guides/GuideManager.ts:170-197"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit points are written inside checkbox items, not as `**Commit**:` lines",
+   "description": "- **The problem:** commit messages are embedded in `[ ] Success criteria:` sub-items. The project convention is to commit only at plain `**Commit**:` lines, and to commit at every top-level task when a file has none. As written, an implementer following the rule would make about 32 commits, not the intended 14.\n- **The points themselves are fine:** every one sits at a tested, green state.\n- **Fix:** move each commit to its own plain `**Commit**: <message>` line after the task.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100,127-128,153-154,204-205,224-225,246-247,276-277,312-313,333-334,342-343,373-374,389-390,412-413"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The config-file deprecation warning is never checked at the CLI",
+   "description": "- **The criterion:** \"shared config has `guide.git_strategy: manual` installs as tarball with the same warning.\"\n- **What's tested:** T6(b) only checks that core reports the alias. T8 and walkthrough step 3 only use the `--strategy` flag. Nothing checks that `guidesInstallAction()` prints the warning on stderr for the config case, which T7's second bullet implements.\n- **Fix:** add one case to T8.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-154"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Some tasks are too small to verify on their own",
+   "description": "- **Broken in between:** T10 can't pass typecheck until T11 (\"typecheck passes once Task 11 populates the field\"). The core test suite is red between T3 and T4.\n- **Suggested merges:**\n  - T10 into T11\n  - T4 into T3\n  - T13 with T14\n  - T28 with T29\n\n  This takes the file from 32 tasks to about 28 and keeps the test-with pattern. The total size is otherwise reasonable for a slice that touches core, CLI and MCP.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:83-100,176-186,207-225,378-390"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "T15's timeout default is ambiguous",
+   "description": "- **The ambiguity:** the first bullet says `init()` always uses `GUIDE_INIT_TIMEOUT_MS`. The second says the timeout is an `init()` option so that `sync()` stays unbounded. It doesn't say whether the timeout is on or off when the option is left out.\n- **Fix:** state it, e.g. \"`init(path, { timeoutMs? })`; `ensureCheckout` passes `GUIDE_INIT_TIMEOUT_MS`, `sync()` passes nothing.\" That keeps the D10 constant at a single call site.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-238"
+  }
+ ]
+}

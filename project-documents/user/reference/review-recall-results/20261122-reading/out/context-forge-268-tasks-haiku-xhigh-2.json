@@ -1,0 +1,518 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "3.2a commit lands on a red suite",
+      "description": "After 3.1 (`SectionBuilder.ts:160-161` stops rendering `Comprehension:`) and 3.2 (`ContextTemplateEngine.ts:112-117` stops rendering Adoption Facts), these assertions still exist and fail: `adoptionBuild.integration.test.ts:99-103` and `:120-124` (brownfield prompt plus `### Adoption Facts`); `pipeline-integration.test.ts:154-173` (probe JSON and the \"Squadron: unavailable\" statement, which come from the facts renderer, `adoptionFacts.ts:81`); and `pipeline-integration.test.ts:177-185` (the `Comprehension:` line). The probe block is deleted at 3.3 (line 107) and `adoptionBuild.integration.test.ts` at 4.1 (line 144). So the 3.2a success check (line 100) is false and the commit is not at a tested point. Delete `adoptionBuild.integration.test.ts` and the probe and comprehension cases in 3.1\u20133.2, or move the 3.2a commit to after 3.3.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99"
+    },
+    {
+      "severity": "FAIL",
+      "title": "3.7 \"all four pass\" is false because an adoption test survives the seam removal",
+      "description": "The file calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`. After 3.3 the factory takes one argument, so the options are ignored at runtime. The resolver is not wired, and the brownfield case in `expectBrownfield` (lines 99\u2013103, used at 120\u2013124) fails. The file is deleted at 4.1 (line 144), after the 3.7 `pnpm -r test` check (line 132). Move that deletion into 3.2 or 3.3.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "3.3 grep check fails on a comment",
+      "description": "Line 9 is a comment mentioning `adoption/`. The 3.3 check `grep -rn \"adoption/\\|detection/\" packages/core/src/services` (line 109) matches it. Step 3.3 removes the import on line 10 but not this comment, so the check prints a line. Name the comment in 3.3.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "4.2 and 4.3 grep checks match leftover test imports that no step deletes",
+      "description": "The 4.2 grep (line 154) matches the `BROWNFIELD_ADOPTION_INSTRUCTION` and `AdoptionResolver` imports at lines 4\u20135. Step 3.3 (line 106) deletes only the cases. The 4.3 grep (line 162) matches the `writeAdoptionState` import at `packages/core/tests/adoption/adoptionState.test.ts:9` after 4.3 deletes the write cases. Name the import removals in 3.3 and 4.3.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:4"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "3.6 leaves `generateContext`'s `options` parameter unnamed",
+      "description": "`generateContext` takes `options?: ContextToolOptions` (line 69), spreads it into `createContextPipeline` (line 100), and forwards it at lines 214 and 281. Removing the type breaks this file, but 3.6 (lines 124\u2013125) names only `adoptionStateWrites` and the `registerContextTools` parameter. The only caller, `packages/mcp-server/src/index.ts:40`, passes no options, so \"update its caller\" (line 125) is a no-op. Name the `generateContext` options removal.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "integrationSetup keeps a `ContextToolOptions` reference that no check sees",
+      "description": "The file imports `ContextToolOptions` (line 9), types `createIntegrationClient(options?: ContextToolOptions)` (line 38), and forwards it (line 41). Step 3.6 (line 126) says only to drop the `squadronProbe` option and its comment. `packages/mcp-server/tsconfig.json:20` includes only `src/**`, so the 3.6 typecheck does not see this file. The 6.2 grep (line 198) scans only `packages/*/src`. A stale `ContextToolOptions` reference therefore survives every check.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Export audit cannot classify live exports and leaves `measureSourceVolume` undecided",
+      "description": "After 4.1, `measureSourceVolume`'s only production caller (`adoptionResolver.ts:61`) is gone. It is not in the design's retained list (`history`, `comprehensionAnalysis`, `adoptionOutcome`), so the 6.2 rule (line 200) would require removing its export. But 4.1 keeps `outOfTreeLinks.test.ts` calling it, and the design's success criterion exempts only the three retained modules. The task does not say whether to remove the export or the function. The rule also cannot classify live exports that the design's consumer list omits: `readAdoptionState` (consumer `introspection/adoptionNavigation.ts:4`), `AdoptionError` (consumers `comprehensionAnalysis.ts:5`, `planningArtifacts.ts:5`, `sourceVolume.ts:8`), and `BROWNFIELD_MIN_SOURCE_LINES` (`sourceVolume.ts:7`). Name the outcome for each.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/detection/index.ts:3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CoreServiceFactory.test.ts has no adoption or options cases to delete",
+      "description": "Step 3.3 (line 106) says to delete \"the options and adoption-wiring cases\" here. The file has none. Its cases cover the factory basics (lines 28\u201366) and permissiveness (70\u2013146). The byte-identical case at 116\u2013133 concerns the permissiveness resolver. A reader could delete permissiveness coverage. Replace the instruction with \"update the `createContextPipeline` calls\".",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts:70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The golden write step is never verified as removed",
+      "description": "If the write step stays in, every run rewrites the same output. The second-run check (line 76) and the `git diff` checks at 133 and 194 then pass, and the test cannot fail. Gate the capture on an explicit env var, or require a grep that finds no write call in the golden test before committing.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The purity mutation check tests the snapshot helper, not production code",
+      "description": "The check adds `writeFileSync` inside the test file. That shows the snapshot assertion works, not that the purity test catches a production write. The design requires failure \"against code that writes state.\" Add the write to production code on the path the test runs (`CoreServiceFactory.ts` or `ContextIntegrator.ts`), confirm the failure, then revert.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The purity test covers two `adoption.state` values, not \"whatever it holds\"",
+      "description": "The design's success criterion (`project-documents/user/slices/268-slice.pure-cf-build.md:189`) says \"whatever `adoption.state` holds.\" Step 5.1 runs only absent and `in_progress`. The old reader rejected out-of-enum values with `AdoptionError` (`adoptionState.ts:17-22`), so an out-of-enum run would show the build no longer reads the key. Add one run with an out-of-enum value.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The walkthrough leaves a project record in the real store",
+      "description": "Step 6.3 runs the design's step 1, which registers the scratch repo with `cf init`. `packages/cli/src/commands/init.ts:125` creates the record through `FileProjectStore`, and nothing in the plan removes it, although `cf project rm` exists (`packages/cli/src/commands/project.ts:652`). Point `CONTEXT_FORGE_DATA_DIR` at a temp dir for the walkthrough, or end with `cf project rm`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes",
+      "description": "The commit steps (lines 79, 101, 134, 148, 155, 163, 169, 186, 206) are checkbox items (\"- [ ] \u2026 Commit\"). The convention is plain `**Commit**:` lines, never checkboxes. Their placement at working points is otherwise fine, apart from 3.2a above.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 3.4\u21923.5 typecheck window is misstated",
+      "description": "Line 87 says only the mcp-server typecheck fails between 3.4 and 3.6. Once core is rebuilt after 3.4, `build.ts:84` passes two arguments to a one-parameter function, so the `cli` typecheck also fails until 3.5.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/build.ts:84"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 3.5 check runs a stale CLI binary",
+      "description": "The second `describe` spawns `packages/cli/dist/index.js`. The 3.5 success check (line 121) therefore tests the pre-change binary until 3.7's `pnpm -r build`. Build before the check.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/cli/tests/integration/build.integration.test.ts:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Keep the guide-warning-on-stderr assertions\" points at no such assertion",
+      "description": "The stderr assertions here (lines 138\u2013141) cover the permissiveness fragment error, not the `MIN_GUIDE_VERSION` warning. The guide-warning test is in `build.test.ts` (line 91), which 6.1 already names. Drop the sentence from 3.5.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/cli/tests/integration/build.integration.test.ts:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"The resolver ... cases\" is ambiguous in ContextIntegrator.test.ts",
+      "description": "Step 3.3 (line 106) says to delete \"the resolver ... cases.\" The file also has integration-branch (265\u2013310) and permissiveness (312\u2013360) describes that inject resolvers. Name the adoption block (365\u2013437) explicitly.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:265"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused imports left in pipeline-integration.test.ts",
+      "description": "`cp`, `mkdir`, `PROMPT_FILE_RELATIVE_PATH`, and `createTestProjectData` are used only inside the probe block that 3.3 deletes (lines 136, 142\u2013145, 179). ESLint ignores tests (`eslint.config.mjs:9`), so no gate fails. Remove them with the block.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/tests/pipeline-integration.test.ts:2"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Golden \"planned at Phase 4\" is not a phase",
+      "description": "`design` is not a phase alias (`projectSchema.ts:61\u201379` maps numbers and slugs), and Case 2 sets no `developmentPhase`. The case is a Design-prompt build, not a Phase 4 build. It also never reaches the resolver's already-planned branch (`adoptionResolver.ts:58\u201359`), which runs only at Phase 0. The design fixes two cases, so this is a coverage observation, not a required change.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73"
+    },
+    {
+      "severity": "PASS",
+      "title": "Existing references check out",
+      "description": "I checked the file, symbol, export-block, and test names the steps cite against the code: the `SectionBuilder` and `EnhancedContextData` fields, the `probeReturning` block, the nine-name export block in `detection/index.ts`, the `ContextToolOptions` and `registerContextTools` signatures, the guide-warning test names, the fixture prompt's `design` key and brownfield text, the `dateProject` fallback (`ContextIntegrator.ts:220`), the `git.integration_branch` key, the package scripts, and the 271 note (`project-documents/user/architecture/260-slices.brownfield-adoption.md:93`). They match.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "3.2a commit lands on a red suite",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "3.7 \"all four pass\" is false because an adoption test survives the seam removal",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "3.3 grep check fails on a comment",
+      "location": "packages/core/src/services/ContextIntegrator.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "4.2 and 4.3 grep checks match leftover test imports that no step deletes",
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:4",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "3.6 leaves `generateContext`'s `options` parameter unnamed",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:69",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "integrationSetup keeps a `ContextToolOptions` reference that no check sees",
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Export audit cannot classify live exports and leaves `measureSourceVolume` undecided",
+      "location": "packages/core/src/detection/index.ts:3",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "CoreServiceFactory.test.ts has no adoption or options cases to delete",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts:70",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The golden write step is never verified as removed",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The purity mutation check tests the snapshot helper, not production code",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The purity test covers two `adoption.state` values, not \"whatever it holds\"",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The walkthrough leaves a project record in the real store",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The 3.4\u21923.5 typecheck window is misstated",
+      "location": "packages/cli/src/commands/build.ts:84",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The 3.5 check runs a stale CLI binary",
+      "location": "packages/cli/tests/integration/build.integration.test.ts:79",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "\"Keep the guide-warning-on-stderr assertions\" points at no such assertion",
+      "location": "packages/cli/tests/integration/build.integration.test.ts:138",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "\"The resolver ... cases\" is ambiguous in ContextIntegrator.test.ts",
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:265",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Unused imports left in pipeline-integration.test.ts",
+      "location": "packages/core/tests/pipeline-integration.test.ts:2",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Golden \"planned at Phase 4\" is not a phase",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Existing references check out",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-22T23:22:54.082903",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 73,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "chars": 20907,
+      "sha256": "b465ca485cca47dd155ecc65bc383271f157b057dab483020ef56fdc20e519de",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/268-slice.pure-cf-build.md",
+      "chars": 20651,
+      "sha256": "a47372ed69ec8d4116c88f57e4a80ef865a186eac0690cd58551ac0489176c1c",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/adoption/contracts.ts",
+    "packages/core/src/adoption/index.ts",
+    "packages/core/src/detection/index.ts",
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/core/src/services/ContextIntegrator.ts",
+    "packages/core/tsconfig.json",
+    "packages/cli/tsconfig.json",
+    "packages/mcp-server/tsconfig.json",
+    "packages/core/tests/adoption/adoptionBuild.integration.test.ts",
+    "packages/core/tests/pipeline-integration.test.ts",
+    "packages/core/tests/services/CoreServiceFactory.test.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/mcp-server/tests/helpers/integrationSetup.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/core/src/adoption/adoptionOutcome.ts",
+    "packages/core/src/adoption/adoptionState.ts",
+    "packages/core/tests/docs-map/outOfTreeLinks.test.ts",
+    "packages/core/src/adoption/adoptionResolver.ts",
+    "packages/core/tests/fixtures/brownfield-guide/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md",
+    "packages/core/src/services/constants.ts",
+    "packages/mcp-server/tests/integration/adoptionParity.test.ts",
+    "packages/core/src/schema/projectSchema.ts",
+    "packages/cli/tests/integration/build.integration.test.ts",
+    "packages/core/vitest.config.ts",
+    "packages/mcp-server/vitest.config.ts",
+    "packages/core/src/services/StatementManager.ts",
+    "project-documents/user/architecture/260-slices.brownfield-adoption.md",
+    "packages/core/src/services/promptFilePath.ts",
+    "eslint.config.mjs"
+  ],
+  "searches": [
+    "list_files packages/*/package.json in .",
+    "list_files packages/core/src/{adoption,detection,services}/**/*.ts in .",
+    "list_files packages/core/tests/{adoption,detection,fixtures,helpers,docs-map}/** in .",
+    "list_files packages/{cli,mcp-server}/tests/**/*.ts in .",
+    "grep \"(name|typecheck|lint|test|build)\": in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks",
+    "grep SquadronProbe|squadronProbe|ProbeOutcome|ProbeRun|ProbeUnavailableReason|classifyProbeRun|SUPPORTED_PROBE_VERSION|SQUADRON_PROBE|runSquadronProbe in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep AdoptionSelection|AdoptionResolver|BROWNFIELD_ADOPTION_INSTRUCTION|createAdoptionResolver|resolveAdoptionFn|adoptionStateWrites|ContextToolOptions|squadronProbe in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep writeAdoptionState|adoption-completed|adoptionFacts|AdoptionFacts|buildAdoptionFacts|fileComprehension|adoptionCompletion|completeAdoption|readAdoptionState in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep adoption|detection|Adoption|Comprehension|squadron|Squadron|BROWNFIELD|MIN_SOURCE in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/node.ts",
+    "grep adoption/|detection/|from '\\.\\./(adoption|detection) in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src",
+    "grep Adoption Facts|Comprehension:|adoptionStateWrites|new ContextIntegrator\\(|BROWNFIELD_MIN_SOURCE_LINES|CONCEPT_PHASE|dateProject in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "list_files packages/core/{tsconfig*.json,vitest.config.*} in .",
+    "grep Adoption Facts|Comprehension:|BROWNFIELD_MIN_SOURCE_LINES|CONCEPT_PHASE|new ContextIntegrator\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep ^\\s*(describe|it|it\\.each|test)\\(|adoption|Adoption|squadron|Squadron|probe|guideWarning|guide-minimum|stderr in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/mcp-server/tests/contextTools.test.ts",
+    "grep ^\\s*(describe|it|it\\.each|test)\\(|adoption|Adoption|squadron|probe|writes the warning|stderr in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/cli/tests/commands/build.test.ts",
+    "grep registerContextTools|createIntegrationClient\\(|generateContext\\(|ContextToolOptions in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep ^import|from ' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/tests/helpers/adoptionFixtures.ts",
+    "grep We are adopting|Write the concept|Design the architecture|brownfield-adoption|^\\s*design\\b|^\\s*implementation:|^\\s*concept|PROMPT_FILE_RELATIVE_PATH = in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core",
+    "grep new Date|toISOString|dateProject|getToday|today in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src",
+    "grep ensureCheckout|async ensure|submodule|git clone|writeFile|mkdir in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/guides",
+    "grep PHASE_STRINGS|export function resolvePhaseValue|export const TASK_BREAKDOWN_PHASE|ADOPTION_STATES =|export async function measureSourceVolume|export async function findPlanningArtifacts|export function findPlanningArtifacts|export async function findPlanningArtifacts|createBrownfieldCheckout|BROWNFI\u2026 in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep integration_branch|adoption\\.state|'adoption' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/config/ConfigKeys.ts",
+    "list_files packages/{core,mcp-server,cli}/vitest.config.ts in .",
+    "grep design|Design|exclude|include: in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/schema/projectSchema.ts",
+    "grep warning|Warning|stderr|guide|Guide|adoption|brownfield in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/cli/tests/integration/build.integration.test.ts",
+    "grep writeFile|writeFileSync|mkdirSync|mkdir\\(|appendFile|createWriteStream|\\.set\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/services",
+    "grep measureSourceVolume|findPlanningArtifacts|decideOutcome|readHistory|findComprehensionAnalysis in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep writeFile|writeFileSync|mkdirSync|mkdir\\(|\\.set\\(|async get\\(|ensureCheckout in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src/config/ConfigManager.ts",
+    "grep StatementManager|getStatements|ensureStatement|loadStatements|statementManager\\. in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/src",
+    "grep createContextPipeline|squadronProbe|writeAdoptionState|resolveAdoptionFn|adoptionStateWrites|SQUADRON_PROBE|runSquadronProbe|ContextToolOptions in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks",
+    "list_files **/file-naming-conventions.md in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks",
+    "list_files project-documents/user/{architecture,slices,tasks}/*{brownfield,271,268,pure-cf}*.md in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks",
+    "grep 271|probe|Probe|268 in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/project-documents/user/architecture/260-slices.brownfield-adoption.md",
+    "grep ^\\s*(describe|it|it\\.each)\\(|AdoptionError|resolver|rethrow in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/tests/services/ContextIntegrator.test.ts",
+    "grep ^\\s*(describe|it|it\\.each)\\(|adoption|Adoption|Comprehension|fileComprehension in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/tests/services/ContextTemplateEngine.test.ts",
+    "list_files packages/cli/src/commands/{init,config}.ts in .",
+    "list_files eslint.config.* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks",
+    "grep \\b(cp|mkdir|PROMPT_FILE_RELATIVE_PATH|createTestProjectData|dirname|writeFile|readFileSync|mkdtemp)\\b in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/tests/pipeline-integration.test.ts",
+    "grep writeAdoptionState|readAdoptionState in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/core/tests/adoption/adoptionState.test.ts",
+    "grep readAdoptionState|AdoptionError|ADOPTION_STATES|measureSourceVolume|BROWNFIELD_MIN_SOURCE_LINES|decideOutcome|findPlanningArtifacts|COMPOSITE_RULE_FILES|RULE_FILE_PATHS in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages",
+    "grep FileProjectStore|store\\.create|\\.create\\(|projects\\.json|CONTEXT_FORGE_DATA_DIR in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/cli/src/commands/init.ts",
+    "grep \\.command\\('(delete|remove|rm)'\\)|command\\('project' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/cli/src",
+    "grep delete|remove in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-268-tasks/packages/cli/src/commands/project.ts"
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 20,
+    "in_fences": 0,
+    "in_section": 20,
+    "surviving": 20
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 74,
+  "prompt_tokens": 5013681,
+  "cached_tokens": 4749225,
+  "cache_write_tokens": 264396,
+  "completion_tokens": 176829,
+  "reasoning_tokens": null,
+  "duration_seconds": 722.7818635827862,
+  "cost_usd": 0.7885857900000001,
+  "cost_basis": "provider"
+}

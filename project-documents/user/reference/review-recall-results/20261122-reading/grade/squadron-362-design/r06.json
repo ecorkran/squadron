@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "File-level selector drops the architecture's allow-list and contradicts itself",
+   "description": "Line 151 says the selector \"becomes an explicit type allow-list\". Lines 155-158 then define an exclusion filter, `select(.type != \"function\" and .type != \"class\")`, and say it is \"stated as an exclusion rather than an allow-list deliberately\".\n\nThe architecture (`360-arch.document-intelligence.md:107-110`) defines read discipline by an allow-list of nine file-level types. Only those types are read. With an exclusion filter, any new sub-file node type in a future upstream release (method, interface, variable, and so on) is read automatically. That is exactly the context blow-up the discipline exists to prevent.\n\nThe drift guard does not cover this. It only flags a surviving node that has no `filePath`, and a symbol-level node would normally have one. The 361 design also specified an allow-list (`361-slice...md:108`, `select(.type == \"file\" or ...)`). So the defect to fix is the 361 implementation collapsing the list to `type == \"file\"`, not the allow-list itself.\n\n**Fix:** restore the nine-type allow-list from the architecture. Report any node type outside both the allow-list and the `{function, class}` exclusion as upstream drift. That gets the \"new file-level type\" visibility the design wants without silently widening reads. All 238 nodes in this repo are `file`/`config`/`pipeline`, so success criterion 5 still yields 238.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dependency observations resolve function/class endpoints, contradicting the read discipline and criterion 9",
+   "description": "Section 6 says \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts\". This conflicts with three things:\n\n1. **Architecture:** \"function- and class-level nodes are not read\" (`360-arch...md:109-110`).\n2. **This slice's success criterion 9 (line 332-333):** \"no function- or class-level node is read\". Walkthrough step 7 (line 423-424) repeats this.\n3. **The same paragraph and the mapping table (row 6, line 179):** both limit inter-layer analysis to `imports` and `depends_on`. Adding `calls` edges changes that scope without saying so.\n\nThe design also doesn't say how an endpoint gets resolved. Reading the function node's `filePath` would violate the discipline. Following `contains` edges is a new traversal. Parsing the type-prefixed `id` treats ID formatting as logical structure and breaks on paths that contain `:`.\n\n**Fix (preferred):** drop the sentence and keep inter-layer counting at file-level endpoints for `imports` and `depends_on`, as 361 defined.\n**Fix (alternative):** if `calls` signal is wanted, name the resolution mechanism, show that it reads no function or class node fields, and change criterion 9 to match.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `[INFERRED]` \"closing observation\" exception is a loophole, and its sample sentence fails its own test",
+   "description": "The design allows each section a closing sentence that \"reads a pattern out of the data\". It gives this sample: \"complexity concentrates in the seams where squadron meets an external SDK\". That sentence cannot be derived from a complexity/layer table. \"Seams\" and \"external SDK\" are interpretations that no named graph field supplies. So the design's own sample fails the \"derivable from the table directly above it\" test.\n\nThe architecture's goal is \"Never fabricate intent\". The project's hallucination-trap rule in `CLAUDE.md` also applies: a concrete sample claim placed next to the instruction is likely to be copied into the skill text and reproduced in generated documents.\n\n**Fix:** either drop the closing-observation allowance, or make it mechanical. For example, a closing sentence may only restate an aggregate already shown (\"N of M `complex` files are in layer X\"). Remove the interpretive sample sentence.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`.understandignore` handling contradicts the measured state and leaves the absent case undefined",
+   "description": "Line 234-235 says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\". The verified-facts table (line 108) records 17 **active, uncommented** lines, so this repo's file is not all-comments. The parenthetical could lead an implementer to output \"defaults only\" for squadron's own run, which would contradict walkthrough step 4's pattern-count spot-check.\n\nSeparately, mapping row 7 (line 180) gives \"`[GAP: ...]` naming the unreadable file\" as the only fallback. The architecture lists `.understandignore` as optional (\"squadron *may* reference it\", `360-arch...md:89`), so the design doesn't say whether a missing file is a gap or \"defaults only\".\n\n**Fix:**\n- Correct the parenthetical.\n- State that an absent `.understandignore` means \"defaults only\" and is not a gap.\n- Keep `[GAP: ...]` for a file that exists but can't be read.\n- Apply the same distinction to `config.json`: absent means nothing to report, unparseable means a gap.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Interfaces table declares fields the mapping never uses",
+   "description": "- `edges[].direction` is listed for \"Dependency ordering\", but mapping row 6 (line 179) orders by count and then `weight`, and never uses `direction`.\n- `nodes[].tags` is listed for \"section grouping\", but only the entry-points section uses tags.\n\nRemove both, or show where they are used, so the table matches the binding mapping.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:83-85"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Weight tie-break is under-specified for aggregated edges",
+   "description": "The ordering rule is \"descending count, ties by `weight`\", but each inter-layer pair groups many edges. The design doesn't say whether to use the sum, the maximum, or the mean of their weights. Name one, or the output won't be reproducible from run to run.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:179"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Unchanged\" wording for `analyze-codebase-prompt.md` contradicts the added line",
+   "description": "Line 277 says the document \"stays in `user/reference/` unchanged, as the architecture requires\". The next sentence adds a cross-reference line to it. The architecture only requires that the document be retained and not superseded, so a pointer line is fine. Reword to \"retained; gains only a cross-reference line\" so it matches success criterion 7.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Gap-marker walkthrough doesn't say how the tampered graphs get read",
+   "description": "The scratch steps create `kg-empty-tour.json` and `kg-no-entrypoints.json`. The skill only reads `knowledge-graph.json`, and `$S` is never defined. Add a step that copies each variant over `knowledge-graph.json` in the scratch root before the run. Alternatively, explicitly reference the 361 walkthrough step that does this.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-411"
+  }
+ ]
+}

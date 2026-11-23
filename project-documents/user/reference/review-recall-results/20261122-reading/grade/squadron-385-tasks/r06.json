@@ -1,0 +1,110 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2.2's real-file fixture cannot pass as written",
+   "description": "Task 2.2 (lines 67\u201368) requires a real task file with \"both groups non-empty\". The named fallback, `384-tasks.post-findings-to-the-pr.md`, has 166 checkbox lines and none unchecked. The `unchecked` group is therefore empty and the assertion fails. The same applies to this file once Task 16.4 checks every box. The primary option, \"this file once it exists\", changes state with every task completion, so the test would pass or fail depending on progress. Pin a fixture with mixed state, either a committed copy under `tests/pr/` or a task file known to be mixed. Keep the \"counts sum to the checkbox count\" assertion, which is state-independent.",
+   "location": "project-documents/user/tasks/384-tasks.post-findings-to-the-pr.md"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\"How it was verified\" and \"known gaps\" have no defined output when only one group is empty",
+   "description": "D4 gives both sections one no-input line, \"No task records for this branch.\" Tasks 9.2, 11.1 and 11.2 only test the case where both tuples are empty. A task file with every item checked is the normal state of a PR at slice completion. It yields an empty `unchecked`, so \"known gaps\" has no input but task records exist. That leaves two outcomes, and both are wrong:\n- Emit the no-input line. It is false, because task records exist.\n- Emit nothing. The Task 12 presence check then fails (\"section contains only whitespace\" fails), so the PR is refused.\n\nThe reverse case, all unchecked, has the same problem for \"verified\". Task 11 must define a truthful empty-group line, for example \"No unchecked items\", and test the all-checked and all-unchecked files. Task 12 must accept it as a no-input line.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:253-270"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The import-boundary edit as described would break existing tests",
+   "description": "Task 15.1 adds `pr/` to the review ban. The existing walker uses `imported.startswith(forbidden)`. Adding `\"squadron.pr\"` to `_FORBIDDEN_FROM_REVIEW` would match `squadron.providers`, which `review/persistence.py:16` imports, and also `squadron.pipeline`. Every parametrized `test_review_does_not_import_codehost` case for those files would fail. The task must specify a separate check with exact or dotted matching (`== \"squadron.pr\"` or `startswith(\"squadron.pr.\")`). It must also keep the `pr_comment.py` carve-out unchanged.",
+   "location": "tests/codehost/test_import_boundaries.py:74-87"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Refusal exception types are unnamed and the command catches only `CodeHostError`",
+   "description": "Several tasks say \"raise\" without naming a type:\n- Task 3.1: detached HEAD and git failures.\n- Task 5.1: the base refusal.\n- Task 6.1: the missing and behind refusals.\n- Task 12.1: the presence check.\n- Task 10.1: the composer failure, which \"becomes a non-zero exit\".\n\nTask 13.1 and Task 14 specify the exit-1 handling only for `CodeHostError`. `git_utils` is in `review/` and cannot import `codehost`, so `current_branch` cannot reuse `TargetUnresolvableError` even though 3.1 says to match `_branch_for`. Without defined types, a junior will leave plain exceptions that escape as tracebacks. Task 5's refusal is not covered by any 13.2 case either. Define the exception types, one handler in Task 13 that maps them to a rendered message and exit 1, and a command-level test for each (base refusal, push refusal, detached HEAD).",
+   "location": "src/squadron/cli/commands/pr.py:89-95"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `ls-remote` read does not raise `CodeHostError`, so Task 14's \"same pattern\" claim is wrong",
+   "description": "`list_remotes` calls `runner.run(..., timeout=GIT_QUERY_TIMEOUT_SECONDS)`. The runner raises `ProcessTimedOutError` unwrapped. Only `GitHubCli._run_gh` converts it to `HostCommandTimeoutError`. Task 6.1 reads `ls-remote` through the runner seam, so a timeout raises `ProcessTimedOutError` and a non-zero exit (auth, unreachable) returns a `ProcessResult`. Neither is a `CodeHostError`. Task 14.1 says \"Every one of the five uses the `except CodeHostError` pattern\", which the `ls-remote` site cannot satisfy. Task 6.1 does not say what to do with a non-zero `ls-remote` exit, an empty stdout, or a timeout. The same unwrapped `ProcessTimedOutError` can come from `resolve_locator`'s `list_remotes`. Specify wrapping the `ls-remote` call into a typed error and handling its non-zero exit. State whether the `resolve_locator` timeout is in scope for the matrix.",
+   "location": "src/squadron/codehost/remotes.py:63-76"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Local HEAD sha has no producer",
+   "description": "`check_head_pushed(..., local_sha: str, ...)` needs the local head sha for the behind check. Task 3 adds only `current_branch` and `commits_in_range`. Task 13 never obtains the sha. `git_utils._resolve_rev` is private and returns `None` on failure. Nothing handles the failed case, which would otherwise be a refusal or a crash. Add a helper (or an explicit use of `resolve_reviewed_sha`/`_resolve_rev`) with the failure behavior stated.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The \"empty range is impossible\" claim is unverified and the title fallback depends on it",
+   "description": "Task 7.1 states that an empty range is impossible. A head already contained in the base, or `--base` equal to head, produces `[]`. Task 3.2 already tests `[]`. A missing local `base` ref also makes `git log base..head` exit non-zero. The base is confirmed on the host, not locally, and may be stale or absent locally. Task 10a's \"first commit's subject\" fallback would then raise `IndexError`. \"First\" is also ambiguous, because `commits_in_range` is newest-first and the fallback would pick the newest, often a fixup. Define the empty-range behavior (a refusal before the model call is natural, since GitHub would 422 with \"no commits between\"). Define the unreachable-local-base behavior and which commit \"first\" means.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Prompt construction and model call count are owned by no task",
+   "description": "Task 10 builds a prompt-in/text-out composer. Task 11 writes `compose_body(facts, *, composer)`. Neither says what prompt is built, whether there is one call or one per section, or how prose is mapped to sections. D4 says \"requests prose per section\", but 11.2 tests \"a model response containing its own `##` headings\", which implies one parsed response. The call count drives token cost, and Task 12 forbids retry precisely because of that cost. A junior has no basis for choosing. State the strategy, who writes the facts-only prompt, and the system prompt. Also state that the composer is async (`create_agent` and `handle_message` are awaited, as in `review_client.py:224`) and who runs the event loop in the sync Typer command.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:211-270"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The title resolver has no signature and its H1 input is not gathered",
+   "description": "Task 10a needs the design's H1. Task 7 gathers the design path only. Task 9's `PrFacts` carries \"slice design path\" only, with \"every field copied\". Nothing reads the design file or extracts the H1. Task 10a also has no signature for `resolve_title`. State where the file is read and what `PrInputs`/`PrFacts` carry, and what happens when the design file is unreadable.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:237-244"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Slice artifact resolution omits path joining and multiple task files",
+   "description": "`SliceInfo[\"task_files\"]` holds bare filenames that must be joined with `TASKS_DIR` (the module's own comment says so). Task 7.1 says only \"read the first task file\". `design_file` is also a `str | None`. `task_files` is a list, and silently reading only the first would drop the rest, which is the \"assert nothing an input does not support\" violation the plan cites. `resolve_slice_info` raises `ValueError` for an unknown slice, and the `cf` client raises `ContextForgeError`/`ContextForgeNotAvailable`. Task 7.1 says \"degrades\" without naming those types, while the plan states narrower handlers name their types. Specify the path join relative to the repo root, the multi-file behavior, and the three exception types.",
+   "location": "src/squadron/review/persistence.py:32-48"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Review-directory enumeration contradicts `resolve_reviews_dir`",
+   "description": "Task 8.1 says to enumerate \"both the project's and \u2026 the configured external directory\", reusing `resolve_reviews_dir`. That function returns one directory plus a rule, by precedence. It requires `flag`, `host`, `owner` and `repository` arguments, which the task does not mention. `sq pr create` has no `--reviews-dir`, so `flag=None`, and the locator supplies the other three. Say explicitly that one directory is scanned, or that a second call is made for the other. The test at 8.2 (\"external directory is used when no `project-documents/`\") matches the one-directory reading, so the \"both\" wording is wrong.",
+   "location": "src/squadron/review/reviews_dir.py:56-93"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The failure matrix needs distinct scenarios, and the failure handling is specified only in a test task",
+   "description": "`branch_exists` is called twice, for head and for the base confirmation, with different outcomes. `default_branch` runs only when no integration branch is set, and the base `branch_exists` only when one is set. A \"five call sites \u00d7 two failures\" parametrization therefore needs two different config setups, and the plan should say so. The `CodeHostError` \u2192 `render_code_host_error` \u2192 `Exit(1)` wrapping is an implementation requirement stated only in Task 14. Task 13.1 should carry it, since a junior implementing Task 13 first would not wrap. Asserting the four `gh` calls carry `HOST_COMMAND_TIMEOUT_SECONDS` re-tests adapter behavior 381 already owns.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:315-325"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The live verification leaves state behind, and its push order is unplanned",
+   "description": "Task 16.2's walkthrough:\n- Changes `git.integration_branch` (step 2).\n- Creates and pushes a scratch branch `385-scratch` (step 3).\n- Creates a real PR (step 5).\n\nOnly the config restore is listed. If the run is interrupted between the `set` calls, the config is left pointing at `dev/does-not-exist`. Add a restore-first check, deletion of the scratch branch locally and on the remote, and a statement on the fate of the live PR. The slice branch must also be pushed and in sync before step 1 (the behind check would otherwise refuse). Any commit made after that point, such as the 16.3 walkthrough rewrite, makes it fail the behind check again. Sequence these explicitly.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:354-359"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "`--profile`/`--model` defaults are unspecified, and `tests/pr/` lacks `__init__.py`",
+   "description": "Task 13.1 lists the flags but not their defaults. `review_pr.py:290-300` uses `str | None` with `None`, while Task 10.1 says the composer takes `profile: str`. The `None` default must be resolved somewhere. `tests/cli`, `tests/review` and `tests/codehost` all have `__init__.py`. Task 1.2 creates `tests/pr/` without one, which risks module-name collisions for basenames like `test_inputs.py` and `test_body.py`. State both.",
+   "location": "tests/cli/__init__.py"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Proportionality: Tasks 4, 9 and 15.2 are small enough to merge",
+   "description": "Task 9 is a pass-through dataclass copy with a one-effort test. It could merge into Task 7 or Task 11. Task 4.2 largely restates 4.1's \"existing tests pass unchanged\". Task 15.2's docstring test is required by the slice's technical criteria, so it stays. None of this is blocking. The sequencing is otherwise sound: tests follow implementations, there are no circular dependencies, and no commit markers is acceptable.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

@@ -1,0 +1,34 @@
+{
+ "case": "squadron-380-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so\" (line 175). `review/rules.py:resolve_rules_dir` at `76bd0251^` resolves CLI flag, config, `{cwd}/rules/`, `{cwd}/.claude/rules/`, then `~/.config/squadron/rules/`, so a review in an unplanned repository can load rules from the repo or the user directory, silently. **VALID** (minor): contradicts code. Needs: code. Raised by the original review (F012). The response changed the doc to \"reported, not suppressed\".",
+   "hits": {
+    "r01": [],
+    "r02": [
+     3
+    ],
+    "r03": [],
+    "r04": [
+     1
+    ],
+    "r05": [
+     13
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     3
+    ],
+    "r08": [
+     2
+    ],
+    "r09": [],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F1 r06 i1 borderline: says that resolving rules against the scratch tree would load the PR author's rules, contradicting the 'template's rules only' degradation for unplanned repos, but it frames this as a conditional trust-root issue and does not cite the actual cwd/user-dir fallback chain; counted. Not counted: r09 i0 and r02/r03 i0 (PR-head rules as injection channel, not tied to the unplanned-repo claim) and r10 i12 (degradation underspecified, but does not say repo or user rules load)."
+}

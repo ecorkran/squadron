@@ -1,0 +1,110 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Required `SimulationConfig.environment` field breaks the existing server tests",
+   "description": "The design adds `environment: EnvironmentConfig` to the frozen `SimulationConfig` with no default. Today `SimulationConfig` is built directly in three places: `tests/test_server.py:44`, `tests/test_server.py:209` and `tests/test_server.py:328`. Those calls pass only `tick_rate`, `world_bounds`, `entity_capacity`, `profiles` and `populations`. With the design's field they all raise `TypeError` (missing `environment`), so every server lifecycle, entity, simulation-manager and WebSocket integration test fails.\n\nThis contradicts two of the design's own requirements: \"All existing tests continue to pass\" (line 354) and \"existing tests \u2026 continue to work without modification\" (line 410). Fix: declare the field with a default, e.g. `environment: EnvironmentConfig = field(default_factory=EnvironmentConfig)`. This works because it is the last field. Alternatively, list the three fixtures under the test changes.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:236-245"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `step()` in Implementation Details skips `post_tick` when there are no entities, contradicting the stated rule",
+   "description": "The Technical Decisions version (lines 176-191) runs `post_tick()` no matter how many entities there are. The Implementation Details version (lines 276-277) does `if self._entity_manager.count == 0: return` *before* `post_tick()`, so with zero entities `post_tick` never runs.\n\nThe note right below it (line 291) and Special Considerations (line 408) both say the early return \"wraps only `engine.tick()`\". The snippet an implementer is most likely to copy does the opposite. Also, no listed test catches it: line 355 names \"tick ordering verification\" but no zero-entity `post_tick` case. Make the Implementation Details snippet match lines 180-190, and add a zero-entity lifecycle test.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Layers plug in without server changes\" / \"layers register themselves\" is false for the existing `Environment`",
+   "description": "`Environment` has no registration method. Layers are fixed at construction through `Environment(bounds, layers)` (`src/migratory/environment/container.py:24-30`). This is deliberate: 500-arch line 62 says \"does not provide a dynamic layer registry \u2026 Layers are statically composed\". The design builds `Environment(bounds=world_bounds, layers={})` from an inline literal (line 303), so nothing else can reach that dict.\n\nTwo claims are therefore wrong: \"when layers arrive they plug in without server changes\" (line 19) and \"layers register themselves\" (line 329). Every layer slice will have to edit `Server.run()` to build layers and pass them in. Either say that the layer-construction site in `server.py` is the extension point 501-507 will change, or add a small server-side factory (driven by `EnvironmentConfig`) that layer slices extend.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:19"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No data path for post-tick writes; `post_tick()` is always called with no arguments",
+   "description": "The slice plan entry (300-slices line 27) gives this slice \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\". 500-arch line 137 says 304 \"calls `post_tick()` with agent-originated writes\".\n\nThe existing signature is `post_tick(trail_deposits=None, threat_mutations=None)` (`container.py:88-92`). The design always calls `post_tick()` with no arguments (lines 105, 190, 288). It never says where `trail_deposits`/`threat_mutations` come from: `engine.tick()` returns `None` (`src/migratory/engine/tick.py:20`), and `BulkForce` returns only an N\u00d72 force array. Line 196 claims \"agent-originated writes (trails, threats) apply after evaluation\", but nothing carries them.\n\nFill the gap with one of these:\n- Define the collection point now, e.g. `step()` gathers deposits/mutations from a named source (a collector that forces write into) and forwards them.\n- Explicitly hand this item to 505/506 or a behavior-engine slice, and update the slice plan.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:189-196"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Environment context is not passed to `engine.tick()`; the change from the plan and the 500 contract is not recorded",
+   "description": "The slice plan (line 27) says \"Pass environment context to `SimulationManager` and `engine.tick()`\". The 300-arch tick cycle step 3 says \"Pass current entity state and environment context to the behavior engine\". The 500 slice says the Environment is \"the composed object the world server holds and passes to `engine.tick()`\" (500-slice lines 410, 422).\n\nThe design instead injects the environment into force constructors and leaves `engine.tick()` unchanged. That is a reasonable, lighter choice, but the design never says it departs from those three documents. It still claims \"After this, the tick cycle matches the architecture\" (line 23). Add a short statement that constructor injection replaces the `engine.tick()` parameter, and list the 300-slices and 500 docs that need updating, so slices 100+ and 501+ don't build against the old contract.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Environment Access for Forces"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The `environment` property's stated purpose is circular; the claim of no None-checks contradicts the code shown",
+   "description": "The design says the `SimulationManager.environment` property exists \"so that force construction code in `server.py` can pass it to environment-aware forces\". But:\n- `SimulationManager` takes `forces` as a constructor argument (`simulation.py:39-51`) and has no way to add forces later. Environment-aware forces must exist *before* `SimulationManager` is built.\n- `server.py` already holds the local `environment` at that point (line 303).\n\nSo the property cannot serve its stated purpose. Either cut that rationale and keep the property only for test access, or say forces are built from the local variable.\n\nSeparately, line 220 says always creating the environment \"avoids `if environment is not None:` checks\", yet the design adds two of those checks to `step()` (lines 273, 287). Either drop the \"avoids checks\" rationale or make `environment` required and fix the tests.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:216"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`_seasonal_parameter` attribute is never used, and 0.0 is mislabelled \"mid-season\"",
+   "description": "State Management adds `_seasonal_parameter: float` to `SimulationManager`. But `step()` takes `seasonal_parameter` as an argument (lines 176, 272), and nothing reads or writes the attribute. Cut it, since slice 308 supplies the value through `step()` (line 198).\n\nLine 198 also calls 0.0 a \"mid-season\" environment. On the [0, 1] cycle that `pre_tick` enforces (`container.py:81`), 0.0 is the cycle start. Either use 0.5 if mid-season is the intent, or correct the wording.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "An empty environment does not always return zeros, and its bounds are not shared with the entity manager",
+   "description": "Line 113 says `WorldBounds` is \"shared with entity manager\". In fact `EntityManager` stores a `WorldBoundsConfig` (`src/migratory_server/entities.py:23-27`) and never sees `WorldBounds`.\n\nLine 151 says \"all queries return zero-filled arrays\". But `Environment.query()` raises `ValueError` for any out-of-bounds position, even with no layers (`container.py:54-56`). Nothing keeps entities inside the world: `integrate()` adds `velocity*dt` with no clamp or wrap (`src/migratory/engine/integration.py:42-44`). The design's own force pattern, `self._environment.query(state.positions)` (line 211), will therefore crash the tick as soon as any entity drifts past 0 or width/height.\n\nCorrect both claims. Also record that boundary enforcement is a prerequisite for environment-aware forces, and name the slice that owns it (300-arch line 88 lists \"boundary-driven\" events as future).",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:113"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No failure handling for the new per-tick environment calls",
+   "description": "Several failures on this new path are possible and not handled:\n- `pre_tick` raises `ValueError` for an out-of-range `seasonal_parameter` (`container.py:81-84`).\n- `post_tick` routes to layer methods that raise on out-of-bounds deposits (500-arch line 66).\n- `query` raises on out-of-bounds positions.\n\nThe design names none of these. As the code stands, an exception in `tick_body` passes uncaught through `TickLoop.run()` (`src/migratory_server/tick.py:64`, no try) and out of `Server.run()`. That skips `client_manager.close_all()` and `_shutdown()` (`src/migratory_server/server.py:133-134`, no try/finally), which breaks 300-arch's \"Explicit lifecycle \u2026 No silent failures, no undefined states\" (line 45).\n\nPartial sequences are also unhandled: if `pre_tick` has already advanced layer state and `engine.tick` raises, `post_tick` never runs, and the design says nothing about whether the environment is then still consistent. State the policy (fail fast is consistent with 500's \"programming errors\" stance). Also state that shutdown still runs through a try/finally in `Server.run()`, and what a half-finished tick means for environment state.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager as Simulation Orchestrator"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Slice-plan config scope dropped: grid resolution and layer selection",
+   "description": "The slice plan entry (line 27) gives this slice \"Server-side environment configuration (seed, grid resolution, layer selection) in YAML\". The design delivers `seed` only, and defers grid resolution and layer selection \"until layers exist\" (lines 48, 153). The reasoning is sound for an empty environment. But this is assigned scope being dropped, and the design doesn't name who takes it over (501-507? 507?). Name the owning slice and update the 300 slice plan entry.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:48"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Terrain summary in snapshots, which 305 handed to 304, is moved to unnamed \"future work\"",
+   "description": "Slice plan line 29 (305) says \"Terrain summary in snapshots deferred to (304) Environment Layer Integration\". The design excludes \"Environment data in client snapshots/broadcasts \u2014 deferred to future work\". That leaves a deferred item with no owner. With no terrain layer, a summary can't be produced yet, which justifies deferring it. But name the slice that owns it (e.g. 501 or a later 300-band slice) and update the plan.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Conflicts with the 500 plan's ordering rule: 507 must be stable before 304 integrates",
+   "description": "500-slices line 41 says the environment specification (507) \"must be stable before world server slice 304 integrates\". Line 38 requires the constructor, query and post-tick contract to be stable by then. The design excludes 507 (\"deferred until layers exist\") and lists only 303 and 500 as prerequisites (line 6), without addressing that rule. Either explain why 304 can go ahead now (e.g. this slice does only the lifecycle wiring, and spec loading moves to a follow-up), or add the dependency. Then update whichever plan changes.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:44"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Two verification steps cannot show what they claim",
+   "description": "- Step 2 runs `--config config/default.yaml` to show the environment section is optional. But development step 1 (line 399) *adds* `environment:` to `default.yaml`, so this run never exercises the case where the section is missing. Point it at a config without the section, e.g. the existing `config/no-populations.yaml` or a new fixture.\n- Step 3 expects \"Server loads environment config with seed 12345\". But the seed is never used, and nothing logs it: the startup log in `src/migratory_server/__main__.py:34-43` has no seed field. The YAML is also only a fragment, not a loadable file. Either add the seed to the \"Configuration loaded\" log line, or make this a config unit test.\n- Step 4 says entity movement tests \"pass unchanged\", but line 407 says every `step()` call in `tests/test_simulation.py` (10 calls) must change.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-382"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Tick-budget target not restated for a change on the tick path",
+   "description": "The parent architecture puts the tick loop at target rates of 20\u201360 Hz, a 16.7\u201350 ms budget (300-arch line 78), with overrun as the measured failure. This slice adds two calls to every tick on that path. Restate the budget, and add a criterion that the empty environment adds negligible time per tick, with no new overruns at the default 20 Hz with 100 entities. That gives layer slices a baseline.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Success Criteria"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Negative seeds pass validation",
+   "description": "Validation only checks that `seed` is an int. `np.random.default_rng(-1)` raises `ValueError`. So a negative seed passes startup validation and fails only when a layer slice first uses it, which goes against 300-arch's \"Failures should be explicit and immediate\" (line 86). Consider requiring `seed >= 0` now.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:247-250"
+  }
+ ]
+}

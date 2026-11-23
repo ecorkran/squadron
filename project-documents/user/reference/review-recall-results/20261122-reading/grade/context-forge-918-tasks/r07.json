@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` fixture line can never match `PLAN_UNINDEXED_RE`",
+   "description": "`PLAN_UNINDEXED_RE` is `/^(\\d+)\\.\\s+\\[([ xX])\\]\\s+\\*\\*([^(].*?)\\*\\*\\s*(.*)/`, so the name has to be wrapped in `**\u2026**`. Task 1 (lines 40-41) gives `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` with no bold wrap. Its success criterion (lines 43-45) only asks for \"the `**Name**` bold-wrap for the indexed form\". Even after Task 2 widens the character class, this line is still dropped. Task 5's unindexed assertions (lines 91-92) and its length check would then fail, and the person doing the task would have no idea why. The slice's success criterion (slice line 266) uses `N. [~] **Name** \u2014 rationale`. Fix: bold-wrap the unindexed example and make the success criterion require it for both forms.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Extending `sample-slice-plan.md` breaks existing assertions the plan doesn't update",
+   "description": "Task 5 (lines 95-98) only updates the totals test. Once the unindexed `[~]` line parses, `parseSlicePlan` gives it `index: unindexedCounter` = **1**. After the sort at `slicePlanParser.ts:91` it becomes `entries[0]`. That breaks:\n- `slicePlanParser.test.ts:10`: `toHaveLength(5)`\n- `slicePlanParser.test.ts:12-20`: `entries[0]` is expected to be Schema Setup / 101\n- `slicePlanParser.test.ts:22-30`: `entries[2]` is expected to be Feature Alpha / 103\n- `slicePlanParser.test.ts:126-129`: \"every entry indexSource: explicit\" fails because of the new `fallback` entry\n- `slicePlanParser.test.ts:164-168`: `entries[0]` / `entries[1]` descriptions\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52`: `totalSlices` is expected to be `5`\n\nThese failures only show up in Task 13's full run. Task 5's filtered run catches the slicePlanParser ones but gives no guidance on them, and it misses the ArtifactIntrospector one entirely. So the Task 5 commit lands with core red.\n\nThis also contradicts the slice's success criterion (slice lines 280-282): regression-free behaviour is \"proven by the existing `sample-slice-plan.md` fixture tests continuing to pass **unchanged**\". Task 5's assertion that `completedSlices: 5`, `totalSlices: 7` also only holds if the unindexed line parses (see the previous finding).\n\nFix: use the sibling fixture the slice already allows (slice line 222), e.g. `deprecated-slice-plan.md`. It should hold both `[~]` forms plus `[x]` entries, so it also proves the all-resolved `completedSlices === totalSlices` case that no current task exercises with a real parsed file. That leaves `sample-slice-plan.md` and its tests untouched.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-46"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Task 8: widening only `resolveEntryStatus`'s `Pick` won't compile, and its claim about the caller is wrong",
+   "description": "Task 8 (lines 146-149) says `resolveEntryStatus`'s \"only caller passes a full `SlicePlanEntry`\". In fact its only caller is `resolveEntryStatusSafe` (line 740). That function's own parameter is `entry: Pick<SlicePlanEntry, 'index' | 'isChecked'>` (line 736). If only `resolveEntryStatus` widens to include `'status'`, `this.resolveEntryStatus(projectPath, entry)` fails type-checking because `status` is missing. Fix: Task 8 must widen the `Pick` on both `resolveEntryStatusSafe` and `resolveEntryStatus`. The outer caller at line 807 passes a full entry, so that change is safe.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9's justification for changing the `derivedStatus` initializer is wrong; the real degraded-path gap is not handled",
+   "description": "Task 9 (lines 155-163) says the line-91 initializer \"is the fallback used if `detectDocuments` throws\". It isn't:\n- Every path through the try block either assigns `deriveEntryStatus(...)` or `'degraded'` (line 122).\n- The `catch` assigns `'degraded'` (line 126).\n- `detectDocuments` never throws anyway (`list-derived-status.test.ts:156-159`).\n\nSo the initializer is dead and the second bullet is unneeded work.\n\nThe real gap is different. When a `[~]` entry's task file is unreadable or its frontmatter status is unrecognized, `derivedStatus` becomes `'degraded'`. Then `isNext` (lines 130-135) and `firstNotComplete` (lines 143-148) offer it as next. The same happens in `WorkflowNavigator.resolveEntryStatusSafe` (lines 741-745). `findFirstNotCompleteEntry` picks degraded entries, as `WorkflowNavigator.test.ts:1067-1068` shows. That contradicts the slice's \"plan-line `[~]` is definitionally true regardless\" (slice lines 140-142).\n\nFix: drop the initializer bullet. Either short-circuit `entry.status === STATUS.Deprecated` before the degraded branches at both sites, or explicitly accept the edge case as out of scope.",
+   "location": "packages/cli/src/commands/slice.ts:91-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "CLI tasks need a core build first, but no step runs it",
+   "description": "`@context-forge/core` resolves to `dist/` (both `exports` and `types`), and `packages/cli` has no vitest config that aliases it to source. Two things follow:\n- Task 9's `planLineStatus` property on the `deriveEntryStatus({...})` literal is an excess-property type error against the stale `dist/*.d.ts`. So \"builds clean\" (line 164) fails.\n- Task 10's `sliceListAction` calls the stale `dist` parser, which still drops `[~]` lines. So the test fails.\n\nFix: add `pnpm --filter @context-forge/core build` before Task 9's build check. Without it, a junior agent hits failures that look unexplained.",
+   "location": "packages/core/package.json:6-16"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`ProjectModelBuilder`'s plan-only path still renders a `[~]` entry as not-started",
+   "description": "This is exactly the case the slice targets: a planned slice with no design doc. It is built by `buildModel()` with `deriveEntryStatus({ isChecked: entry.isChecked })`, which ignores `entry.status`. As a result `buildModel`'s consumers (the MCP tool at `packages/mcp-server/src/tools/introspectionTools.ts:308,321`, `packages/cli/src/commands/arch.ts:165-169`, and `FutureWorkCollector`) report `[~]` entries as `not-started`. That breaks the surface parity that the slice-911 parity tests (`ProjectModelBuilder.test.ts:239-296`) exist to protect.\n\nThe slice design misses this call site too, so it isn't in the success criteria. But the task file's Context Summary (lines 21-22) says the signal is \"threaded through\". Fix: either add `planLineStatus` at line 445 with a parity test case, or record it as an explicit out-of-scope follow-up.",
+   "location": "packages/core/src/introspection/ProjectModelBuilder.ts:437-448"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 12's tests are tautological under the existing mock pattern, and `arch-status-vs-plans` is not covered",
+   "description": "Task 12 points at the existing Rule 7 tests. Those mock `parseSlicePlan` and hand-set `completedSlices`/`totalSlices` (lines 797-805, 826-834). A case written that way, with \"every entry `[x]` or `[~]`\", only proves the checker compares two numbers the test itself chose. It doesn't exercise Decision 3's parser arithmetic.\n\nAlso, the slice's success criterion (slice lines 277-279) names both `plan-status-vs-entries` **and** `arch-status-vs-plans`. Task 12 only covers the first.\n\nFix: drive the case from a real plan file (scratch filesystem, as the collision tests around line 1143 do), or rely on the parser test proving `completedSlices === totalSlices` on an all-resolved fixture. Then add or extend one `arch-status-vs-plans` case.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:795-849"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 11's \"plan complete\" alternative isn't reachable in the scenario it mirrors",
+   "description": "Task 11 mirrors the test at `WorkflowNavigator.test.ts:1073`, which uses `fileSlice: ''` (no active slice). In that branch, if `findFirstNotCompleteEntry` returns `undefined`, `getNext` returns `cf set slice <index>` / \"Pick your first slice\". It does not report the plan as complete. \"Plan complete\" is only produced by the complete-advance branch (lines 357-384), which needs an active, complete slice.\n\nThe task accepts either outcome (lines 186-188), so its expected result is left open. It also tells the agent to stop and escalate if the test fails, so the agent may escalate a correct behaviour. Fix: specify the scenario exactly. Use `[x]`, `[~]`, `[ ]` with no active slice, and expect `cf set slice <next>`. If the \"last remaining entry\" criterion should be covered, add a second case with an active complete slice and expect \"Slice plan complete\".",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:238-249"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and the first one lands on a red suite",
+   "description": "Lines 105, 135, 179, 197, 212 and 224 write commit markers as `- [ ] Commit:` checklist items. Markers must be plain `**Commit**:` lines. Also, the Task 5 commit (line 105) comes after a filtered run only. With the fixture approach as written, `ArtifactIntrospector.test.ts:52` is failing at that point, so it isn't a tested point. Otherwise the cadence (after Tasks 5, 7, 10, 11, 12, 13) is reasonable.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Proportionality: Tasks 2-4 are too small to stand alone, and Task 8's test is far from it",
+   "description": "Tasks 2, 3 and 4 are three edits of one to three lines each in one function, with no test in between. They should be one task (\"parser: accept `~`, set Deprecated, count as resolved\"), followed directly by Task 5. Task 8's production change is tested in Task 11, with Tasks 9 and 10 in between, which breaks the test-with pattern. Move Task 11 to straight after Task 8.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:6-93"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 1's note slightly misstates the CLAUDE.md rule",
+   "description": "CLAUDE.md requires that the fixture \"include the actual format that parser will consume in production\". It does not require the fixture to exist before the parser change. Putting the fixture first is fine, but the justification at lines 46-50 attributes an ordering rule to CLAUDE.md that isn't there.",
+   "location": "CLAUDE.md:41"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Rule 7/8 messages still say \"checked\" when they now count deprecated entries",
+   "description": "The descriptions \"only X/Y entries are checked\" (line 738), \"All N entries are checked\" (line 754) and \"plan has unchecked entries\" (line 837) now count `[~]` entries as resolved. The slice puts rule changes out of scope, so this is informational. A one-word change (\"resolved\") would avoid confusing output.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:738"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "`\u2298 deprecated` table rendering is only covered by the manual walkthrough",
+   "description": "Task 10 asserts JSON `status: 'deprecated'`. The table rendering relies on `renderEntryStatus()`, which already exists, and is checked manually in Task 13 (walkthrough step 3). That fits the slice's claim that display needs no change.",
+   "location": "packages/cli/src/output/entryStatusDisplay.ts"
+  }
+ ]
+}

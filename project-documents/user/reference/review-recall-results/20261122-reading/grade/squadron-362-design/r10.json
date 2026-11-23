@@ -1,0 +1,96 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Slice 361 isn't implemented, so the file this slice edits and the facts it relies on don't exist",
+   "description": "The design says it is \"markdown edits to the existing `commands/analysis/understand.md`\" (line 22). It calls 361 \"the shipped\" contract and depends on a generated `943` sample (lines 135-136, 368, 466). None of these exists on `main`:\n- `commands/analysis/` contains only `tech-debt-audit.md`.\n- `project-documents/user/analysis/` stops at `942-analysis.tech-debt-audit.md`.\n- There is no `.understand-anything/` directory and no `.gitignore` entry for it.\n- `361-slice.graph-contract-and-provenance.md:10` is still `status: not_started`.\n- Every task in `361-tasks.graph-contract-and-provenance.md` is unchecked, including 0.1, \"Generate the knowledge graph\".\n- The DEVLOG has no 361 implementation entry. The last 361 entry is \"Next: Phase 6 implementation\".\n\nAs a result:\n- Lines 113-165 correct \"361 skill text\" that a reader can't inspect.\n- The table at lines 130-133 (\"361 reported 1 / 2\") and every number in **Verified graph facts** (lines 92-109) can't be checked from this repo.\n- Walkthrough step 2 (\"943 exists, so expect **944**\") is wrong for the repo as it stands.\n- Implementation step 1 (line 456, \"apply the two corrections to the existing 361 sections\") has nothing to apply to.\n\nEither implement and merge 361 first, then re-base this design on the real skill text and graph, or restate the corrections as changes to the 361 *design*. A stray `.understand-anything/` checkout or a 361 branch outside `main` can't be the base of a design that is committed to `main`.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:17-27"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The 361 design doesn't contain the defect Correction 2 attributes to it",
+   "description": "Line 146 says 361 \"collapsed that to `select(.type == \"file\")`\", and line 121 says 361 \"instructs intersecting with `type == \"file\"` to get a file count\". The 361 design reads differently:\n- `361-slice...md:108` writes the file-level selector as `.nodes[] | select(.type == \"file\" or ...)`, which keeps the multi-type intent.\n- `361-slice...md:244` asks only for each layer's \"file count, from `layers[]`\", with no intersect instruction.\n\nIf those defects exist, they are in an unmerged implementation, not in the 361 contract. Line 115 frames them as \"a defect fix inside squadron, not an escalation\", so cite the actual source text (file and line) or reword the fixes as clarifications.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-149"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Correction 2 calls its selector an allow-list but specifies an exclusion, which widens the read discipline to unknown types",
+   "description": "- Line 151 says the selector \"becomes an explicit type allow-list\". The code at line 155 and the text at line 158 say it is \"an exclusion rather than an allow-list deliberately\". The section contradicts itself.\n- The heading defines \"file-level\" as \"carries a `filePath`\", but the selector filters on type.\n- The architecture (`360-arch...md:107-110`) defines file-level as an allow-list of nine named types and says function- and class-level nodes are not read.\n- Excluding only `function` and `class` means any future sub-file node type upstream adds (for example `method` or `interface`) is read automatically. Line 158 prefers that outcome, but the read discipline exists to prevent exactly that.\n\nThe drift check at line 160 (\"surviving this filter but carrying no `filePath`\") wouldn't catch a sub-file type that carries a `filePath`. Either use the architecture's nine-type allow-list and report any type outside the known set as drift, or record this as a deliberate departure from the architecture with its rationale.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Layer cross-check: what happens on drift is unspecified",
+   "description": "Line 140 says a `function` or `class` entry in `nodeIds` \"is reported as such rather than silently filtered\". It doesn't say:\n- what the layer count then is (`nodeIds | length` including the stray entries, or excluding them);\n- whether the run continues or stops;\n- where the report goes (body gap marker, provenance, or console only).\n\nAn entry that resolves to no node at all also has no defined handling. Walkthrough step 1 maps such entries to `\"UNRESOLVED\"`, but the skill's behaviour isn't specified. The Risk Assessment (lines 439-445) relies on this check to make the correction safe on unmeasured graphs, so it needs a defined outcome.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:138-141"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Section 6 contradicts itself on edge types and reads function/class data despite SC9",
+   "description": "- Line 215 limits inter-layer connections to `imports` and `depends_on`. Lines 219-220 then count \"a `calls` edge between two functions in different layers\" as an inter-layer signal. Pick one.\n- Mapping a function or class endpoint to \"its owning file's layer\" needs either `contains` edges or parsing the function node's id or `filePath`. Either way the flow reads function- and class-level node data, against Success Criterion 9 (line 333: \"no function- or class-level node is read\") and the architecture's read discipline (`360-arch...md:109-110`). The resolution method isn't specified.\n- \"Ties by `weight`\" (line 179) doesn't say how weights combine for an aggregated layer pair (sum, max or mean).",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The \"closing observation\" exemption brings back unmarked inference",
+   "description": "Line 187 says no section is \"filled with prose that is not traceable to its named fields\". Line 245 then gives every section a closing observation that \"reads a pattern out of the data\". The example, \"complexity concentrates in the seams where squadron meets an external SDK\", can't be derived from a table of tiers by layer. Knowing which layers \"meet an external SDK\" is a semantic judgment. So the \"mechanical test\" isn't mechanical, and its own example fails it. The mapping table (lines 172-180) also doesn't mention closing observations, so it's unclear whether they are required.\n\nThe parent's \"Never fabricate intent\" goal and the slice plan's \"gap marker rather than inferred prose\" criterion both apply here. Either drop closing observations, or limit them to strictly quantitative statements such as \"N of M `complex` nodes are in layer X\".",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The `analyze-codebase-prompt.md` comparison misdescribes that document",
+   "description": "Line 266 says the template has a \"ten-part structure (identity, architecture, build/test/deploy, code quality, security, performance, operations, and so on)\". The template at `project-documents/user/reference/analyze-codebase-prompt.md:49-161` has **eight** sections:\n1. Identity & Stack\n2. Architecture\n3. Build, Test & Deploy\n4. Code Quality & Defects\n5. Issue Tracker & Project Health\n6. AI Agent Integration\n7. Risks & Recommendations\n8. Deep-Dive Plan\n\nThere is no security, performance or operations section. The file's own diagram also says \"8-section structured analysis\" (line 358). This paragraph is the recorded answer to the parent's open question, so it should describe the real document.\n\nThe same section also contradicts itself:\n- Line 258 says \"retain the document unchanged\", but lines 278-279 add a note to it.\n- Line 23 says no file outside `project-documents/` changes, but Success Criterion 11 (lines 336-338) and walkthrough step 8 (lines 434-435) call `user/reference/analyze-codebase-prompt.md` a \"non-document file\".\n- The document's frontmatter (`dateUpdated: 20260426`, `status: complete`) needs a decision on whether `dateUpdated` changes.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:266-271"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The gap-marker and coverage walkthrough steps can't run as written",
+   "description": "- `$S` is never defined.\n- After `cd \"$S/real/.understand-anything\"` there is no step to run the skill from `$S/real`. Under the 361 rule (repo root, falling back to `pwd`), running from the current directory would look for `.understand-anything/.understand-anything/knowledge-graph.json` and report \"absent graph\".\n- The tampered graphs are written to `kg-empty-tour.json` and `kg-no-entrypoints.json`, and step 6 writes `meta-wrong.json`. The skill only reads `knowledge-graph.json` and `meta.json`, and no step swaps the tampered files in.\n- The scratch copy brings only `knowledge-graph.json` and `meta.json`. Without `config.json` and `.understandignore`, section 7 hits its own fallback on every scratch run, so \"every other section is unaffected\" (line 409) can't hold.\n- The scratch directory isn't a git repo and has no `project-documents/user/analysis/`, so staleness, hygiene and index selection all behave differently. None of that is stated.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-420"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Walkthrough from a clean checkout: no graph step, and hard-coded numbers",
+   "description": "- Step 1 assumes `.understand-anything/knowledge-graph.json` exists. It isn't in the repo, and 361 Task 0.1 says not to commit it. Unlike 361's walkthrough (`361-slice...md:297-298`), there is no prerequisite step to generate it.\n- Line 347 admits \"the graph may have been refreshed\", but Success Criteria 4-5 (lines 322-326) and step 2 hard-code 34, 6 and 238. A refreshed graph whose three numbers still agree with each other would pass step 1's gate and then fail the success criteria.\n- Spot-check 2 (line 388) compares against \"config nodes under templates/\", a figure the design never requires the document to report.\n\nState the criteria as reconciliations (layer sum = `analyzedFiles` = selector count) rather than as fixed values, or pin them to a named `gitCommitHash`.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:346-365"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Section 7 contradicts itself on `.understandignore` and conflates absent with unreadable",
+   "description": "- Line 234 says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\". A file with 17 active lines isn't all comments, so the parenthetical contradicts the rule it illustrates.\n- The mapping-table fallback (line 180) emits a gap marker for \"the unreadable file\". But line 231 says absent optional `config.json` keys are not gaps, and `.understandignore` is optional upstream. The design never separates absent (normal), unreadable or unparseable (gap), and a present file that has no `analyzedFiles` field or a non-integer value.\n\nThese are the new I/O paths this slice adds, and each needs explicit handling.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:228-235"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Partial absence of `complexity` is unhandled",
+   "description": "Row 4's fallback covers only whole-section absence. 361 named \"a node lacking `complexity`\" as the most likely real gap (`361-slice...md:252-253`). The design doesn't say:\n- whether such nodes are counted in the tier distribution;\n- whether they get a per-node gap marker or a count;\n- what \"top ordinal tier\" means when no node is `complex` (the highest tier observed, or always `complex`).\n\nLines 209-212 justify omitting `languageNotes` silently because it is optional, but `complexity` is a source field, so the \"no third option\" rule (line 186) needs an explicit answer here.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:177"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`edges[].direction` is listed as consumed but never used",
+   "description": "The Interfaces Required table says `.direction` is used for dependency ordering. Neither the mapping row (line 179) nor the section 6 detail uses it. Remove it, or say how direction affects ordering.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:86"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "\"Reused verbatim by 363\" overstates the hand-off",
+   "description": "This design maps graph fields to *comprehension* sections. 363 needs a mapping to *concept* sections, and the architecture already supplies that (`360-arch...md:215-221`). What 363 actually reuses is the corrected file-level selector and project-identity extraction, as lines 299-301 say. Line 36's \"verbatim\" should be softened to match.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:36-38"
+  }
+ ]
+}

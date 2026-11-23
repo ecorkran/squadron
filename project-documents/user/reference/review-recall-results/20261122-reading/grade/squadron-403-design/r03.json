@@ -1,0 +1,117 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "A sync merge followed by a fast-forward is recorded as a merge-commit landing",
+   "description": "The first-parent restriction does not keep sync merges out once the slice branch is fast-forwarded into the target.\n- **Flow:** `git merge main` on `381-slice.x` creates S (\"Merge branch 'main' into 381-slice.x\"). Merging the branch into `main` then fast-forwards by default, so S sits on `main`'s first-parent line.\n- **Result:** S matches the pattern's `(^|[^0-9])381-slice` alternative (`src/squadron/review/git_utils.py:234`). It is stored as a `merge_commit` landing with before = a slice-branch commit and tip = old `main`.\n- **Knock-on:** because \"none found \u2192 fast-forward\" never fires, the real landing is never recorded.\n- **Contradiction:** criterion 1 (line 332) says a sync merge is never taken as a landing. The fixture at line 347 only covers the `--no-ff` variant.\n- **Fix:** reject matches whose message merges *into* the slice branch, or require `M^1` to be on the target line independently of `M`. Add a sync-merge-then-fast-forward fixture.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:111-114"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The reflog fork is not \"the target just before the landing\" for a rebased or synced branch",
+   "description": "Line 201 claims a fast-forward is only possible if the target had not moved past the fork. That is false after a rebase.\n- **Flow:** branch created at A; `main` advances to C; branch is rebased onto C and fast-forwarded.\n- **Result:** `_resolve_fork_point` returns the single \"branch: Created from\" entry, which is still A (`git_utils.py:209-218`). A is an ancestor of the new tip, so the `FORK_NOT_ANCESTOR` check passes.\n- **Stored range:** before = A, after = tip, which includes every other slice merged between A and C. D3 exists to exclude exactly that, and the record is permanent.\n- **Fixture:** \"a rebased branch (`FORK_NOT_ANCESTOR`)\" at line 347 will not produce that reason for an ordinary rebase onto an advanced target.\n- **Fix:** take `before` from evidence of the landing itself, such as the target's reflog `merge <branch>: Fast-forward` entry or the branch's last `rebase (finish) \u2026 onto` entry. Otherwise refuse the landing when the fork is not the target-line parent of the slice's first commit.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:199-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Every first-parent merge that mentions the slice number becomes a permanent landing",
+   "description": "- The architecture accepts the message convention \"as the resolver does it today\". Today's resolver takes only the newest match (`-1`, `git_utils.py:236`); the design takes all of them.\n- `--grep` matches the whole message, not the subject. A later merge whose body says \"follow-up to slice 940\" becomes a landing of 940.\n- A batch-promotion merge on the target line that lists slices becomes a landing of each one. D2 rejects the `main` fallback for this same reason.\n- Nothing cross-checks a match against topology, for example `M^2` equal to the branch tip when the branch exists.\n- Fix: match the subject only and add a topological check where one is available.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:112"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A wrong or dead landing can only be removed by hand-deleting the whole project record",
+   "description": "- Landings are append-only (D1), and the risk at line 376 admits a wrong one stays.\n- The only remedy is deleting the project's file by hand, which also drops every other slice's fast-forward landings whose reflog has expired.\n- A landing whose commit was rewritten warns on every report forever (line 165).\n- `git cat-file -e` succeeds for unreachable commits until gc, so whether a rewritten landing is measured or shown as \"not found\" depends on gc state. An ancestor-of-target check would be stable.\n- Fix: add a per-slice forget or re-resolve option to `slice-ranges`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:381"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "An unreadable `slice_ranges` record reads as \"no record\" and is then overwritten",
+   "description": "- Store methods \"follow the existing shape\" and line 110 specifies a scan. `_iter_records` skips any file that fails to parse or validate with only a WARNING (`src/squadron/metrology/store.py:193-199`).\n- `get_slice_ranges` therefore returns `None`, and the next write replaces the file with only the newly resolved landings. Expired fast-forward landings are lost silently.\n- The failure table has no row for this.\n- \"Last write wins\" is also not what `_write_atomic` gives. Both writers share one `.tmp` path (`store.py:168`), so a concurrent pair can raise on `replace` or publish a half-written file, which then hits the path above.\n- Fix: load by the deterministic id with `load_record`, and treat an existing-but-unreadable record as an error.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The `first_parent` argument on `_search_merge_commit` cannot serve the resolver",
+   "description": "- The helper returns one abbreviated hash from `--oneline \u2026 -1` (`git_utils.py:236-242`).\n- The data flow needs every match, oldest first, as full SHAs (line 112), and D1 depends on multiple landings.\n- The review resolver is \"unchanged\", so it will not pass `first_parent` either. The argument has no caller that can use it.\n- Line 346 forbids `git_utils.py` growing beyond that argument, so the design does not say where the list-returning search lives.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:195"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Renaming the helpers breaks the tests the design says pass unchanged",
+   "description": "- `tests/review/test_git_utils.py:26-28` imports `_find_merge_commit`, `_find_slice_branch` and `_resolve_fork_point`.\n- The same file patches `squadron.review.git_utils._find_slice_branch`, `._resolve_fork_point` and `._search_merge_commit` by string about 30 times, for example at lines 217, 279 and 474.\n- `tests/pipeline/test_code_pipelines_branching.py:17` imports `_find_slice_branch`.\n- Lines 77 and 386 rename these. Either keep the private names as aliases or state that the tests are updated.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:351"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "A required `environment_root` breaks existing constructors, and `_measure_all` cannot be shared as it stands",
+   "description": "- \"Required field with no default\" (line 211) fails `tests/metrology/snapshot/builders.py:80` and `tests/metrology/snapshot/test_python_length.py:25`, which construct `AdapterContext` without it. \"The 400 tests pass unchanged\" is false.\n- `_measure_all` takes a `PreflightResult` and calls `resolve_files`, which runs `git ls-files` in `repo_root` (`src/squadron/metrology/snapshot/take.py:93-100`). The export tree is not a repository, and `read_snapshot_config` has no `head_sha`.\n- The design does not state the changed signature or the return type of `read_snapshot_config`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:389"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Resolver and report git calls have no stated failure handling, and the exit rule conflicts",
+   "description": "- The table covers only the reflog read and the merge search. It omits `merge-base(M^1, M^2)`, the two ancestry checks, `cat-file -e` returning `None`, and the first-parent listing behind `report history`.\n- A `None` on the fork-ancestor check read as \"is an ancestor\" persists a landing.\n- A target ref that does not exist makes `git log` exit non-zero, and every slice is reported `no_landing`. This happens in a clone that never checked out the integration branch.\n- Line 275 says a git error exits 1, while this row says it becomes a reason with exit 0.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Reviews with no commit are listed under a slice, against 402's contract",
+   "description": "- 402 states that records with `commit_sha is None` or `slice_index is None` roll up at project level only (`project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md:279`).\n- The design restates only the `slice_index` half. Lines 150 and 243 select on `slice_index == N` alone.\n- 402 counts 37 historical files with no `reviewedSha`. Apply the rule or change 402's contract.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:325"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "`report history` does not say where several kinds of figure go",
+   "description": "- Rows are snapshot commits, and this report takes no snapshots.\n- Reviews of a resolved slice whose `after_sha` has no snapshot have no row. The closing line excludes them too.\n- A slice with two landings (D1's own case) does not say which `after_sha` row carries its reviews.\n- Audit runs at commits without a snapshot are not placed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Lint and type figures have no stated sample size",
+   "description": "- D8 takes n \"from the distribution\". Lint and type measurements carry no `distribution` (`src/squadron/metrology/snapshot/python_lint.py:118-124`, `python_types.py:206-213`).\n- The sample output at lines 284-285 shows those rows without n.\n- The slice plan requires every figure to carry its sample size. Use `file_count` less `tool_ignored_files`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:235"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 3 cannot run as written",
+   "description": "- `sq metrology snapshot --json > a.json` is run from the repo root, and the shell creates `a.json` before the command starts.\n- Preflight lists untracked files with `--untracked-files=all` and refuses a dirty tree (`src/squadron/metrology/snapshot/preflight.py:71`, `150-155`). `.gitignore` does not cover `a.json`.\n- Fix: write both files outside the repository.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:365"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 2 does not test store durability and leaves a stray record",
+   "description": "- `git clone . /tmp/sq-clone` gives the clone an origin that is a filesystem path. `normalize_remote_url` passes it through as the project id (`src/squadron/metrology/identity.py:119-123`).\n- The clone therefore reads no stored record and writes a second `sliceranges-*` file in the real user store.\n- The step proves topology only, not the claim at line 176.\n- No walkthrough step covers criterion 2: a fast-forward slice persisted, then resolved with the branch deleted.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The 401 cache claim is not supported by what 401 says",
+   "description": "401 describes a reader built per registry whose first call does the work and later calls return the cached reading (401:91-97). I found no statement that the cache is keyed on `repo_root`. `report slice` takes several exports under one registry. The effect is nil while coverage is absent at every export.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:324"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Smaller export gaps",
+   "description": "- \"Tools run with `cwd=repo_root`\" and \"the uv check from `environment_root`\" conflict for uv. `resolve_environment` checks lock and venv under one root and runs uv there (`python_types.py:72-93`). State that uv runs in the live checkout.\n- The in-place-equals-export test cannot detect the editable-install leak, because the two trees are identical at HEAD. Step 4 has no reference value for an old commit (line 380).\n- The 30 s `git archive` bound is a constant in the review module (`git_utils.py:25`), with no setting for a large brownfield repo.\n- A tracked symlink pointing outside the tree makes a commit permanently unexportable (line 161), although only regular files are measured.\n- Line 315 names a `landings` field that the schema does not have.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212"
+  }
+ ]
+}

@@ -1,0 +1,72 @@
+{
+ "case": "context-forge-260-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependencies: \"cf releases that select the brownfield profile require at least v0.22.2\", while the Amendment states \"`cf build` is pure again: no detection, no state writes, no prompt swap\" and Technical Considerations says `cf build` \"no longer selects the `brownfield-adoption` profile\". The same stale material sits in the Responsibility table row (b) (\"plus squadron 361's provenance block\"), Current State (\"The capability probe does not exist yet\") and Technical Considerations (probe contract kept \"for history\"). **VALID**: self-contradiction (the Dependencies line is the cleanest instance; the others are labeled history). Needs: doc alone. **Raised by the original review (F001)**; control for claude-sonnet-5-5.",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     12
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     4,
+     9
+    ],
+    "r05": [
+     12
+    ],
+    "r06": [
+     5
+    ],
+    "r07": [
+     6
+    ],
+    "r08": [
+     3
+    ],
+    "r09": [
+     3
+    ],
+    "r10": [
+     6,
+     7
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Responsibility table row (c): \"CF writes the architecture doc on both paths\", while the amendment and Design Goals make squadron the only adoption path with no CF-only fallback. The amendment says rows (a), (b) and (g) changed; (c) was not updated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     7
+    ],
+    "r04": [
+     6
+    ],
+    "r05": [
+     12
+    ],
+    "r06": [],
+    "r07": [
+     5
+    ],
+    "r08": [
+     5
+    ],
+    "r09": [],
+    "r10": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "F1: r04[4] counted as borderline (stale Current State, not the Dependencies line); r02[12] counted though it cites Anticipated Slices/guide coupling/probe contract rather than the Dependencies line. F2: r01[7], r02[2] and r09[5] quote row (c) but raise who-writes ownership (CF vs agent), not the both-paths vs squadron-only contradiction; not counted."
+}

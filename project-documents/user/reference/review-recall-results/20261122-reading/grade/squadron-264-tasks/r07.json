@@ -1,0 +1,103 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 6 breaks `tests/tools/test_package.py` and no task updates it",
+   "description": "- **What breaks:** `test_exactly_the_three_builtin_tools_are_registered` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}` (line 11). `test_materialize_binds_every_registered_tool` asserts `len(executors) == 3` (line 22). Task 6.4 registers five more tools at import, so both fail the moment Task 6 lands.\n- **Why the plan misses it:** Task 6 has no scoped test command, and Task 7's command runs only `tests/tools/test_cf_tools.py`. The break first appears at Task 9.2's full-suite run, with no task owning the fix.\n- **What it contradicts:** the Sequencing claim \"Each task leaves the suite green\" (task file line 55) and Task 6's commit landing on a red suite (line 220).\n- **Fix:** add a step to Task 6 that updates both pins and renames the first test. Derive the expected set from the `cf_tools` and `builtin` name constants, and replace `== 3` with `len(tools.list_tools())`. Add `uv run pytest tests/tools -q` as Task 6's scoped command.\n- **Stale docs in the same step:** the package docstring \"registers the built-in tools and does nothing else\" (`src/squadron/tools/__init__.py:3-4`) and the comment at `src/squadron/pipeline/steps/utils.py:66-68` both become wrong.",
+   "location": "tests/tools/test_package.py:10-22"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport failure row has no test, and the obvious implementation lets it escape",
+   "description": "- **Gap against the design:** design lines 146 and 149-150 require a test for every failure-mode row, including \"Protocol/transport error mid-call (`McpError`, closed stream)\". Task 5.4 (lines 174-176) lists only timeout, server `isError` and spawn failure.\n- **`test_unknown_tool_name` does not fill it:** the low-level MCP server turns a handler error into an ordinary `isError=True` result, so that test most likely repeats the `fail` test.\n- **Why it matters in code:** `stdio_client` yields inside an `anyio` task group (`mcp/client/stdio/__init__.py:182-189`), and `ClientSession` opens a second one (`mcp/shared/session.py:221-238`). anyio 4.12 re-raises any body exception as `BaseExceptionGroup`. An `McpError` from `initialize()` or `call_tool()` therefore reaches the bridge as a nested `ExceptionGroup`.\n- **Effect of Task 4.3 as written:** a plain `except McpError:` (line 143, \"each `except` clause is specific\") will not match. The exception leaves `call_mcp_tool` and is caught only by the loop's catch-all, which returns a generic \"raised an unexpected exception\". That violates fact 2 and the design row's WARNING signal.\n- **This is also the realistic \"spawn fails\" case:** only a missing binary raises plain `OSError` before the task group (`stdio/__init__.py:131-137`), which is all Task 5.3 tests. \"Package fetch fails\" means `npx` starts and then exits, giving `McpError(\"Connection closed\")` wrapped in a group.\n- **Fix:**\n  - Add a `crash` tool to the Task 3 fixture that exits the process mid-call.\n  - Add a server-exits-before-initialize case, for example `command=sys.executable, args=[\"-c\", \"raise SystemExit(1)\"]`.\n  - Assert `is_error is True` plus the WARNING for both.\n  - State in Task 4.3 that SDK errors arrive wrapped in `ExceptionGroup`, so the handler needs `except*` or group unwrapping.\n  - Drop `test_unknown_tool_name`, or make it assert which path it exercises.",
+   "location": "src/squadron/providers/openai/agent.py:280-286"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Config read at execute time can raise out of the executor, and its shape conflicts with existing convention",
+   "description": "Task 6.3 (lines 205-207) reads `cf.mcp_command` and `cf.mcp_timeout_s` inside the async executor and passes them to `shlex.split` and `StdioServerParameters`. Nothing in Tasks 6 or 7 handles these cases:\n\n- `get_typed_config` raises `ValueError` on a non-int value (`manager.py:103-105`).\n- `_read_toml` raises `tomllib.TOMLDecodeError` on a malformed file (`manager.py:46-51`).\n- `shlex.split` raises `ValueError` on an unbalanced quote.\n- An empty command gives `[]`, so indexing the command raises `IndexError`.\n\nEach is a \"command misconfigured\" case. Design line 143 says that must return an `is_error=True` result explaining the bridge is unavailable, with a WARNING naming the launch command. As written they raise, against fact 2.\n\nThree related gaps in the same step:\n\n- **Blocking I/O:** execute-time reads do two synchronous TOML reads on the event loop per call. `agent.py:97-99` deliberately avoids this (\"so that no config file I/O happens inside an async turn\"). Design line 188 allows \"factory/execute time\", and the factory is synchronous.\n- **Which directory:** the task does not say what `cwd` to pass to `get_config`. The default `\".\"` reads the process directory's `.squadron.toml`, not the bound one.\n- **Typing:** `get_typed_config` returns `int | float`. Existing callers wrap it in `int(...)` (`events/dispatcher.py:92`), and strict pyright needs the same for `timeout_s: int`.\n\nFix: specify where config is read, pass `cwd=str(bound_cwd)`, convert the four errors to a result plus WARNING, and add one Task 7 test with a misconfigured command.",
+   "location": "src/squadron/config/manager.py:94-109"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The live contract test's \"CI without node\" premise is false for this repo",
+   "description": "CI installs Node 22, installs `@context-forge/cli`, runs `cf init --lite --no-ide`, then runs `uv run pytest`. The Task 8.1 gate (lines 256-259) will find `npx -y @context-forge/mcp` launchable, so the test runs on every CI job in both matrix legs.\n\n- **CI now depends on the npm registry** and on whatever unpinned CF release is current. An unrelated PR can go red on a CF release or a registry outage.\n- **Task 8.2 runs in CI too:** \"non-error content mentioning the project\" (lines 266-268) has to hold in a runner checkout initialised with `cf init --lite`. That is unverified, and \"mentioning the project\" is not a checkable assertion as written.\n- **No `network` marker:** the repo already has one (`pyproject.toml:83-85`), and the task does not apply it despite the design's own cold-start risk (design lines 273-275).\n- **The gate runs at collection:** a module-level launch spawns `npx` on every full-suite collection, including `--collect-only` and `-k` runs, with no stated timeout.\n\nFix: move the gate into a module-scoped fixture bounded by `cf.mcp_timeout_s`, mark the module `network`, and state the intended CI behaviour. Either accept and document the live run, or have CI deselect it. Give 8.2 a concrete assertion.",
+   "location": ".github/workflows/ci.yml:20-32"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tests and walkthrough steps can write to the real user config with no restore",
+   "description": "- **Task 7.3 (lines 241-243)** says \"with `cf.mcp_command` set to a multi-word value\" without naming `patch_config_paths`. `set_config` without that fixture writes `~/.config/squadron/config.toml` (`manager.py:129-136`), and no plan command restores it.\n- **Tasks 6 and 7 executors** read the developer's real user config at execute time unless the fixture is used. \"Green with no network and no node\" then also depends on local config.\n- **Task 8's criterion \"forcing an unlaunchable command skips rather than fails\"** (lines 271-272) names no mechanism and no cleanup. A module-level gate cannot be reached by a per-test fixture, so the likely route is `sq config set` on the user config.\n- **Task 9.1 step 3** uses `sq config set` then `unset` on the user config. `unset` deletes the key, so a local-dev override set earlier (the design's own example, lines 164-165) is lost, not restored.\n- **A leftover bad value hides itself:** the Task 8 gate skips, so Task 9.2's \"full suite green\" passes with the contract unverified.\n\nFix: name `patch_config_paths` in Tasks 2 and 7. Give Task 8 a patched-config skip test. In 9.1, record the prior value with `sq config get` and re-set it afterwards, and add a `sq config get cf.mcp_command` check before 9.2.",
+   "location": "tests/conftest.py:29-55"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two of the four result-mapping rules have no test",
+   "description": "Success criterion 2 (design lines 221-222) requires results mapped \"per the Result mapping rules\". Task 5.1 covers `isError` and the no-text-block rule. It does not cover:\n\n- joining multiple `TextContent` blocks with `\\n` (design line 132); `echo` returns one block.\n- noting non-text blocks by type (design line 137); the Task 3 fixture has no tool that returns one.\n\nTask 4.2 implements both rules untested. Fix: add one fixture tool returning two text blocks plus an image block, and one test asserting the joined text and the type note.",
+   "location": "unverified"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No executor-level round-trip against the fake server",
+   "description": "Success criterion 3 (design lines 223-225) reads \"against the fake python MCP server, an executor returns the server's text\". Task 5 tests `call_mcp_tool` directly, and Task 7 tests executors with the transport mocked.\n\nThe seam between them is exercised only by Task 8.2, which is gated. That seam is config \u2192 `shlex.split` \u2192 `StdioServerParameters(cwd=bound_cwd)` \u2192 real spawn. A wrong `cwd` or argument split passes every ungated test.\n\nFix: give the fake server a `workflow_status` tool that returns its `os.getcwd()`. Add one Task 7 test that points `cf.mcp_command` at it via `patch_config_paths` and asserts the returned directory equals the bound one. This also verifies the Security claim at design lines 174-177.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Success criterion 6's model-driven half has no executing task, yet the slice is marked complete",
+   "description": "Criterion 6 (design lines 229-231) requires a dispatch where a tool-capable non-SDK model calls `cf_build_context`. Task 9.3 (lines 289-292) marks the task file and slice design `status: complete` while noting step 4 \"remains open\".\n\n- **The guard is real but narrow:** it lives only in the `sq run` CLI path (`run.py:148`). A script that builds `OpenAICompatibleAgent` with `allowed_tools=[\"cf_workflow_status\", \"cf_build_context\"]` is not blocked, the same way walkthrough step 2 bypasses the CLI.\n- **Precedent:** slice 263 was closed the same way, with the open item recorded in the slice plan entry (`260-slices\u2026md:51`).\n- **Missing from 9.3:** it does not say where the open item is recorded, and it does not update the 264 entry in the slice plan (`260-slices\u2026md:53`, still `[ ]`).\n\nFix: add a 9.1 step that drives the agent directly for criterion 6, or name the slice-plan entry as the place the open item is recorded.",
+   "location": "src/squadron/cli/commands/run.py:148"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 5.2's timeout test needs fixture features Task 3 lacks, and its timing bound is too tight",
+   "description": "- **PID capture:** Task 5.2 (lines 167-169) asserts the child is gone via a PID the fake server writes to a temp file. Task 3.1 specifies no such behaviour, so Task 5 has to rework the committed fixture. Since an explicit `env` is only merged over the default whitelist (`stdio/__init__.py:127`), the simplest route is a `--pid-file` argument, specified in Task 3.\n- **Timing:** \"within ~timeout wall-clock\" (line 166) is not what the SDK does. After cancellation, teardown waits up to 2s for exit (`stdio/__init__.py:48, 202-209`), then SIGTERM, then SIGKILL after 2 more. A blocking `sleep` tool returns at about timeout + 2s. State the bound as timeout + about 5s.\n- **Overclaim:** the task says the assertion \"pins the SDK process-group teardown fact\". The fake server has no grandchild, so a direct-child check would pass without `killpg`. Either have `sleep` spawn a child and assert both are gone, or drop the claim. The design (lines 156-157) only requires the direct-child check.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task count is heavier than a 2/5 slice needs",
+   "description": "The design rates the slice 2/5 (design line 335). The plan has nine tasks, four of them rated 3/5.\n\n- **Merge Tasks 1 and 2:** two config entries plus two default assertions is one task and one commit. The existing pattern is `tests/config/test_keys.py:51-85`.\n- **Fold Task 3 into Task 5:** the fixture has no consumer until then. Its \"by hand\" check (lines 118-119) and Task 4's \"manual smoke\" (line 151) both duplicate `test_echo_round_trip`.\n- **Replace `test_unknown_tool_name`** (lines 162-163): it traces to no success criterion.",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Env handling in Tasks 4.1 and 6.3 is redundant and self-contradictory",
+   "description": "Task 4.1 (lines 129-131) says the bridge uses `get_default_environment()` and, in the same bullet, that callers build the parameters. Task 6.3 passes `env=get_default_environment()`. The SDK already applies that environment when `env` is `None` and merges it under any explicit one (`mcp/client/stdio/__init__.py:127`). Both steps are no-ops; delete them.",
+   "location": "unverified"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Task 7.4 misstates the `validate_allowed_tools` signature",
+   "description": "The function takes `(config: StepConfig, action_type: str)`, not a list of names as lines 244-245 imply. The test needs a `StepConfig` built like the `_step` helper in `tests/pipeline/steps/test_allowed_tools_validation.py:10-11`. That file is also the natural home for the test.",
+   "location": "src/squadron/pipeline/steps/utils.py:32"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Commit instructions are checkbox items, and two land before tests",
+   "description": "The file has no `**Commit**:` marker lines, which is acceptable. Commits appear as checkboxes in every task's success criteria. The per-task cadence follows `CLAUDE.md:36`. Task 4's commit precedes any automated test, and Task 6's lands on the red suite from the FAIL finding. Merging the implementation and test pairs would put every commit at a tested point.",
+   "location": "unverified"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The plan relies on mcp 1.26.0 behaviour while the dependency floor is `mcp>=1.0.0`",
+   "description": "Fact 6 forbids custom kill code on the strength of SDK behaviour verified at 1.26.0, the version `uv.lock` pins. The published floor permits older SDKs. This is also the first import of `mcp` anywhere in `src/` or `tests/`. Consider raising the floor in Task 1.",
+   "location": "pyproject.toml:29"
+  }
+ ]
+}

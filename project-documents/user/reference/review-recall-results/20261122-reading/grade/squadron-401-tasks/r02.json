@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" fails because of an existing test",
+   "description": "Task 2 replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (`src/squadron/metrology/snapshot/python_adapter.py:105`) with an explicit set of the four metrics from slice 400. It then says \"the full `tests/metrology/` suite passes unchanged\". But `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`. Once the new enum members exist, that assertion fails. A junior agent will hit this and then has to choose between editing a test it was told not to touch and undoing the fix.\n\nTask 7's later rule, \"400's length tests pass \u2026 edited only for the rename\", conflicts with it too. Fix: have Task 2 change that assertion to the explicit set, and add an assertion to Task 25 that `PythonAdapter.metrics` equals the full set once all eight metrics are measured.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:42-46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All 18 commit lines use `- [ ] Commit: \u2026` (lines 46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283, 290).\n\nThe project's rule is \"implement, then task-checker, then commit\" and \"never make a commit that only checks boxes\". A commit line that is itself a checkbox can only be ticked after the commit happens, so it either goes unticked or needs a check-off-only commit. Change each one to a plain `**Commit**: \u2026` line.\n\nWhere the markers sit is fine: each follows a tested implementation step, and they are neither after every task nor only at the end.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Two failure-mode tests don't check the signal or the side effect",
+   "description": "The Technical Requirements say \"Failure-mode tests assert both the signal and the outcome for each row\":\n- **RecursionError (Task 9):** the test checks only `unparsed_files`. It doesn't check the WARNING per file that the failure-mode table lists.\n- **Token ceiling (Task 11, SC 10):** the test runs at the `duplication.py` level only. The criterion's clause \"its other metrics are unchanged\" is never checked through an adapter.\n\nFix: add a `caplog` assertion to Task 9, and one line to Task 13 or Task 26 that lowers `DUPLICATION_MAX_TOKENS` and checks that file length and function length are still present.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`tool_failed` needs a `command=` argument that duplication and coverage don't have",
+   "description": "Tasks 10, 21 and 23 build failures with `tool_support.tool_failed`, which requires the keyword argument `command`. Neither the duplication pass nor the Cobertura read runs a command. Without guidance, a junior agent will make up a value. Have the tasks name what to pass, for example the report path for coverage, or name the pass in a module constant.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+  }
+ ]
+}

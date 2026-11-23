@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Merge step at line 48: ## Part A \u2014 Branch steps: catch-up merge (D5), `restore_target()`, `branch: { plan: }` (D6)",
+   "description": "Line 48 schedules a merge: `## Part A \u2014 Branch steps: catch-up merge (D5), `restore_target()`, `branch: { plan: }` (D6)`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:48"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Merge step at line 71: - [ ] Work count 0 \u2192 `git merge --ff-only {target}` (no merge commit)",
+   "description": "Line 71 schedules a merge: `- [ ] Work count 0 \u2192 `git merge --ff-only {target}` (no merge commit)`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:71"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Merge step at line 72: - [ ] Otherwise \u2192 `git merge --no-ff -m \"merge: {target} into slice {n}\" {target}`",
+   "description": "Line 72 schedules a merge: `- [ ] Otherwise \u2192 `git merge --no-ff -m \"merge: {target} into slice {n}\" {target}``. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:72"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Merge step at line 73: - [ ] Conflict \u2192 record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT \u2026 (conflicted: \u2026); resolve on the branch and retry`); checkout stays on the clean slice branch",
+   "description": "Line 73 schedules a merge: `- [ ] Conflict \u2192 record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT \u2026 (conflicted: \u2026); resolve on the branch and retry`); checkout stays on the clean slice branch`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:73"
+  },
+  {
+   "i": 4,
+   "severity": "FAIL",
+   "title": "Merge step at line 82: - [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved",
+   "description": "Line 82 schedules a merge: `- [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:82"
+  },
+  {
+   "i": 5,
+   "severity": "FAIL",
+   "title": "Merge step at line 89: - [ ] Commit: `test: cover catch-up merge on branch enter`",
+   "description": "Line 89 schedules a merge: `- [ ] Commit: `test: cover catch-up merge on branch enter``. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:89"
+  }
+ ]
+}

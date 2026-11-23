@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`cf config unset --project` deletes the wrong file in the collision recovery path",
+   "description": "Line 89 says delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to.\" Line 30 says callers keep passing `scope: 'project'` and cannot pick between the shared and personal files. So for the personal key `git.integration_branch`, `cf config unset git.integration_branch --project` deletes from `.context-forge.local.toml`.\n\nThe collision rule at line 146 and walkthrough step 9 at line 259 tell the user to run that same command \"to clear the stale shared-file copy.\" Following the design as written, that command:\n- deletes the personal value (`legacy/value`), which is the value the collision logic was written to protect;\n- leaves the stale shared copy, which then becomes the value that reads resolve to (via the fallback at line 79);\n- leaves the `cf check` warning in place, so step 9's \"confirm `cf check` is clean again\" cannot pass.\n\nThere is no CLI path at all to remove a personal key from the shared file except `migrate-personal`, and on a conflict it deliberately skips the key.\n\nThe simplest fix also removes a branch: when the personal file already has a value, `migrate-personal` should delete the shared copy whether or not the values match. Line 146 already says the shared copy is \"stale and harmless\" and never wins at read time, and the old value stays in git history. Then remove the \"skipped (personal value already set)\" outcome and the `unset` instruction, and rewrite step 9.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No `ConfigManager` operation defined for reading or deleting keys in the shared file",
+   "description": "Line 181 says `ConfigManager` gets \"no signature changes,\" but two new consumers need things the current API cannot do.\n- **The `ConsistencyChecker` rule (line 142)** must scan the shared file for personal-scope keys. `ConsistencyChecker` receives an optional, injected `ConfigManager`, whose `get()` returns only the merged value. A personal key with values in both files reports `source: 'project-personal'`, so the stale shared copy can't be seen through `get()`. The design doesn't say whether the checker gets a new `ConfigManager` method or reads the TOML directly. Reading it directly would be a hidden dependency on file paths and would duplicate `readToml`. The design also doesn't say what the rule does when no `ConfigManager` is injected.\n- **`migrate-personal` (line 144)** must \"delete each from the shared file.\" Under the routing at line 89, `delete()` can't target the shared file for a personal key. Line 89 calls `migrate-personal` \"the one exception\" but names no mechanism for it.\n\nAdd the needed method or methods to API Contracts. One option is a single `ConfigManager.findPersonalKeysInSharedFile()` plus a `migratePersonalKeys()` that the CLI command and the checker both call. Keeping the file access inside `ConfigManager` matches the \"routing lives inside `ConfigManager`\" decision at lines 128\u2013132.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#api-contracts"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Frontmatter dependency differs from the slice plan entry",
+   "description": "The frontmatter declares `dependencies: [914]`, but the slice plan entry says \"Dependencies: none.\" Since 914 is complete and line 45 explains why it's needed, this has no practical effect. Consider updating the plan entry so the two match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`.gitignore` scope text contradicts itself",
+   "description": "Line 32 says the gitignore addition is \"reusing the pattern already used for personal ignores.\" Line 159 says no gitignore-writing logic exists anywhere today, and the slice plan's Future Work entry agrees. Remove the \"reusing the pattern\" clause so implementers don't go looking for code that doesn't exist.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`migrate-personal` option shape differs from sibling subcommands",
+   "description": "The design shows `[-p, --project <id>]`, which requires a value. The existing `get`, `set` and `unset` subcommands use `-p, --project [id]`, where the value is optional and a bare flag resolves the project from the current directory. They share `resolveConfigProjectPath`. Use the same optional-value form and the same resolver so `migrate-personal` resolves projects the same way as the other three.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+  }
+ ]
+}

@@ -1,0 +1,476 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Uninstall `--commands-dir` check as written rejects every existing Claude uninstall that passes the flag",
+      "description": "The design says `--commands-dir` on uninstall \"must match the receipt's destination or the command exits 1\". For Claude packs the receipt destination is not the commands dir: it is `commands_dir/<prefix>` (`src/squadron/skills/installer.py:83`) or `commands_dir/sq` (`installer.py:103`). Today the flag is accepted and ignored (`src/squadron/cli/commands/skills.py:95`).\n- **What breaks:** `tests/skills/test_cli_skills.py:127`, `:149` and `:191` all uninstall with `--commands-dir <tmp>/commands` against a receipt recording `<tmp>/commands/analysis`; they would exit 1.\n- **What it contradicts:** line 184, which says existing tests pass without edits.\n- **What is missing:** the comparison has to be defined per layout (root derived from the receipt), not as equality with `receipt.destination`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prefix-directory removal is unspecified once `remove_receipt_files` \"never removes the destination\"",
+      "description": "For a Claude prefix pack the destination is the prefix directory, so the shared routine (line 75, D7) will not remove it. Line 102 says it is \"still removed, as today\", which means the caller keeps the branch at `skills.py:120-122`. That branch is keyed on `receipt.surface == PREFIX`. An agents prefix pack also has `surface = prefix`, with destination `~/.agents/skills`. Uninstalling the last pack from an otherwise empty root would then `rmdir` the shared root, violating criterion 2 (line 222). Walkthrough step 5 hides this because `mine.txt` keeps the root non-empty. The design must say where this step lives (for example on the Claude `PackLayout`) and that it is keyed on target, not surface.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D5 breaks three existing tests the design says stay green",
+      "description": "Step 1 calls D5 a \"pure refactor; existing tests stay green\". Renaming `receipt_base` to `receipt_suffix` and changing `receipt_name(target, *, local)` to `receipt_name(base, target, *, local)` fails:\n- `tests/skills/test_targets.py:58` (`claude.receipt_base != agents.receipt_base`)\n- `tests/skills/test_targets.py:63` (`receipt_name(target, local=local)`)\n- `tests/skills/test_targets.py:74` (`receipt_name(CommandTarget.CLAUDE, local=False)`)\n\nThe Migration Plan (line 182) lists only \"fixtures\" in that file. Name these three as rewrites.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:302"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D4 move breaks one 925 drift guard and silently narrows the others",
+      "description": "The Migration Plan describes test impact as \"moved fixture paths\". The 925 guards do not use fixtures: they read the real bundle through `_agents_root() = get_commands_source() / \"agents\"` (`tests/cli/test_install_commands.py:478-481`).\n- **Fails:** `test_every_claude_command_has_an_agents_twin` (`:512`) expects `commands/agents/analysis-understand/SKILL.md` and `analysis-tech-debt-audit/SKILL.md`.\n- **Fails:** `test_openai_yaml_mirrors_disable_model_invocation` (`:559`) looks for the analysis policy files under the same root.\n- **Passes but stops covering the moved skills:** the reverse-twin (`:521`), name-matches-directory (`:532`), description (`:547`) and no-`$ARGUMENTS` (`:578`) guards iterate only that root, as does `_agents_skill_names()` (`:643`).\n\nThe design needs to say that `_agents_root()` becomes the set of AGENTS `bundle_subdirs`, the same change it makes to `bundled_skill_names`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D3 validation is not reconciled with the bundled pack or with the repo's existing skill-name guard",
+      "description": "- **Bundled pack may fail its own validation.** D4 routes the `analysis` pack through D3 unchanged. `commands/agents/analysis-tech-debt-audit/SKILL.md:1` is an HTML attribution comment; the frontmatter fence starts on line 2. The existing test parser tolerates this deliberately (`tests/cli/test_install_commands.py:484-499`). D3 does not say whether the validator does. A strict line-1 parser fails criterion 1 on squadron's own reference pack.\n- **Name rule is weaker than the existing one.** D3's `^[a-z0-9-]+$` admits `demo-`, `demo--x` and names over 64 characters. The 925 guard uses `^[a-z0-9]+(-[a-z0-9]+)*$` plus a 64-character limit attributed to Codex (`test_install_commands.py:475`, `:544`). A name Codex rejects installs inert, which the Value section (line 28) says cannot happen.\n- **No name rule for `dispatch_file` packs.** `sq-<dispatch_file>` has no character rule, and `PackEntry` validates neither field (`src/squadron/skills/models.py:17-32`).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:123-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`installed_path` proves an agents install by name shape in a shared root; reinstall leaves orphans that keep it true",
+      "description": "\"First `root/p-*/SKILL.md`\" reports pack `p` installed whenever any skill from any source matches. That includes a third-party `analysis-foo`, or pack `a-b`'s skills matching pack `a`. Slice 925 rejected this heuristic for the same root (`tests/cli/test_doctor_checks.py:138-152`; `doctor_checks.py:171-185` counts known names). The design's own convention (line 176) makes receipts the only authority, and a per-target receipt exists by D5.\n\nRelated sequence with no exit: install a pack with skills `p-a` and `p-b`, the source drops `p-b`, reinstall. `install_pack` has no stale removal (`installer.py:80-91`, unlike `install.py:164-175`), so the new receipt lists only `p-a`. After uninstall, `p-b/` remains, Codex still offers it, and `skills list --ide codex` and doctor still say Installed. Only deleting the directory by hand ends it. Either derive status from the receipt or add stale removal to the agents writer.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D8's \"pack ships no Codex content\" row needs source resolution the doctor layer forbids; target selection ignores setup's `ide`",
+      "description": "- **Source resolution.** Knowing whether a pack has `agents/` means resolving its source. `doctor_checks.py:1` declares \"no network, no subprocesses\", and a `github:` source resolves only by `git clone` (`src/squadron/skills/resolver.py:40-70`). The design does not say what row a GitHub pack gets.\n- **Error handling.** A missing local source raises `SkillSourceError`. Uncaught, it collapses the whole Skill Packs section into one synthetic row (`doctor_checks.py:618-628`).\n- **Setup.** `check_skill_packs` iterates `_command_targets_to_check(None)`, but `sq setup` calls `run_all_checks(ide=\u2026)` (`src/squadron/cli/commands/setup.py:195`, `:243`). `sq setup --ide claude` on a Codex machine gains `<pack> (codex)` optional steps while the command rows follow `ide`.\n- **Existing parameter.** `commands_dir` on `check_skill_packs` (used at `tests/cli/test_doctor_checks.py:412`, `:422`) is left undefined under a per-target loop.\n\nProportionality: the plan entry asks for install and uninstall. The no-content WARN variant is the part to cut; plain \"not installed\" per target avoids source resolution in doctor.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D10 enumeration misses the hidden commands `$sq-run` executes against providers",
+      "description": "D10 probes \"each top-level `sq` command\" and lists `sq run` as reaching a provider. The provider calls under `$sq-run` are separate commands taken from the step JSON:\n- `sq _dispatch-run --prompt-file \u2026` (`src/squadron/pipeline/prompt_renderer.py:186-192`)\n- `sq _summary-run \u2026` (`prompt_renderer.py:330-343`)\n\nBoth are registered `hidden=True` (`src/squadron/cli/app.py:69-70`), so they do not appear in `sq --help`. The skill runs them directly (`commands/agents/sq-run/SKILL.md:87-92`). A rule built from the table allows `sq run` and still fails at the first non-SDK dispatch with the #127 symptom. That leaves the plan's \"enumerate every `sq` command that reaches a provider\" (parent line 455) unmet for the one skill that chains commands. Add both to the probe list. `models`, `pools`, `config`, `events`, `setup`, `doctor`, `install-commands` and `serve` are also absent from the table.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One first-level `prefix_rule` cannot express the D10 rows, and the classification rule is ambiguous",
+      "description": "D9 fixes the shape as `[\"sq\", [<subcommands>]]`. Three problems follow.\n- **Depth.** A \"yes\" for `sq skills install` (GitHub source) or `sq auth login` can only be expressed by allowing all of `sq skills` or `sq auth`, or by a second rule at a different depth.\n- **Over-reach.** \"`sq metrology \u2026` reach a provider by construction\" (line 161) is wrong for most of that sub-app: `list`, `report \u2026`, `recommend` and `offers` read the local store (`src/squadron/cli/commands/metrology.py:266-620`). Likewise `sq run --status`, `--step-done` and `--dry-run` reach no provider. The stated justification string and line 30 (\"every `sq` command that reaches the network\") would then misdescribe the rule. The same pattern also covers `sq pr create`, which writes to the host, so the docs paragraph must say so.\n- **Filesystem-only failures.** D10 classifies by \"network or filesystem denial\" and then says the alternatives are \"exactly the yes rows\". Commands that only write under `~/.config/squadron` or `~/.claude` would fail on filesystem alone. The design does not say whether those earn a rule entry.\n\nCriterion 8 negative-tests only `sq models list`. State the pattern depth per row, and add a negative check for a local-only subcommand under an allowed prefix.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D12 hint: fixed skill list, a trigger that may not match what the model sees, and an unstated placement constraint",
+      "description": "- **Skill list.** The three skills are fixed while D10's rows are open. If the daemon commands, `auth login` or summary turn out \"yes\", then `sq-spawn`, `sq-task`, `sq-list`, `sq-shutdown`, `sq-auth` and `sq-summary` fail the same way without a hint. Derive the list from the D10 \"yes\" rows.\n- **Trigger.** The hint fires \"if Codex rejects or blocks the `sq` command for sandbox or approval reasons\". The design's own evidence (line 160) shows `sq` running inside the sandbox and failing with its own `HostUnreachableError`. In that case the model sees an `sq` connection error and no Codex rejection. The hint should also key on that observable, or it may never fire for the case #127 reports.\n- **Placement.** `test_long_command_skills_carry_one_waiting_rule` (`tests/cli/test_install_commands.py:594-608`) reads from \"## Waiting on the command\" to the next `\\n---\\n`. In `commands/agents/sq-pr/SKILL.md:81-91` that section is last, with no trailing divider. A hint appended there becomes part of the waiting section and fails the test as drift.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq-analysis` agent skill still tells Codex users to run the Claude install",
+      "description": "The skill prints \"Run `sq skills install analysis` to install it.\" After this slice that command still writes to `~/.claude/commands`, which is the #125 symptom the slice exists to remove. The design edits the agents tree (D12, the `models list` fix) but does not list this line. It needs `--ide codex`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "commands/agents/sq-analysis/SKILL.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Receipt-name suffixes create a new pack-versus-pack collision the exclusion calls pre-existing",
+      "description": "Under D5, pack `x` on agents writes `x-agents.toml` and pack `x` with `--local` writes `x-local.toml`. A Claude pack literally named `x-agents` or `x-local` uses the same file, and `PackEntry` and the manifest do not restrict pack names (`src/squadron/skills/manifest.py:41`). Today pack names map one-to-one to receipts, so this is new. The second install overwrites the first receipt; uninstalling either removes the other's record and leaves its files with no owner. `sq skills uninstall x --ide codex` would also act on the Claude pack's recorded destination. Either reject pack names ending in a reserved suffix or check on read that the receipt's destination matches the target's layout.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 11 cannot produce a block on a machine that followed the current README",
+      "description": "`README.md:87-95` tells users to add `prefix_rule(pattern = [\"sq\", \"review\"], decision = \"allow\")` to `default.rules`. D9 itself notes the live machine's `default.rules` is full of Codex-written approvals. Removing `squadron.rules` leaves that rule in force, so step 10 repeats without a block and the only verification of D12 passes vacuously. The step needs to say to clear `sq` entries from `default.rules` first. D9's README text should tell existing users the old `default.rules` entry is superseded.",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:294-295"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"The skills section of README\" does not exist",
+      "description": "`README.md` and `docs/` contain no mention of `sq skills` or `skills.toml`; the only hits are the doctor section name in `docs/QUICKSTART.md:58` and `:91`. The pack-format documentation, the deliverable behind Value line 29, has no existing home. Scope a new README section explicitly.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:196"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`remove_receipt_files(receipt) -> int` cannot report skipped entries",
+      "description": "`uninstall_commands` prints a warning per receipt entry outside the destination (`src/squadron/cli/commands/install.py:278-282`). With an `int` return, \"no behavior change\" (line 76) means either printing from `skills/receipts.py`, which imports no CLI today, or dropping the warning. No test pins the message. Returning the skipped entries would keep the layering clean.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Small inaccuracies in claims about existing code",
+      "description": "- **`sq model list` count.** \"One line each\" is three per file: `commands/sq/review.md:60`, `:112`, `:158` and `commands/agents/sq-review/SKILL.md:82`, `:134`, `:180`.\n- **`metrology/audit.py`.** Line 132 says it globs `*.md`. It reads one named file, `tech-debt-audit.md`, via `_resolve_bundled` (`src/squadron/metrology/audit.py:44`, `:53`, `:122`). The conclusion that the new subdirectory is invisible to it still holds.\n- **`sed -i ''`.** Walkthrough line 265 is BSD-only and fails on GNU sed.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+    },
+    {
+      "severity": "PASS",
+      "title": "Plan-assigned design questions are answered with recorded reasons",
+      "description": "D2 chooses pack-declared content and rejects unconverted install, as parent line 454 requires. D11 answers the doctor-detection question with reasons (parent line 455). Moving the rule to `squadron.rules` is acknowledged in the plan entry (parent line 457). Exclusions match the plan's \"Not in scope\".",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about 925's surface, the default-path receipts and the docs check out",
+      "description": "- **925 surface.** `CommandTarget`, `normalize_target`, `DELIVERIES`, `receipt_name`, `write_skill_dirs` and `bundled_skill_names` exist in `src/squadron/skills/targets.py`; `_command_targets_to_check` is at `doctor_checks.py:577`.\n- **Cited lines.** `skills.py:24` and `doctor_checks.py:428` are as cited.\n- **Receipt names.** D5 reproduces today's four `squadron-commands*` names and `<pack>.toml`.\n- **Bundled source.** `_resolve_bundled(\"analysis\")` returns `commands/analysis`, and the wheel's force-include (`pyproject.toml:69`) carries nested directories.\n- **Manifest.** The shipped default manifest supplies `analysis`, so walkthrough steps 1-7 are runnable from a blank `HOME`.\n- **Docs.** The README rule covers `sq review` only, in `default.rules` (`README.md:87-95`). QUICKSTART has none. The `$sq-spawn` sentence is at `README.md:84-85`.\n- **Setup tables.** Skill-pack row names are not keys in any setup table (`setup_steps.py:200-212`).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:58"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency directions and layer placement",
+      "description": "`skills/pack_layouts.py` and `remove_receipt_files` sit in `squadron.skills` and are consumed by the CLI modules, with no CLI-to-skills inversion and no import cycle. No new I/O path is added in squadron code (the `git clone` path is unchanged), and the plan states no NFR for these paths.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:70-81"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Uninstall `--commands-dir` check as written rejects every existing Claude uninstall that passes the flag",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Prefix-directory removal is unspecified once `remove_receipt_files` \"never removes the destination\"",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "D5 breaks three existing tests the design says stay green",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:302",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "D4 move breaks one 925 drift guard and silently narrows the others",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D3 validation is not reconciled with the bundled pack or with the repo's existing skill-name guard",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:123-128",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "`installed_path` proves an agents install by name shape in a shared root; reinstall leaves orphans that keep it true",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "D8's \"pack ships no Codex content\" row needs source resolution the doctor layer forbids; target selection ignores setup's `ide`",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "D10 enumeration misses the hidden commands `$sq-run` executes against providers",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "One first-level `prefix_rule` cannot express the D10 rows, and the classification rule is ambiguous",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-153",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D12 hint: fixed skill list, a trigger that may not match what the model sees, and an unstated placement constraint",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:170",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`sq-analysis` agent skill still tells Codex users to run the Claude install",
+      "location": "commands/agents/sq-analysis/SKILL.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Receipt-name suffixes create a new pack-versus-pack collision the exclusion calls pre-existing",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "Walkthrough step 11 cannot produce a block on a machine that followed the current README",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:294-295",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "\"The skills section of README\" does not exist",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:196",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`remove_receipt_files(receipt) -> int` cannot report skipped entries",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Small inaccuracies in claims about existing code",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Plan-assigned design questions are answered with recorded reasons",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Claims about 925's surface, the default-path receipts and the docs check out",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "Dependency directions and layer placement",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:70-81",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-22T22:21:48.837106",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 50,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+      "chars": 24788,
+      "sha256": "9f9384c6449c442f866a1ebd4faaa617714f42d4732dca27d0da29f173f7af02",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+      "chars": 117309,
+      "sha256": "f4952b3f13ecfa019757f893671127c949bffa9006f40639f0911f92220075c6",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/cli/commands/skills.py",
+    "src/squadron/skills/targets.py",
+    "src/squadron/skills/installer.py",
+    "src/squadron/skills/receipts.py",
+    "src/squadron/cli/commands/install.py",
+    "src/squadron/cli/commands/doctor_checks.py",
+    "src/squadron/skills/manifest.py",
+    "src/squadron/skills/resolver.py",
+    "src/squadron/skills/models.py",
+    "tests/cli/test_install_commands.py",
+    "tests/skills/test_targets.py",
+    "README.md",
+    "src/squadron/data/skills.toml",
+    "tests/skills/test_cli_skills.py",
+    "commands/agents/sq-review/SKILL.md",
+    "commands/agents/sq-run/SKILL.md",
+    "commands/agents/sq-pr/SKILL.md",
+    "tests/skills/test_installer.py",
+    "src/squadron/metrology/audit.py",
+    "commands/agents/analysis-tech-debt-audit/SKILL.md",
+    "src/squadron/pipeline/prompt_renderer.py",
+    "tests/cli/test_doctor_checks.py",
+    "commands/agents/sq-analysis/SKILL.md",
+    "src/squadron/cli/commands/setup_steps.py"
+  ],
+  "searches": [
+    "list_files src/squadron/commands/**/* in .",
+    "grep receipt_name|receipt_base|bundled_skill_names|bundle_subdirs in .",
+    "list_files commands/**/* in .",
+    "list_files src/squadron/skills/*.py in .",
+    "grep sq models? list in .",
+    "grep commands/agents|\"agents\"|analysis-understand|analysis-tech-debt in .",
+    "grep codex|Codex|prefix_rule|default\\.rules|sq-spawn in .",
+    "list_files tests/**/test_skills*.py in .",
+    "list_files tests/skills/*.py in .",
+    "grep commands|skills\\.toml in .",
+    "list_files src/squadron/data/skills.toml in .",
+    "grep commands|glob\\(|rglob in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/metrology/audit.py",
+    "grep check_skill_packs|SECTION_SKILLS|Skill Packs in .",
+    "grep connection failed|HostUnreachable|Connection error|could not connect in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src",
+    "grep tmp_path\\}|\"command\"|cmd_parts|sq _|\\b_summary|hidden=True in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/pipeline/prompt_renderer.py",
+    "grep add_typer|app\\.command\\(|hidden=True in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/cli/app.py",
+    "grep run_all_checks|check_skill_packs|_command_targets_to_check in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src",
+    "grep autouse|shutil\\.which|def _hermetic|HOME in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests/conftest.py",
+    "grep skills (install|uninstall|list)|skills\\.toml in .",
+    "grep skill pack|Skill Pack|sq skills|skills\\.toml in .",
+    "grep outside the install|Skipping receipt|\\.\\./|escape in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/tests/cli/test_install_commands.py",
+    "grep Codex|codex|sandbox in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/DEVLOG.md",
+    "grep ^(def|async def) |reach|provider|network|httpx|subprocess in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron/cli/commands/metrology.py",
+    "grep tech-debt-audit|commands_source|get_commands_source|_resolve_bundled|resolve_source|_AUDIT_FILE_GLOBS\\s*=|\\.claude in /Users/manta/.config/squadron/reading-20261122/wt/squadron-928-design/src/squadron"
+  ],
+  "sections_in_document": 26,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 51,
+  "prompt_tokens": 1408576,
+  "cached_tokens": 1242090,
+  "cache_write_tokens": 166464,
+  "completion_tokens": 41621,
+  "reasoning_tokens": null,
+  "duration_seconds": 398.87557912478223,
+  "cost_usd": 4.5825097,
+  "cost_basis": "provider"
+}

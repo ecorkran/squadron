@@ -1,0 +1,89 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 7 puts the throttle check after `progressed = True`, so the pipeline retries forever",
+   "description": "In `dispatch`, `progressed = True` (line 153) runs on every message *before* the `ResultMessage.is_error` check (line 156). Task 7 (line 70) says to add the `RateLimitEvent` check \"before the existing `ResultMessage.is_error` check\", which puts it *after* `progressed = True`. When `RateLimitRejected` is raised, the handler sees `progressed` is true and runs `if progressed: retries = 0` (lines 190-191). A stream that keeps sending only `rejected` events then resets the budget on every attempt, sleeps 2s each time, and never raises.\n\nThe query/client modes don't have this problem, because `_skip_unparseable` raises before anything is yielded. Task 11's test (two rejections, then success) can't detect the bug, and no task tests running out of retries on `dispatch`.\n\nThe check must come before `progressed = True`, or skip setting it for `RateLimitEvent`. Task 11 should add a test that retries run out when every attempt is rejected.",
+   "location": "src/squadron/pipeline/sdk_session.py:152-156"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 6 says two opposite things about informational events, and one reading leaks them into four consumers",
+   "description": "Task 6 (line 61) says informational events should \"continue the loop without yielding it to the caller \u2026 let it flow to translation as normal\". Those can't both happen: in `_handle_query_mode` and `_handle_client_mode`, translation only runs on what `_skip_unparseable` yields (lines 155-156, 203-205). The LLD (D4, line 265) says informational events \"must not reach translation\".\n\nIf the implementer lets them through, Task 4's new system message reaches every `handle_message` consumer. Each of these filters out only the existing types, so the rate-limit notice gets appended to prose:\n- `src/squadron/review/review_client.py:263`\n- `src/squadron/pipeline/summary_oneshot.py:139`\n- `src/squadron/pipeline/actions/dispatch.py:165` (skips only `SDK_RESULT_TYPE`)\n- `src/squadron/metrology/audit.py:542-559`\n\nThat is the issue #23 defect class in review artifacts, which Task 14 checks for. A pass-through event would also set `progressed` in client mode.\n\nTask 8 (line 79) only asks to \"verify no other \u2026 exclusion list exists\". These lists do exist, and no task changes them. Task 6 should say plainly \"skip; do not yield\", or a task should add `\"rate_limit_event\"` to all four filters.",
+   "location": "src/squadron/providers/sdk/agent.py:97-140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Running out of retries in query mode depends on an unspecified exception message",
+   "description": "Task 6 (line 63) replaces \"both\" `RATE_LIMIT_MARKER` gates, but `agent.py` has three uses. The third, line 180, decides between `ProviderRateLimitError` and plain `ProviderError` when retries run out. Task 2 (line 32) says to add no behavior to `RateLimitRejected` and never says what its message text should be.\n\nIf it's raised with text that doesn't contain `\"rate_limit\"`, running out of retries raises `ProviderError`. Then `src/squadron/metrology/audit.py:693` (which catches only `ProviderRateLimitError`) never reports `AuditRunFailure.RATE_LIMITED`. That breaks SC6, and the rewritten `test_exhausted_rate_limit_raises_a_distinct_error` fails. Line 180 should also switch to `_is_throttle(exc)`, or the message should be specified.",
+   "location": "src/squadron/providers/sdk/agent.py:180-181"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No task makes SC3 hold for pipeline `dispatch`, which has no `RateLimitStats`",
+   "description": "SC3 (slice line 370) says a rejected event on **any of the three** dispatch paths increments `RateLimitStats.throttles`. `SDKExecutionSession.dispatch` has no stats object; it only logs and sleeps. No task adds one, and no test asserts it.\n\nTask 15's forced-throttle step says \"in one dispatch path, confirm \u2026 `RateLimitStats.throttles` increments\", which can't be observed if the implementer picks the pipeline path. Either add stats to `dispatch` in Task 7 and assert them in Task 11, or record that SC3 applies only to the agent paths.",
+   "location": "src/squadron/pipeline/sdk_session.py:190-202"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Importing the private `_is_throttle` across modules fails strict pyright",
+   "description": "Pyright runs with `typeCheckingMode = \"strict\"` over `src`. Strict mode reports `reportPrivateUsage` as an error. Task 2 defines `_is_throttle` with a leading underscore in `rate_limit.py`, and Tasks 6 and 7 import it into `agent.py` and `sdk_session.py`. Task 13's `uv run pyright` will fail. The slice design uses this name too, but the task should pick a public name such as `is_throttle` (or say how to handle the error) rather than leave it to be found at Task 13.",
+   "location": "pyproject.toml:93-96"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and several sit where tests fail",
+   "description": "Every `Commit:` line (28, 36, 44, 50, 56, 66, 75, 81, 89, 101, 108, 125, 147) is written as a `- [ ]` checkbox; commit markers should be plain lines. Several also sit where the suite is red:\n- **Task 1:** at 0.2.152 the parser no longer raises on `rate_limit_event`. `test_the_shim_lets_a_rejected_event_raise` (expects `MessageParseError`) and `test_the_shim_absorbs_informational_events` (expects `SystemMessage`) in `tests/providers/sdk/test_agent.py:684-731` fail. This commit also ships the silent backoff loss into history.\n- **Task 6:** removing the `is_rate_limit_event` special case makes `test_a_rejected_rate_limit_event_reaches_the_backoff` (`test_agent.py:648-681`) skip the fabricated `MessageParseError`, so the test fails.\n- **Task 9:** all four shim tests fail at runtime on the lazy `install_rate_limit_parser_shim` import.\n\nThe suite is only green again at Task 10. Merge 1\u21922, 6+9\u219210 and 7+8\u219211 into tested commit points, or drop the intermediate markers.",
+   "location": "unverified"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tasks 4 to 7 leave pipeline output leaking until Task 8",
+   "description": "Once Task 4 lands, `translate_sdk_message` returns a `rate_limit_event` system message. At the new floor, informational events reach `dispatch` as `RateLimitEvent` objects, and line 173 still appends them to `response_parts`. Every commit from Task 4 to Task 7 has the issue #23 leak. Task 8 is a one-line change in the same loop Task 7 edits, so it should merge into Task 7 or move before Task 4's commit.",
+   "location": "src/squadron/pipeline/sdk_session.py:173"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Some stale docstrings are left out of the rewrite tasks",
+   "description": "LLD Part B (line 355) asks for stale docstrings and comments to be rewritten in `_skip_unparseable` and \"both `dispatch` methods\". These still say \"when the CLI emits a `rate_limit_event` the SDK raises `ClaudeSDKError`\" or \"Retries the full query on a `rate_limit_event`\", and no task covers them:\n- `_handle_query_mode` (lines 143-149)\n- `_handle_client_mode` (lines 185-192)\n- `SDKExecutionSession.dispatch` (`src/squadron/pipeline/sdk_session.py:132-135`)\n\nTask 7 covers only the comment in the except block (lines 181-185). Task 6 covers only `_skip_unparseable`.",
+   "location": "src/squadron/providers/sdk/agent.py:142-192"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 10 has wrong facts about the test file and a weak SC9 check",
+   "description": "- Line 97 lists `test_other_unknown_messages_are_still_skipped` under `TestUnparseableMessages`. It is actually in `TestRateLimitBackoff` (line 765).\n- The `TestUnparseableMessages` docstring (lines 419-420) says `rate_limit_event` \"means real throttling and must reach the backoff path\". That is stale, but Task 10 only allows edits to comments that mention the shim.\n- The SC9 grep on line 99 (`MessageParseError.*rate_limit`) matches within a single line. The current fabrication spreads `MessageParseError(` and `\"Unknown message type: rate_limit_event\"` over two lines (666-667), so the grep finds nothing even before the rewrite. It can't confirm SC9.",
+   "location": "tests/providers/sdk/test_agent.py:765"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Nothing checks that Task 15's temporary injection was removed before Task 16 commits",
+   "description": "Task 15 adds an uncommitted forced-throttle patch at the `receive_response` seam and says \"revert before committing\". But Task 15 has no commit, and Task 16's commit has no check for that patch. If the step is interrupted, or Task 16 runs right after, the patch can end up in the closeout commit. Add a step to Task 16 that confirms the source tree is clean apart from documentation (e.g. `git status`/`git diff --stat src tests`).",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 12 only verifies, and could merge into Task 13",
+   "description": "I checked Task 12's claims: `test_rate_limit_overrides_reach_the_agent` exists, `test_provider.py` never mentions the shim, and `tests/metrology/test_audit_cli.py:337,377` build `AuditRunResult` directly. Task 12 changes no files. Task 13 already runs `pytest tests/providers tests/metrology`, so Task 12 can merge into it with its DEVLOG note.",
+   "location": "tests/providers/sdk/test_provider.py:194"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Small accuracy points",
+   "description": "- Task 5 says \"create if it does not exist\", but `tests/providers/sdk/test_translation.py` already exists.\n- Task 13's success line says \"all four commands\", but the task lists six.\n- Task 1 runs plain `python -c` rather than `uv run python -c`, so it may check the wrong interpreter.\n- Task 3's `-k \"classif or throttle or RateLimitRejected\"` depends on test names the task never sets, so it could select no tests.\n- Task 2 imports `RateLimitEvent` but not `ClaudeSDKError`, which `RateLimitRejected` needs as its base class.\n- I couldn't confirm which `RateLimitInfo` constructor fields are required (Tasks 3, 10, 11), because SDK 0.2.152 isn't installed in this worktree.",
+   "location": "tests/providers/sdk/test_translation.py"
+  }
+ ]
+}

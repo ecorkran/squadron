@@ -1,0 +1,460 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Template registry is never loaded on metrology paths, so every hash and every threshold read is `None`",
+      "description": "`_template_content_hash` calls `get_template(template_name)`, which only reads the module-level `_TEMPLATES` dict (`src/squadron/review/templates/__init__.py:155-165`). That dict is populated only by `load_all_templates()`, whose only callers are `cli/commands/review.py:304/658/756`, `pipeline/actions/review.py:111`, `pipeline/classification.py:67` and `pipeline/loader.py:174`. Nothing in `src/squadron/metrology/`, `cli/commands/metrology.py` or `cli/app.py` calls it.\n\nIn a fresh `sq metrology sample` process the registry is therefore empty and every captured sample gets `template_content_hash=None`. The existing suite pins this: `tests/metrology/test_result_ref.py:109-113` asserts `None` for `judge.slice-vs-arch`, which is a real built-in template name (`src/squadron/data/templates/judge-slice-vs-arch.yaml:1`).\n\nWhat this breaks in the plan as written:\n- **T7/T9:** every real cell is unversioned, so `classify_direction` can never return `GRADUATE`; `read_current_thresholds` (T7 line 122, bare `get_template`) returns `None` plus a WARNING for every cell.\n- **T15/T16:** `graduate` always refuses; the \"pairing meeting `GRADUATE` succeeds\" test can only pass with hand-forged hashes or by test-order accident, since the registry is process-global.\n- **T17 steps 3, 5, 6, 7:** all fail in a scratch repo.\n- **T1:** the narrowing is a production no-op, and the \"one-time re-key of historical records\" (line 18) is really `None` \u2192 hash.\n\nNo task loads templates on the capture, recommend or offers paths, and no task updates `test_result_ref.py:113`, which fails the moment one does. T17 line 258 expects only the T1/T2 re-key to change existing tests.\n\nFix: add a task ahead of T1 that loads templates inside `_template_content_hash` and `read_current_thresholds`, updates the pinned test, and gives T2/T8/T16 a registry fixture that restores state.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/metrology/identity.py:309-313"
+    },
+    {
+      "severity": "FAIL",
+      "title": "T13's result-discovery fallback makes the non-empty-offers guarantee unreachable",
+      "description": "T13 (line 201) says to reuse \"320's existing result-discovery surface\" and, if none exists, to \"scope this task to the store-recorded samples only and note the gap\". No such surface exists:\n- `resolve_target` globs one index only (`capture.py:93-95`).\n- `_REVIEWS_SUBDIR` is private (`capture.py:37`).\n- The store exposes only `list_samples` (`store.py:160`).\n\nSo the fallback is the branch that fires. A store-recorded result is by definition already sampled, so the unsampled set is always empty. That makes T13's own success line (206: \"3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s\"), T14's non-empty guarantee, T16 line 247, T17 step 6 and slice criterion line 269 all unmeetable.\n\nThe task must commit to adding the reviews-directory enumeration, with a public helper or constant in `capture.py`. It must also say what the scan does with files it cannot key:\n- `derive_judge_config_id` raises `MetrologyTargetError` for any review without `score` (`identity.py:252-259`), which is every non-judge review and every `.json` review in that directory.\n- Deriving a `result_ref` to test \"already sampled\" needs `derive_project_id`, which raises `MetrologyIdentityError`. T15 line 232 limits handling to `MetrologyStoreError`/`MetrologyTargetError`, so that error would be uncaught.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/metrology/capture.py:93-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T3 and T11 together create an import cycle between `models.py` and `calibration_models.py`",
+      "description": "T3 defines `GraduatedConfig` in `calibration_models.py`, which must import `JudgeConfigId` from `models.py` (directly, and via `report_models.py:13`). T11 line 175 then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`, which must import `calibration_models`. A top-of-file import fails with `cannot import name 'JudgeConfigId'` from a partially initialised module.\n\nIt also pulls `squadron.pipeline.actions.judge` into every metrology import, and `squadron/pipeline/__init__.py:15-35` imports the whole pipeline package. Move `GraduatedConfig` and `EvidenceSnapshot` into `models.py`, or state the deferred-rebuild approach explicitly.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/metrology/models.py:100-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence contradicts the behaviour it requires",
+      "description": "Line 115 says to implement \"exactly, in this precedence order\" and step 1 is `n < floor \u2192 INSUFFICIENT_EVIDENCE`. Step 4 and line 121 then require a below-floor, low-match cell to return `TIGHTEN`. Followed literally, the list fails T8 line 134.\n\nThe unversioned case with a low match rate is not defined either (step 2 comes before step 4). Nor is `tighten_rate >= graduate_rate`. Rewrite the list in the order the code must evaluate: tighten check first, then floor and unversioned, then graduate, then hold. State the unversioned-and-low outcome.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Idempotent re-graduate has no core function, and `write_graduation` cannot update in place",
+      "description": "T15 line 230 requires \"update its evidence snapshot in place \u2026 one record, not two\". T11 provides only `write_graduation`, which \"returns a generated record id\" (line 176), and `find_graduation`, which returns a `GraduatedConfig` with no record id or path (line 177). Nothing can locate the file to overwrite, so the update logic lands in the Typer shell, against line 228's \"thin shells\".\n\nA killed delete-then-write, or two generated ids, leaves two records for one identity; `find_graduation` has no rule for that. Specify a deterministic record id derived from `(JudgeConfigId, artifact_level)` so a re-write overwrites atomically through `_write_atomic`.\n\nT11 is also ambiguous about whether these are module functions taking `store` or `MetrologyStore` methods; lines 176-178 say both.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:131-142"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`graduate` assumes one cell per `(template, model, level)`, but agreement groups on the hash",
+      "description": "`agreement_report` keys cells on `(level, template_name, model, template_content_hash)`. One `--template T --model M --level L` can therefore match several cells:\n- an unversioned cell (hash `None`), which every existing store has;\n- a pre-T1 hash cell;\n- the current-hash cell;\n- cells from earlier prompt edits.\n\nT15 line 230 says \"look up the pairing's current recommendation \u2026 filtered to this template/model/level\" with no rule for picking one. A stale-hash cell at `GRADUATE` could be recorded as a graduation that is lapsed on arrival.\n\nThe task should select the cell whose hash equals the current template hash and refuse otherwise. That needs a public accessor: `_template_content_hash` is private, and pyright strict (`pyproject.toml:87`) rejects cross-module private use.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/metrology/report.py:199-227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graduation records have no project scope and no removal command",
+      "description": "The store is user-level and cross-project (`~/.config/squadron/metrology`). `GraduatedConfig` carries no project id (T3 line 64), and `list_graduations` / `select_residual_offers` take no project filter. `offers --project ID` (line 231) therefore has nothing to filter on.\n\nT13 line 203 defines lapse as \"no longer matches any current judge result\". Running `offers` in any other repo then reports every graduation as lapsed due to a config change, which is false.\n\nNo command in the plan removes or supersedes a graduation. After a prompt edit and re-graduation, the stale record stays and prints its lapse line on every `offers` run until someone deletes the JSON file by hand.",
+      "file_ref": null,
+      "category": "state-handling",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Float config keys are not settable through `sq config set`, and defaults are unspecified",
+      "description": "`_coerce_value` handles only `int` and `str` and raises `ValueError(\"Unsupported config type\")` otherwise. `config_set` catches only `KeyError` (`cli/commands/config.py:33-37`). After T5, `sq config set metrology.graduate_match_rate 0.9` ends in a traceback. T6 hides this because it writes `.squadron.toml` directly.\n\nRelated gaps in T5/T6:\n- **Defaults:** T5 gives no default values, yet T6 line 104 asserts \"correct \u2026 defaults\".\n- **Wrong claim:** T5's success line says `sq config list` shows descriptions; it prints name, value and source only (`config.py:92`).\n- **Validated readers:** T15 reads three rates and the floor with none specified. The existing floor reader is private (`report.py:189`), and a TOML `1` reads back as `int`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:54-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed `judge:` block is claimed covered but is neither handled nor tested",
+      "description": "`resolve_thresholds` calls `float()` on the raw value and raises `ValueError`/`TypeError` on a non-numeric floor. The pipeline catches this itself (`pipeline/actions/review.py:230-238`).\n\nT7's `read_current_thresholds` has no such handling. The error escapes `recommend_thresholds` and the CLI, which catches only the two metrology errors.\n\nThe slice's failure-mode row (line 242) requires a flagged target, a WARNING and a test. Line 287 of the task file says this is \"inherited from `resolve_thresholds`, exercised in T8\", but T8 (lines 131-137) has no such case and there is nothing to inherit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/judge.py:54-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation is not in the note and not asserted",
+      "description": "Slice criterion line 270 requires the runtime-drawn-model limitation to be \"stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\". Slice line 201 specifies that the note says the threshold cannot track a pool-drawn model.\n\nT9 line 147 covers only the template-and-model pairing sentence. T10 line 161 and T16 line 243 assert only that the note is non-empty or present. Add the limitation text to T9 and a content assertion on text and `--json` output.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T17 step 5 passes with or without T1",
+      "description": "Agreement cells are grouped on each sample's stored `judge_config`. Editing `judge.pass_floor` or `system_prompt` and re-running `report agreement` (line 265) shows identical cells and n before and after T1. The `system_prompt` half (\"new `JudgeConfigId`, evidence separates\") can never be observed that way.\n\nThe regression only shows when a new sample is captured after each edit: it should join the existing cell after a threshold edit and open a new cell after a prompt edit. Add those captures to step 5.\n\nThe walkthrough T17 defers to also uses `--template judge-tasks-vs-slice` (slice line 312). The template's name is `judge.tasks-vs-slice` (`src/squadron/data/templates/judge-tasks-vs-slice.yaml:1`), so that command finds no cell.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "src/squadron/metrology/report.py:226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 pins a return type that cannot carry the lapse or pruned signals T14 asserts",
+      "description": "The signature is fixed as `-> list[OfferTarget]`. Line 203 leaves the lapse signal open (\"return enough information (or have the CLI re-derive it\u2026)\"), and T14 line 217 asserts \"on whatever signal T13 produces\".\n\nT14 line 218 tests a pruned review file that is \"skipped, counted \u2026 WARNING logged\". T13 has no pruned-file step and no place for a count. `GraduatedConfig` references no review paths, so a deleted file is simply absent from a scan.\n\nDefine one result shape, for example per-graduation offers, status (active, exhausted or lapsed) and skipped count. State where a pruned path can come from.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers follow all 17 tasks, including implementation before its tests",
+      "description": "Every task ends in a `**Commit:**` line (39, 52, 69, \u2026 272). Eight of them land implementation before the test task that verifies it (T1, T3, T5, T7, T9, T11, T13, T15). Put one marker per implementation-and-test pair, eight or nine in total.\n\nT10's no-mutation check (line 163) can be cut. `recommend_thresholds` takes no store or cwd, and T16 line 248 already makes the assertion the slice asks for at the `recommend` entry point.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Signatures deviate from the slice design without saying so",
+      "description": "- `classify_direction` gains `versioned`, `graduate_rate` and `tighten_rate` (slice line 84 has three parameters).\n- `recommend_thresholds` drops `current: ThresholdSnapshot` (slice line 83).\n- `read_current_thresholds` and `ThresholdTarget.current` become optional (slice lines 85, 98).\n\nAll are sound and needed by the failure-mode table; `ThresholdSnapshot` is undefined in the design. A one-line note in the Context Summary would stop an implementer \"correcting\" them back.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`recommend --json` with `--level` is unspecified",
+      "description": "The existing `report agreement` filters rows by level but emits the unfiltered model under `--json`. T15 line 229 does not say which behaviour `recommend` follows.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/metrology.py:298-302"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about existing code check out, apart from those flagged above",
+      "description": "- `_template_content_hash` is at the cited lines and hashes the six named fields.\n- `judge.py:41-57` merges step \u2192 template \u2192 constants, with `75.0` / `50.0`.\n- `judge-tasks-vs-slice.yaml` has `pass_floor: 78`.\n- `JudgeThresholds` is a dataclass (`judge.py:25-30`).\n- `RECORD_TYPE_SAMPLE` and `RECORD_TYPE_AUDIT_FINDING` are in `models.py:25-26`.\n- `tests/metrology/test_identity.py` and `test_config.py` exist.\n- The Typer-free parity test T16 mirrors is at `tests/metrology/test_report_cli.py:329-344`.\n- The `(322)` slice-plan entry T17 updates is at `320-slices\u2026md:64`.\n- T1 alone breaks no existing test; nothing pins a hash value.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/metrology/identity.py:298-323"
+    },
+    {
+      "severity": "PASS",
+      "title": "New record type coexists with existing store reads",
+      "description": "`list_samples` already skips records with `sample is None` or a non-sample `record_type`. `count_samples`, the budget check and all 321 reports are therefore unaffected by `graduated_config` records. The optional envelope field needs no schema bump, which meets slice line 283.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:180-182"
+    },
+    {
+      "severity": "PASS",
+      "title": "Remaining success criteria trace to tasks, and no load test is owed",
+      "description": "Each of these has both an implementation task and a test task:\n- floor refusal with n and floor stated (T7-T9, T15/T16);\n- unversioned refusal (T7/T8);\n- version-scoped matching (T11/T12);\n- hash narrowing in both directions (T1/T2);\n- graduate refusal (T15/T16);\n- Typer-free core (T16);\n- 321 consumed unchanged.\n\nNo scope creep was found. The slice restates no NFR, so no `tests/load/` or CI-gating task is required. Test tasks directly follow their implementation tasks.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:276-288"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Template registry is never loaded on metrology paths, so every hash and every threshold read is `None`",
+      "location": "src/squadron/metrology/identity.py:309-313",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T13's result-discovery fallback makes the non-empty-offers guarantee unreachable",
+      "location": "src/squadron/metrology/capture.py:93-95",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T3 and T11 together create an import cycle between `models.py` and `calibration_models.py`",
+      "location": "src/squadron/metrology/models.py:100-111",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "T7's numbered precedence contradicts the behaviour it requires",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Idempotent re-graduate has no core function, and `write_graduation` cannot update in place",
+      "location": "src/squadron/metrology/store.py:131-142",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`graduate` assumes one cell per `(template, model, level)`, but agreement groups on the hash",
+      "location": "src/squadron/metrology/report.py:199-227",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "state-handling",
+      "raw_category": null,
+      "summary": "Graduation records have no project scope and no removal command",
+      "location": "src/squadron/metrology/store.py:35",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Float config keys are not settable through `sq config set`, and defaults are unspecified",
+      "location": "src/squadron/config/manager.py:54-61",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Malformed `judge:` block is claimed covered but is neither handled nor tested",
+      "location": "src/squadron/pipeline/actions/judge.py:54-57",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation is not in the note and not asserted",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "T17 step 5 passes with or without T1",
+      "location": "src/squadron/metrology/report.py:226",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "T13 pins a return type that cannot carry the lapse or pruned signals T14 asserts",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers follow all 17 tasks, including implementation before its tests",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Signatures deviate from the slice design without saying so",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "`recommend --json` with `--level` is unspecified",
+      "location": "src/squadron/cli/commands/metrology.py:298-302",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Claims about existing code check out, apart from those flagged above",
+      "location": "src/squadron/metrology/identity.py:298-323",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "New record type coexists with existing store reads",
+      "location": "src/squadron/metrology/store.py:180-182",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Remaining success criteria trace to tasks, and no load test is owed",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:276-288",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-22T22:26:38.884515",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 51,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "chars": 31902,
+      "sha256": "4c4257ef9fbdfd55114caf6e6edcd3ca2b33c14c6ce5d06a650ca56da689d2fc",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+      "chars": 38932,
+      "sha256": "d1cdbf21b7e79ee0da3e0397bd2d4dc8cbb8d7c78fd1dcf23d59aaf5b3b94067",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/metrology/identity.py",
+    "src/squadron/metrology/models.py",
+    "src/squadron/metrology/store.py",
+    "src/squadron/metrology/report_models.py",
+    "src/squadron/metrology/report.py",
+    "src/squadron/metrology/capture.py",
+    "src/squadron/metrology/levels.py",
+    "src/squadron/cli/commands/metrology.py",
+    "src/squadron/pipeline/actions/judge.py",
+    "src/squadron/config/keys.py",
+    "tests/metrology/test_identity.py",
+    "tests/metrology/test_config.py",
+    "src/squadron/review/persistence.py",
+    "src/squadron/review/templates/__init__.py",
+    "src/squadron/data/templates/judge-tasks-vs-slice.yaml",
+    "src/squadron/pipeline/actions/review.py",
+    "tests/metrology/test_result_ref.py",
+    "tests/metrology/conftest.py",
+    "tests/metrology/test_report_cli.py",
+    "tests/metrology/test_store.py",
+    "tests/metrology/test_models.py",
+    "src/squadron/config/manager.py",
+    "src/squadron/cli/commands/config.py",
+    "project-documents/user/architecture/320-slices.judge-calibration-quality-metrology.md",
+    "src/squadron/cli/commands/review.py",
+    "src/squadron/pipeline/actions/__init__.py",
+    "src/squadron/pipeline/__init__.py"
+  ],
+  "searches": [
+    "list_files src/squadron/metrology/**/*.py in .",
+    "list_files tests/metrology/**/* in .",
+    "list_files src/squadron/review/**/*.py in .",
+    "list_files src/squadron/data/templates/* in .",
+    "grep reviewType in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/src",
+    "grep _template_content_hash|template_content_hash in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests",
+    "grep typer|Typer in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests/metrology",
+    "grep save_review_result|review_type=|get_template\\(|load_all_templates|load_builtin_templates in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/src",
+    "grep load_all_templates|load_builtin_templates|clear_registry in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks",
+    "grep templates|metrology in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/src/squadron/cli/app.py",
+    "grep ^name:|^model:|pass_floor|concerns_floor in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/src/squadron/data/templates",
+    "grep template_content_hash|register_template|get_template|load_all_templates|_TEMPLATES in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests",
+    "list_files src/squadron/config/*.py in .",
+    "list_files project-documents/user/**/32[0-2]* in .",
+    "grep CONFIG_KEYS|type_ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks",
+    "grep 322|\\(32[0-4]\\)|^\\s*\\d+\\. \\[|- \\[[ x]\\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/project-documents/user/architecture/320-slices.judge-calibration-quality-metrology.md",
+    "grep template_content_hash|judge_config|get_template|register_template in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests/metrology",
+    "grep pyright|reportPrivateUsage|typeCheckingMode|\\[tool\\.ruff|select =|testpaths|tests/load in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/pyproject.toml",
+    "grep config set|CONFIG_KEYS|float|metrology in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests/config",
+    "grep help|\"list\"|sample_id|\\.json in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/tests/metrology/test_cli.py",
+    "list_files src/squadron/pipeline/**/__init__.py in .",
+    "grep pool|runtime-drawn|drawn in /Users/manta/.config/squadron/reading-20261122/wt/squadron-322-tasks/src/squadron/metrology",
+    "list_files tests/load/** in ."
+  ],
+  "sections_in_document": 20,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 52,
+  "prompt_tokens": 1001219,
+  "cached_tokens": 862675,
+  "cache_write_tokens": 138524,
+  "completion_tokens": 31834,
+  "reasoning_tokens": null,
+  "duration_seconds": 303.70826916676015,
+  "cost_usd": 3.6653979999999997,
+  "cost_basis": "provider"
+}

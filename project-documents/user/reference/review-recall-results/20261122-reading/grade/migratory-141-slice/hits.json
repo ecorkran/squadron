@@ -1,0 +1,156 @@
+{
+ "case": "migratory-141-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Workload schema: `world_size: [200.0, 200.0, 200.0]`, `cluster_centers: [[60,60,60],[140,140,140]]`, \"initializes one `AgentState` per workload\". `src/migratory/__init__.py` at `3c5e6c7` has `DIMS = 2` and `AgentState` arrays are N x 2. The checked-in workloads ended up 2D (`[200.0, 200.0]`, `[60.0, 60.0]`). **VALID**: contradicts code. Needs: code.",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [],
+    "r05": [
+     1
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "\"A single registered backend: `numpy` (today's `engine.tick.tick` ...)\" and \"the NumPy backend (the only backend that exists today)\", while Numba is a later one-row addition. At `3c5e6c7` `engine/_jit_config.py` sets `USE_JIT_KERNELS = True` and every force in `flocking.py` and `herding.py` dispatches to `forces_jit` kernels by default, so `tick()` as called by the harness runs the Numba kernels; the design never says the `numpy` runner must turn the flag off, and the implemented `numpy_backend.py` does not touch it. The report's \"numpy\" rows would be Numba timings and the parity \"golden\" hash would come from the JIT path. **VALID**: contradicts code. Needs: code. (Moderate confidence: the design also says a Numba runner would delegate to `forces_jit` \"via the engine's existing JIT-config flag\", which shows awareness of the flag but not the consequence.)",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     1
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [],
+    "r10": []
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Workload section: profile names resolve to \"the existing `BehavioralProfile` constructors used in `config/default.yaml`. The harness does not invent new profiles\". `config/default.yaml` has one profile, `default`; `flocker` and `leader` exist nowhere (the implementation's own comment calls `leader` \"a derived profile\"). **VALID** (minor): contradicts repo. Needs: code.",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [
+     6
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"Force names resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`)\". No such instances exist; forces are classes (`CohesionForce`), and the implementation builds its own registry of instances. **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [
+     6
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Consumes from Other Slices: \"`engine.spatial.KDTreeQuery`\", while Interfaces Required says `migratory.spatial`; the class is `migratory.spatial.kd_tree.KDTreeQuery`. **VALID** (minor): self-contradiction plus code. Needs: code.",
+   "hits": {
+    "r01": [
+     11
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     10
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [
+     7
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F3 r02 i3 borderline: says profiles are not 'constructors in default.yaml' and the claim does not match default.yaml, but does not explicitly say flocker/leader are absent; counted. F4 r08 i7 not counted: questions singleton resolution only as bypassing force_builder, never says the singletons do not exist. F5 r04 i3 counted: flags the spatial module named two ways (migratory.spatial vs engine.spatial.KDTreeQuery)."
+}

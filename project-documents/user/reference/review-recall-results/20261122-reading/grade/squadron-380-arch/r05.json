@@ -1,0 +1,124 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The PR head's own tree becomes the reviewer's instruction source, and the untrusted-input rule does not cover it",
+   "description": "Lines 177-179 treat title, body, linked issues and threads as untrusted text, \"never as instructions\". The larger untrusted surface is the PR head itself. Lines 84-87 make the scratch worktree the review's working directory, and lines 68-71 say that from there \"the review path is the existing one\". On the existing path, that directory supplies:\n\n- **Rules.** `resolve_rules_dir` (`src/squadron/review/rules.py:41-45`) picks up `{cwd}/rules` or `{cwd}/.claude/rules`. Their content is appended to the system prompt under \"Additional Review Rules\" (`review_client.py:113-114`). A PR that adds `.claude/rules/review.md` writes the reviewer's instructions.\n- **CLAUDE.md.** `_inject_file_contents` injects `{cwd}/CLAUDE.md` as \"project conventions\" (`review_client.py:412-421`), and the code prompt tells the model to apply it (`builders/code.py:51-55`).\n- **SDK project settings.** `code.yaml` declares `setting_sources: [project]` and `permission_mode: bypassPermissions`, passed through at `providers/sdk/provider.py:76-83`. With the worktree as `cwd`, the Claude Code CLI loads the PR's `.claude/` settings. Whether hooks defined there execute in this mode needs verifying, and if they do this is code execution under the operator's account. Slice 916 E3 kept `bypassPermissions` on the assumption of a trusted tree.\n- **Project config.** `get_config(..., cwd=cwd_for_config)` reads `.squadron.toml` from the same directory (`review_client.py:336-340`).\n\nThe result is a PR author steering a verdict that capability 2 then posts under the operator's login (lines 138-141). The document must state which tree supplies rules, conventions, settings sources and project config for a PR review (base or operator side, not head). It must also say that SDK `setting_sources` is not `project` when the working directory is a PR head. This contradicts \"same rules loading\" in lines 48-51, so it cannot be left to the `sq review pr` slice.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:177-179"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"A review without tools needs only the fetched ref\" is false for the existing engine",
+   "description": "The engine reads the working directory with or without tools:\n\n- `--files` globs and injects bodies from `cwd` (`review_client.py:403-406`, `_inject_glob_files`). The initiative plan lists `--files` as a flag that carries over.\n- CLAUDE.md is injected from `cwd` regardless of tools.\n- Rules resolve from `cwd`.\n- `_check_path_existence(findings, cwd)` runs after every review (`parsers.py:556-557`). Slice 917 Part 5 adds line-bounds checks on the same root.\n\nWithout a worktree, `cwd` is the operator's checkout on some other branch. The model then gets file bodies and conventions from the wrong tree, and files the PR adds are flagged as non-existent. That is the \"diff and the files a reviewer opens can disagree\" defect from lines 109-110, reintroduced on the path the document says is safe. It also means `--no-tools` changes which rules and CLAUDE.md a PR review uses. Either always materialize the tree, or name every tree-reading step and say how each reads from a ref.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:84-87"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The base ref is never fetched, so the range can include changes the PR did not make",
+   "description": "Only the head is fetched (lines 125, 164-165, 204). The merge-base is computed against whatever local base ref exists. If the PR head has merged a newer base than the local `origin/<base>`, `merge-base(stale base, head)` is the stale tip. The diff then includes every base commit the PR merged in. This is the slice 916 Part A defect by another route, and it breaks the claim in lines 161-162 that the review \"matches what the host displays\". Three related gaps:\n\n- \"Base moved since resolution\" is a named failure (line 92) with no stated meaning or response.\n- Shallow clones, where merge-base is not computable, are not addressed.\n- The fetch runs over git's own transport and credentials, not `gh`. Lines 119-121 and 184-186 claim auth and transport are fully delegated to `gh`. An operator with working `gh` auth and a failing git remote is a failure mode missing from lines 91-94.\n\nAlso, `run_git` bounds every call at 30 seconds (`git_utils.py:24`). A PR-head fetch on a large enterprise repository will exceed that and be reported as \"git unavailable\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:160-165"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Who fetches and who computes the range is stated two ways",
+   "description": "The adapter and the review command are both given the same work:\n\n| Responsibility | Adapter | Review command |\n|---|---|---|\n| Fetch the head | Lines 52-53, 164-165, 203-204 | Lines 124-127 (\"fetches the head ref\") |\n| Compute the diff range | Lines 68-69 (adapter produces \"a local diff range\") | Lines 124-127, 206-207 (\"range resolution with merge-base semantics\") |\n\nIf the adapter owns fetch and range, every future host implementation re-implements local git logic that is host-independent. If the command owns them, the adapter protocol should return a refspec and base/head SHAs and stop there. Pick one; the second is the cleaner boundary. Host-agnostic git work belongs beside `git_utils`, with the worktree lifecycle, which currently has no named owner.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:68-71"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Posting as a flag on the review command makes dry-run preview something other than what gets posted",
+   "description": "Line 81 calls posting a \"separate operation\", but lines 23-24 and 138 make it a flag on `sq review pr` that posts the review that invocation just produced. No path posts a review the operator has already read. Run, read, then post means re-running with `--post`, which pays for and posts a different, non-deterministic review. The dry-run (lines 81-82) has the same flaw: it prints a review that the next real run will not reproduce. That contradicts \"never surprise the operator\" (lines 56-58). Posting should take a saved artifact as input, with `--post` on the review as a convenience at most.\n\nUnstated interactions:\n- `--post` with `--no-save`.\n- `--post` after a failed save.\n- `--post` on a degraded or UNKNOWN review, or a provider-failure artifact (917 Part 4).\n- Exit-code precedence between a FAIL verdict (exit 2 today) and a rejected post.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:138-141"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The adapter protocol as enumerated cannot implement idempotent posting",
+   "description": "Lines 52-53 list six operations: resolve, fetch head, read threads, post comment, create PR, identify operator. Lines 141 and 180-183 require finding and updating squadron's prior comment. That needs list-comments and update-comment, which are not in the protocol. On GitHub a summary comment is an issue comment, not a review thread, so \"read its threads\" does not cover it. Also unspecified:\n\n- Whether the marker match is restricted to comments authored by the current operator. A second operator cannot edit the first's comment.\n- \"Updates or supersedes\" (line 141) is two behaviours. When the head has moved, overwriting erases the record of what was said about the earlier SHA.\n- To my knowledge, thread resolved-state is not a `gh pr view --json` field and needs a paginated `gh api graphql` query. Line 186's \"JSON parsing per call\" understates that; confirm before sizing the adapter slice.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:180-183"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "PR-keyed persistence defers the naming decision it exists to make",
+   "description": "Slice 916 deferred slice-less naming as \"a design decision of its own\" (issue #90). The initiative plan assigns the PR-keyed target to this architecture. The document says only \"a PR-keyed name that satisfies the review frontmatter contract\". The existing consumers constrain that name and none are mentioned:\n\n- `resolution_evidence.locate_review` globs `{index}-review.{type}.*.md` and reads the type by filename position.\n- `metrology/capture.resolve_target` globs `{index}-review.*`.\n- `metrology/discovery` globs `*-review.*`.\n\nA name beginning with the PR number collides with the slice index space. PR #380's review would be found as initiative 380's.\n\n\"Apply unchanged\" (line 136) does not hold for the writer either:\n- `format_review_markdown` hard-writes `slice:` and `project:`, with `unknown` and `0` fallbacks, and titles the file \"slice 0\".\n- `save_review_result` stamps `reviewedSha` from `git rev-parse HEAD` in the process directory (`persistence.py:515`). That is the operator's HEAD, not the PR head that line 162 says is recorded.\n- The 917 verdict gate is a commit-event action. It never fires for artifacts in a squadron data directory.\n\nAlso unstated:\n- Whether `sq review resolve`, which takes an integer index, works on PR reviews.\n- Whether the same target contract closes #90 for `--diff`-only reviews.\n- The data-directory layout. It must key on host, owner and repo, not number alone.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133-136"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`sq pr create` has no stated relationship to the remote branch and no enumerated failure modes",
+   "description": "A PR cannot be created for an unpushed branch. The document never says whether squadron pushes (an unrequested outward write), refuses, or leaves it to `gh`, which prompts interactively. The body is composed from local commits (line 143). If local is ahead of the remote, the body describes commits the PR does not contain, which breaks the traceability goal in lines 62-64. Lines 91-94 enumerate failures only for review and post. Missing for create:\n\n- Branch not pushed, or local and remote heads differ.\n- A PR already exists for the branch.\n- No commits against the target.\n- Configured integration branch absent on the remote.\n- Composition model call failed.\n\n\"The latest saved review\" (line 144) names no review type; code, slice, tasks and arch reviews all exist per index. It also does not say what happens when that review's `reviewedSha` is not the branch head.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:143-148"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The fixed five-section body conflicts with the traceability rule, and its \"contract\" has no consumer",
+   "description": "The named inputs are commits, slice documents and a review artifact (lines 62-64). No input records what was actually run, so \"how it was verified\" can only restate a slice design's planned walkthrough or be invented. For a commits-only branch (line 197), \"why\", \"how it was verified\" and \"known gaps\" have no supporting input, yet the sections are fixed (line 145). The document needs a rule for a section with no input, and a statement of how \"nothing is asserted that no input supports\" is checked on model-written prose. As written it is an aspiration.\n\nLine 233 cites the rule as adopted from initiative 360. The phrase appears in the initiative plan's 360 entry, but I could not find it stated in `360-arch.document-intelligence.md`.\n\nLines 147-148 and 192-193 call the section structure \"a contract other tooling can rely on\" that `sq review pr` \"can parse\". Nothing in this initiative parses it. Lines 177-179 inject the body as opaque untrusted data. Cut the contract claim until a consumer exists. Also consider that a body carrying the previous squadron verdict, fed back into `sq review pr` as context, anchors the next review on the last one.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:189-193"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The second-host extension point has no selection mechanism and a GitHub-shaped record",
+   "description": "\"A second host is a new implementation, not an edit\" requires something that picks an implementation before the target is parsed. Line 158-159 fixes the grammar \"at the adapter boundary\", but the grammar is host-specific. `owner/repo#n` and the URL shape are GitHub's; GitLab uses nested groups and `!n`. The document describes no registry, no remote-URL-to-host mapping, and no configuration. The typed record in lines 72-73 (owner, repository, number) is GitHub's shape, and \"linked issues\" and \"unresolved review threads\" are GitHub concepts. Since the plan excludes non-GitHub hosts in the first pass, either state the selection point and keep host-specific fields out of the shared record, or drop the \"not an edit\" claim.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Cross-repository targets and multi-remote clones are unresolved",
+   "description": "The grammar accepts a full URL and `owner/repo#n`, but the design needs a local clone of that repository to fetch into, diff in, and add a worktree to. The document does not say what happens when the target names a repository that is not the current directory's, or matches none of its remotes. Line 158 fails loudly when the repository \"has more than one\" host remote. An `origin` plus `upstream` fork clone is the standard setup for the fork PRs this serves, so the bare-number and current-branch forms would fail in the most common case. The document should state how such a clone is disambiguated.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The flag-parity question the plan assigned is answered by assertion",
+   "description": "The initiative plan lists \"which existing review flags carry over unchanged\" as an architecture question. The document answers \"every existing review flag behaving as it does today\" (also lines 207-208). Several flags cannot behave as today:\n\n- `--diff`: the PR determines the range.\n- The positional slice number.\n- `--cwd`: unclear whether it names the clone or the review root.\n- `--files`: globbed against which tree.\n- `--rules-dir` and `--no-rules`: interact with the FAIL finding above.\n- `--fan`.\n\nState per flag: carried, rejected, or redefined.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:21-22"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "PR metadata shares one injection budget with the diff",
+   "description": "\"Sized with the same truncation discipline as file injection\" puts title, body, issues and threads into `_add_injection`'s single `review.max_total_injection_bytes` budget. That function skips whatever does not fit, including the \"Git Diff\" block (`review_client.py:349-363`, `396-400`). A long thread history can displace the diff, and the per-item cap already truncates a large diff with only a log WARNING. Neither condition reaches the artifact. The posted comment (lines 139-141) would claim the head SHA was reviewed without saying the diff was cut or absent. Give metadata its own budget, and record truncation in the artifact and the comment.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:177-179"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Current State misdescribes rules loading, and the degradation path describes behaviour that does not exist",
+   "description": "Lines 106-108 say rules \"have no defined behavior\" outside a planned project. They do: `resolve_rules_dir` falls through `rules/`, `.claude/rules/`, then `~/.config/squadron/rules/`, then `None`. None of these depends on `project-documents/`. Line 175 says an unplanned repository \"runs with the template's rules and language auto-detection only\". Template rules (`review.md`, `review-code.md`) and language rules both live in the rules directory. With none resolved, `load_review_rules` returns only manual content (`rules.py:232-257`).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:174-176"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Host-side merges produce topology the slice range resolver was not built for",
+   "description": "\"Existing flows do not change\" holds for the code. But once slice branches merge through PRs, squash and rebase merges leave no merge commit. `resolve_slice_diff_range`'s second path searches `git log --merges` (`git_utils.py:229-237`). A post-merge `sq review code <slice>` then depends on the local branch still existing. Worth a sentence in Technical Considerations.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:42-44"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Slice sequencing leaves two seams uncovered",
+   "description": "Only the persistence slice is sequenced after 916 and 917. The `sq review pr` slice adds prompt inputs to `builders/code.py`, which 917 Part 3 also rewrites, and 917 is `not_started`. That slice also ships before PR-keyed persistence, so its first release produces not-persistable reviews. Say that this is intended.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:206-211"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The doctor check should be optional and has no host to probe outside a repository",
+   "description": "Line 42 says no PR is ever required, so a missing `gh` should be a WARN with `required=False`, like `check_codex_cli`. \"Host reachable\" needs a host, and `sq doctor` may run outside any repository or on a machine with several `gh` hosts configured.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:198-199"
+  }
+ ]
+}

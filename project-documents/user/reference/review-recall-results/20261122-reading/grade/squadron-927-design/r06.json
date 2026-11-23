@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6 rests on a parser state that cannot occur, and as written adds a false notice to derived-verdict reviews",
+   "description": "D6 and SC7 (line 292) describe \"a PASS parsed with `fallback_used=True` (verdict read, findings not)\". The parser never produces that.\n- `parsers.py:1023` sets `fallback_used` in the mismatch branch only when `verdict in (CONCERNS, FAIL) and not findings`. The cap never touches those verdicts.\n- The only other place `fallback_used` is set is `parsers.py:992`, the derived branch. There the verdict was derived from findings, so findings are non-empty and today's first branch renders them.\n\nSo a capped PASS never loses a not-parsed notice, and SC7 has no reachable fixture.\n\nRendering the notice \"whenever `fallback_used` is set\" would also change behavior:\n- Every derived-verdict review with findings would gain `## Findings Not Parsed`. The text at `persistence.py:535` says \"no findings could be extracted\", which is false there.\n- #97 already surfaces the derived case through `verdictSource: derived`.\n- `_display_terminal` does the same: the degraded messages sit under `if not result.findings` (`cli/commands/review.py:180`).\n\nCut D6 and SC7, or restate D6 against a state that exists.\n\nA related point on D5: `impose_diff_coverage` overwrites `verdict_source`. A derived PASS that gets capped loses its `derived` provenance, although `fallback_used` stays true in JSON. The design should say which wins.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Claims about existing call sites, tests and `_add_injection` are inaccurate",
+   "description": "- **Call sites.** The design says \"Update its two `review_client` call sites\". There is one, at `review_client.py:154`.\n- **Direct callers.** `test_injection_decision.py` is listed as a direct caller. Its only mention of `_inject_file_contents` is a comment (line 283). It reaches the function through `run_review_with_profile`.\n- **Patched caller.** `test_review_client.py:224` does not call the function; it patches it with `side_effect=lambda p, *a, **k: p`. A tuple return breaks that stub at unpacking, and the design does not say so.\n- **Tuple return.** `test_content_injection.py` has about 22 direct calls that assert on the string result. Any `assert \"x\" not in result` left unconverted would pass vacuously against a tuple. A thin wrapper that keeps the `str` return would avoid touching those tests.\n- **D3.** It says `_add_injection` \"already reports whether it added the content, so this needs no new branch\". That is true of add versus skip, but `_add_injection` returns only a `bool`, and `_inject_glob_files` is typed against `Callable[[str, str], bool]`. The design never says where `injected_chars` is computed. It cannot come from `_add_injection`'s return value, and changing that return type would break the glob helper.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A diff that never reaches the prompt for a non-budget reason is still unrecorded",
+   "description": "`_run_git_diff` returns `None` on a non-zero git exit, an `OSError`, or an empty diff, with only a log line (`review_client.py:515-521`). `run_review_with_profile` pre-checks only `--name-only`, so the second git call can still fail. The `if diff_content:` guard at line 423 then drops the diff silently.\n\nD2 says `diff_injection` is `None` only when `inputs` has no `diff` key and is otherwise \"always written\". D3 covers only the budget skip. The git-failure case is exactly the silent class this slice exists to remove, and the design does not say what it records. Record `DiffInjection(0, 0)` or an explicit \"unavailable\" state. Part B should also say whether it counts that case as truncated.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:117-125"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "OpenAI answering-model capture: missing-`model` failure mode and stamping plumbing are unspecified",
+   "description": "D8 calls `chunk.model` \"a required field on every streamed chunk\". The codebase already treats OpenAI-compatible backends as non-conforming: a tool call with no id raises its own `ProviderError` (`agent.py:462-477`). Streamed chunks are not re-validated, so a backend that omits `model` would raise `AttributeError` inside `_stream_turn` and crash a review that works today. The design should require `getattr(chunk, \"model\", None)` plus an `isinstance(str)` check and a non-empty check.\n\nTwo plumbing gaps remain.\n- `_stamp_tool_telemetry` takes only the final `turn` (`agent.py:531-538`). \"Accumulate distinct values across the agentic loop\" needs a loop-local list and a new parameter, and the no-tools branch at `agent.py:225-238` needs the same.\n- The existing `if not chunk.choices: continue` at line 287 must be bypassed for the model read. D8 says so, but the Component table does not.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:72-73,170-174"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Existing OpenAI test fixtures will report substitutions the design does not account for",
+   "description": "`tests/providers/openai/conftest.py:38,73` hardcode `model=\"gpt-4o\"` on every chunk. Tests that run the real review client with another requested model now produce `aiModel: gpt-4o`, `requestedModel`, and a WARNING. One example is `test_non_sdk_tool_call_integration.py:148`, which requests `moonshotai/kimi-k2`. The development approach lists no fixture change and no pass over assertions or caplog checks.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:369-373"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "D10's metrology consequence is understated and omits the operator-visible breakage",
+   "description": "I verified that metrology keys on `aiModel` (`metrology/identity.py:35,329`). The design says identity changes \"once\". The code shows more.\n- `graduation._identity_matches` (`graduation.py:44`) compares `model` exactly. A graduation earned under `gpt-5` stops matching new `gpt-5-2025-08-07` results, so `select_residual_offers` returns no offers for it, silently.\n- `sq metrology \u2026 --judge-config 'template|model'` (`cli/commands/metrology.py:269-281`) is a typed exact match. An operator typing `gpt-5` no longer finds new records.\n- The change is not one-time on routed profiles. Every provider that reports a differing id changes identity every time that id changes. That includes OpenRouter routing.\n\n\"Provides to Other Slices\" should state the re-graduate step and the filter behavior. The design should also decide whether metrology matching normalizes through `answers_as_requested`, or why not.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196,273-274"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Part B's coverage test is weaker than its stated guarantee, and the counters it reads are inconsistent with D8",
+   "description": "Value says a PASS means the model \"saw the whole diff or read files with its tools\". D4 lifts the cap on any successful call, so one `list_files` or `grep` exempts a truncated diff. That is probably acceptable, but the doc should say it is a deliberate floor and not a coverage guarantee.\n\nThe inputs to the rule are also shaky.\n- On the SDK path, `failed_tool_calls` is incremented only when a top-level message is a `ToolResultBlock` (`sdk/agent.py:178-180`). If the SDK yields those blocks only inside user messages, the count stays 0 and \"successful = made \u2212 failed\" overstates success. The design does not verify this.\n- `_tool_calls_made` counts every `ToolUseBlock`, subagent blocks included. D8 excludes subagent messages when reading the model, but D4 does not exclude them when reading tool use.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27,129-135"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Imposed CONCERNS feeds loop convergence and fix prompts; the design only analyses checkpoints",
+   "description": "D4 reasons about `ON_CONCERNS` checkpoints only. The imposed verdict and synthetic finding also reach the loop path: slice 910 feeds findings into `_format_findings_as_instructions` (`executor.py:320,390`) as the next dispatch's fix prompt.\n- The finding's remedy is \"raise `review.max_file_size_bytes`\", which a fix agent cannot act on.\n- A loop with `until: pass` on the same oversized diff is deterministic and will exhaust.\n\nState this behavior, or mark the finding as non-actionable for fix prompts.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:137,339"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Verification step 6 cannot run as written for the profiles it names",
+   "description": "Step 6 says to run once per profile (sdk, openai, openrouter, local). The only command given is `sq review slice 927 --model sonnet -v`, which resolves to the SDK profile and exercises none of the others. It omits any `--model` or `--profile` for the other three profiles, and it omits `--output json`. The steps also say the `answering_models` list comes from `--output json`, yet the one command shown has no such flag, so a second run is needed to get both the artifact and the JSON. D9's mitigation depends on this capture, so the step needs concrete commands per profile. The design also never says whether the `gemini` and `openai-oauth` profiles, which the plan lists, are covered.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Verified claims and sound structure",
+   "description": "These claims hold against the code:\n- `_truncate` is imported by `builders/code.py:58`, so keeping its signature is necessary.\n- `claude-agent-sdk>=0.2.152` is pinned (`pyproject.toml:29`).\n- `review_client.py` is 588 lines.\n- `to_dict()` already carries `verdictSource`.\n- `format_review_markdown` falls back to `result.model`, so the CLI and the pipeline share one rendering path.\n- `test_review_action.py:1032` still passes, because its hand-built result carries the same model id.\n- Provider-failure artifacts keep the requested id and have no `ReviewResult`.\n- The pipeline `ActionResult.verdict` comes from `result.verdict`, so the cap flows through to `ON_CONCERNS`.\n\nScope is close to proportionate: Part C is the heaviest part, and the plan assigns it to this slice. Only D6 is a clear cut.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Architecture"
+  }
+ ]
+}

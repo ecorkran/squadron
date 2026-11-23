@@ -1,0 +1,75 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The `arch` / pre-slice-plan boundary has no workable insertion point, index or status carrier",
+   "description": "The design says to \"extend the no-active-slice / pre-slice-plan path for the `arch` gate\" and set `pending-review`/`review-failed` there. Against the code, this fails in four ways:\n- **No active slice.** `deriveSliceStatus()` returns `no-active-slice` whenever `project.fileSlice` is unset (`WorkflowNavigator.ts:453-455`). The arch-exists, no-plan case lives in `getNext()`'s no-active-slice guard (`:98-166`), where `activeSlice` is that empty `{name:'', index:null}` status. Nothing says how this path yields a `SliceStatus` that carries `pending-review`, or whether `getStatus()` reports it.\n- **Wrong index.** `detectDocuments(projectPath, sliceIndex, reviewType)` matches `${idx}-review.${reviewType}.` (`documentDetector.ts:91-95`). For an arch review the index must come from `project.fileArch` (via `extractSliceIndex`), not a slice index. The design never says which index the `arch` lookup uses, and the `slice`/`tasks`/`code` examples all assume the slice index.\n- **First-run branch fires first.** `detectFirstRunContext` (`:113-121`) runs before the \"arch exists but no slice plan\" branches. Its FR-3b case (`:413-421`) already returns \"Advance to Phase 3\" when Phase 2 has arch and no plan. The gate must run before it, or the `arch` gate never fires in the most common case. The design does not mention this ordering.\n- **Plan set but file missing.** \"Arch exists, no slice plan\" also covers `fileSlicePlan` set with the file missing (`:136-148`). The design doesn't say whether the gate applies there.\n\nThe verification walkthrough (lines 325-374) never exercises the `arch` boundary, so the gap would not surface there either.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`SliceStatus` cannot carry the boundary, review type, verdict or threshold that `getNext()` needs for its rationale",
+   "description": "TD-3 puts gate evaluation in status derivation, and `getNext()` then only \"maps `pending-review` \u2192 `review` and `review-failed` \u2192 `blocked`\". But TD-7 says the rationale must name the review type, and for `review-failed` also the verdict and threshold. Four boundaries share the same two status values, so `getNext()` has no way to know which one fired. The `SliceStatus` change at lines 51 and 91 adds only two union members, with no field for `reviewType`, `verdict` or `threshold`. Line 218 says `reviewGate` \"exposes\" these values, but derivation and `getNext()` are separate calls, and `getNext()` only sees `getStatus()` output.\n\nThis also hurts runners. The arch says runners should act on first-class statuses \"without parsing recommendation strings\" (arch line 32), yet a runner can't tell which review agent to route to. The design should add gate detail to `SliceStatus`, such as a `gate?: {boundary, reviewType, verdict, threshold}` field. It should also say that `pending-review` replaces `needs-tasks`/`in-implementation`/`complete` when the gate fires. That replacement changes what `status.ts:162-163`, `buildSummary()` (`:547-553`) and the existing `getNext` branches see.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The recommendation vocabulary contradicts itself and the parent documents",
+   "description": "The Overview, Value and \"Provides\" sections (lines 17, 41, 286) promise `review`/`blocked` as \"the stable strings runners route on\". The arch (lines 118, 124) specifies `recommendation: \"review\"` and `recommendation: \"blocked\"`, and the Amoeba note (arch line 173) depends on a stable vocabulary. TD-7 instead uses prose such as `'Review required before advancing'` and `'Blocked: review verdict does not clear threshold'`, with \"exact strings finalized in implementation\". Either the literal `review`/`blocked` values or the prose strings are the contract, not both. The example rationale also hard-codes \"code review \u2026 before advancing\", but the same status serves all four boundaries. Pin the exact `recommendation` values and a per-boundary rationale template now. The walkthrough output lines (e.g. 341, 348) depend on them.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config access is async, ownership is described two ways, and read failures are unhandled",
+   "description": "Four problems with how config reaches the gate:\n- **Contradictory ownership.** Line 109 says the navigator \"calls `this.config?.get(...)` and hands raw values to `reviewGate`\". TD-1 and Technical Scope say `resolveGateConfig(config)` reads `review_enabled`, threshold and unknown-as from the `ConfigManager`. These differ, and line 172 calls `reviewGate` \"pure functions\".\n- **Async.** `ConfigManager.get()` is `async` and returns a `ConfigResult` (`{value, source, ...}`), not a raw value (`ConfigManager.ts:91`). `resolveGateConfig` therefore has to be async and unwrap `.value`. The design's pseudo-signatures and the \"narrow explicitly (`=== true`)\" note ignore this.\n- **Throws on bad config.** `readToml` rethrows any non-ENOENT error, so a malformed `.context-forge.toml` or user config makes `get` throw (`ConfigManager.ts:21-31`). Inside `deriveSliceStatus` the `try/catch` (`WorkflowNavigator.ts:497-499`) would turn that into `no-active-slice`, a silent misreport. Outside the `try`, `getStatus` would reject. The arch's \"fail-fast on configuration errors\" principle (arch line 48) is not applied to this I/O path.\n- **Byte-for-byte claim.** The design says gating off is \"byte-for-byte identical\", but every surface will now always pass a `ConfigManager`. Every `cf next`, `cf status` and `workflow_*` call then reads config and can throw, even for ungated users. The gating-off guarantee needs an explicit rule: read failure with gating off \u21d2 ignore, or treat as off.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:109"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Boundary predicates for `slice` and `tasks` are loose and can block in-flight work",
+   "description": "Line 57 evaluates `slice`/`tasks` gates \"at the `needs-tasks`/`in-implementation` boundaries\", but the code's statuses don't map cleanly to the boundary table (lines 21-26):\n- **Empty task file.** `needs-tasks` is also returned when a task file exists but parses to zero tasks (`WorkflowNavigator.ts:482-484`). The table says pre-tasks fires when \"design exists, no task file\". Is the `slice` review owed, or the `tasks` review?\n- **Half-done slice.** `in-implementation` covers both `not-started` (0 checked) and `in-progress` (some checked) (`taskFileParser.ts:55-61`). Applying the `tasks` gate to `in-progress` would flip a half-finished slice to `pending-review` or `review-failed`. Pre-implementation should be bounded to `not-started`, or the design should say otherwise.\n- **Earlier gates after completion.** At `complete`, only the `code` gate is evaluated. Whether a missing `slice` or `tasks` review also blocks a finished slice is unspecified, and so is the ordering when several reviews are missing.\n- **Mid-flight enabling.** Flipping `review_enabled` on mid-initiative therefore changes the state of every existing slice. The design should say this is accepted.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Per-boundary threshold override is under-specified and is scope that can be deferred",
+   "description": "The design retains and consumes four per-gate `threshold` keys. The code names them `pre_advance`, `pre_slice_plan`, `pre_tasks` and `pre_implementation` (`ConfigKeys.ts:61-100`). The design's `Boundary` union uses camelCase (`preSlicePlan`, \u2026, line 185), and the arch uses hyphenated names (arch lines 82-85). The mapping from `Boundary` to config key is never specified, so keys can silently go unread. Nothing in the plan entry for 241 requires the override: the plan says only that 241 \"decides\" (plan line 28). The override adds four more config reads per evaluation, a mapping table, a precedence rule and a test matrix (line 314), which matters given [the config finding above](#concern-config-access-is-async-ownership-is-described-two-ways-and-read-failures-are-unhandled). The lighter option is to use only global `review_threshold` and defer the override to a follow-up. If it is kept, specify the mapping in `reviewGate.ts`. Related to this, `positionToReviewType()` is a one-line lookup over `BOUNDARY_REVIEW_TYPE`, and its only value is naming. TD-6 and the Rejected-alternatives paragraph also restate other documents' rationale and could be trimmed.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:229"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The arch's \"rationale names the parse failure\" requirement is dropped, and the review path handling is unspecified",
+   "description": "Arch line 149 requires that the rationale \"names the parse failure explicitly\". The design builds on `parseFrontmatter` precisely because it never throws and returns the same `{found:false, data:{}}` for an unreadable file, a missing closing `---` and a missing `verdict` (`frontmatterParser.ts:12-48`). The gate cannot distinguish these cases, so it can't name a parse failure. Either the design drops that arch requirement explicitly, or it says how the gate tells \"unreadable\" from \"no verdict\". Separately, `detectDocuments` returns a path relative to the project (`documentDetector.ts:91-95`). The data flow's `parseFrontmatter(path)` at line 161 omits the `join(projectPath, \u2026)` that the existing task-file code does (`WorkflowNavigator.ts:479`). The result would be a silent `UNKNOWN` on every present artifact.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Some claims about existing code and other slices are wrong or unverifiable",
+   "description": "Four claims don't hold up:\n- **Slice 910.** The design relies on \"maintenance slice 910 (`dependencies: 241`)\", but no `910-*` file exists under `project-documents/user`. The 240 slice plan doesn't list 910 either, so the deferral target is not tracked anywhere this review can see.\n- **Literal count.** \"~50 pre-existing literal sites\" is low. A search of `packages/**/src` finds 82 occurrences of the four status literals across 9 files, 44 of them in `ConsistencyChecker.ts`.\n- **Visualizer.** Line 222 claims `getStatus()` feeds a \"visualizer\". No visualizer consumer of `SliceStatus` exists in `packages/`.\n- **MCP tool description.** `workflow_status` hard-codes the status list in its description string (`workflowTools.ts:127-129`: \"needs-design, needs-tasks, in-implementation, complete\"). It becomes inaccurate once two statuses are added. Neither the Technical Scope nor the exclusion of docs/README work (\u2192 243) covers this code-embedded text.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:37"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The verification walkthrough mixes two different meanings of `--project`",
+   "description": "Step 2 runs `cf config set \u2026 --project <scratch>`. In `config.ts:18,59` that flag is passed straight to `new ConfigManager(opts.project)`, so it must be a filesystem path. For `cf next` and `cf status`, `--project` means a project id or name (`next.ts:19`). The later steps run `cf next` with no flag, so they depend on the CWD or default project being the scratch project. That assumption is not stated. Also, the walkthrough has no `arch`-boundary step and no malformed-config or unparseable-review case, which are the riskiest paths.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:332"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Deliberate divergences from the arch are recorded and consistent with the plan",
+   "description": "Folding the initiative-level gate (slice 244) into 241 and deriving the review type from position both contradict the arch (lines 22, 82-86, 141). The slice plan's Notes (plan lines 26-28) explicitly supersede those parts, so this is aligned with the plan. One more divergence: the arch (line 106) lets an UNKNOWN verdict surface as `pending-review`, while the design (line 216) never does. `review_unknown_as` has no `pending` value, so the design's choice is sound. Leaving the earlier arch text uncorrected may confuse 243's documentation work.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:68"
+  }
+ ]
+}

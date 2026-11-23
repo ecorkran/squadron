@@ -1,0 +1,131 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"numpy\" backend would run Numba kernels, because JIT is the default",
+   "description": "The design says NumPy is \"the only backend that exists today\". It describes the runner as \"today's `engine.tick.tick`\" (line 60) with the existing `BulkForce` instances (lines 138-141, 398-400).\n- `src/migratory/engine/_jit_config.py:14` sets `USE_JIT_KERNELS = True` by default.\n- Every force wrapper dispatches on it at call time: `flocking.py:82,192,326` and `herding.py:32,175`.\n- So a \"numpy\" run through the existing forces would time Numba kernels and label them NumPy.\n- The design never has the numpy backend set the flag to `False`.\n- It also never says how `--all-backends` (line 481) would run a numpy backend and a numba backend in one process. The flag is a module global, so the backends would have to flip it between runs and restore it.\n- Line 342 says slice 144 registers `numba` \"via the engine's existing JIT-config flag\". That admits the flag is the switch, but the design neither gives it to the numpy runner nor states that Numba already exists.\n- The architecture's 3.14 ms `force_total` figure (arch line 55) is described as \"NumPy vectorized\". It is not comparable to a default-flag run today.\n\nThe design needs to:\n- Pin the numpy backend to `USE_JIT_KERNELS=False`, with save and restore.\n- Say how the flag is isolated between backends.\n- Correct the \"only backend that exists\" claim.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The workload schema uses 3D coordinates, but the engine is 2D",
+   "description": "The `mid-flock.yaml` example gives `world_size: [200.0, 200.0, 200.0]` and 3-component `cluster_centers`.\n- `src/migratory/__init__.py:4` sets `DIMS = 2`.\n- `AgentState` arrays are `N\u00d7DIMS` (`state.py:52-54`).\n- `tools/run_deterministic_trajectory.py:41` draws positions as `(n, 2)`.\n- `KDTreeQuery.build` documents shape `(n, 2)`.\n- A formation initializer following the documented schema would fail on shape, or silently mis-size.\n- The scaffold in `workload.py:187-191` already rejects non-2-entry `world_size`, so it contradicts the design's own example YAML.\n- The density figures (200\u00b3 volume) and the cluster radius of 30 are also wrong for a 2D world. The \"mid-density\" characterization has no basis.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:364-368"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The design names force singletons that do not exist",
+   "description": "The design says force names \"resolve to module-level singleton instances \u2026 (e.g. `flocking.cohesion_force`)\".\n- No such symbol exists. The engine exposes classes (`CohesionForce`, `SeparationForce`, and so on) that the tools instantiate directly.\n- The scaffold's `workload.py:67-74` builds its own registry, which the design never specifies.\n- The registry also includes `propulsion`, which is not among the \"five existing BulkForce implementations\" at lines 138-141. The slice plan (arch line 34) lists six.\n- Because forces are stateless, the shared instances are probably harmless. But a shared registry mutated across backends is an undeclared hidden dependency.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-400"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The profile registry source is claimed but not verified",
+   "description": "The design says `flocker` and `leader` map to \"the existing `BehavioralProfile` constructors used in `config/default.yaml`\". The only profile content I found there is a commented-out example (`config/default.yaml:145-162`). Nothing there is named `leader`.\n- \"The harness does not invent new profiles\" is therefore false as written.\n- The scaffold hard-codes new parameter sets, including a derived \"leader\".\n- Both profiles use `max_neighbors=32`, so every workload takes the `all_capped` `query_knn_batch` fast path in `tick()` (`tick.py:74-85`). The general radius-query path is never benchmarked, and the design doesn't say so.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-396"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Phase boundaries are undefined, and the two overhead statements contradict each other",
+   "description": "The design says the five phases \"correspond exactly to bracketed regions of the existing `tick()` body\". They don't.\n- `tick()` has no `csr_assembly` region. It has profile-array building (`tick.py:58-72`), the query, `exclude_self`, optional `apply_neighbor_cap`, and the `concatenate`/`cumsum` offset build (`tick.py:103-106`). The architecture calls this phase `self_excl_cap`.\n- The design never says which phase gets the profile-array build, `exclude_self`, `apply_neighbor_cap`, `eval_indices` construction, `max_speeds` indexing, or `record_density`.\n- Lines 287-290 say profile-attribute fancy indexing is \"overhead\" (total minus the five phases).\n- Lines 697-699 say `all_radii = np.array(...)` is included in `force_total`. In `tick()` it runs before the query and is not in the force loop. One of the two statements is wrong, and the per-phase numbers depend on which.\n- The 5-phase comparison against the architecture's reference budget (verification step 9) is meaningless without these assignments.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:246-267, 287-290, 697-703"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented` duplicates the whole tick, and a bit-equality test cannot catch boundary drift",
+   "description": "- The design calls the duplication \"small (~5 lines per phase)\". It is a copy of about 90 lines of `tick()` logic: both the fast path and the general path, the cap, CSR build, force loop, integrate, and density record.\n- It is the only reason `bench/` carries engine logic.\n- The drift mitigation (bit-equality test) catches algorithm drift but not phase-boundary drift. The design admits this, and the phase breakdown is the harness's entire reason to exist.\n- Option (A) is dismissed as \"bloat\" and as forcing every backend to expose hooks. A keyword-only, default-`None` timer parameter on `tick()` would be one `if` per boundary, and it still wouldn't oblige other backends to expose hooks. Alternatively, `tick()` could be split into phase functions that both paths call.\n- At minimum, the design should justify why a fork of the tick was chosen over a single shared code path.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-272, 682-695"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The harness cannot be added to by a single file, because backend registration depends on an import",
+   "description": "`register_backend` is a decorator in `backends/__init__.py`. A backend module registers itself only when it is imported.\n- The design specifies no import or discovery mechanism, so `get_backend(\"numpy\")` would hit `KeyError` unless something imports `numpy_backend`.\n- If `__init__.py` imports it, the result is a circular import (`numpy_backend` imports `register_backend` from `__init__`).\n- If `__init__.py` imports each backend, adding a backend is not \"one file and zero changes elsewhere\" (lines 586-591).\n- Either specify auto-discovery (for example `pkgutil`) or explicit import lines, and correct the integration requirement.\n- `--list-backends` (verification step 1) depends on the same unresolved choice.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-345, 586-591"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Per-force timing is deferred, though the slice plan assigns it to 141",
+   "description": "The slice plan entry (plan line 26) requires timings \"broken down by phase (\u2026 force totals per force, integration)\". The design ships one `force_total` and pushes per-force timing to slice 142.\n- Slice 142's plan entry never says it extends the harness.\n- Doing so would change `PhaseTimings`, bump `schema_version`, and edit the harness. That contradicts the \"one file, no harness changes\" promise (lines 525-526, 586-591).\n- Slice 142 benchmarks a single force (Cohesion) against Numba and NumPy, so it needs exactly this resolution.\n- The cost is a `perf_counter_ns` pair around each force in the loop. It is trivial now and costly to retrofit.\n- Pre-plan `PhaseTimings` is already shaped for the change, so deferring it saves nothing.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Other scope the plan assigns to 141 is dropped silently",
+   "description": "- The plan says reports include \"the formation-dependent breakdown noted in the architecture's Profile Principle\". The design has three workloads and a per-workload table. Nothing produces a cross-formation comparison.\n- The plan names \"CSV/JSON\" output. The design drops CSV without comment. That is probably fine, but say so.\n- The Numba backend is deferred to \"slice 144 / 118\" (lines 92, 341, 589). The slice plan says 142 benchmarks Quadrants \"against the existing NumPy and Numba implementations\" and depends on (118) and (141). 142 therefore needs a Numba runner before 144.\n- Numba already exists (finding 1), so a numba runner is a small addition that belongs in this slice, or the design should state that 142 adds it.\n- Slice 144's plan entry does not list a Numba runner either.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:90-112"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The parity hash cannot serve the downstream use the design claims",
+   "description": "- Line 473 says a downstream consumer will \"interpret [the hash] within the documented tolerance band\". A SHA-256 over raw bytes cannot be compared within a tolerance. One ULP difference changes the whole digest.\n- The slice plan (plan lines 36, 78) needs tolerance-based tick-level parity for GPU reductions.\n- Line 534 says slice 145's parity test \"consumes the harness's NumPy parity hash as the reference\". That would give a bit-exact check where 145 needs a tolerance check.\n- The harness should keep the post-run positions and velocities, or a sample or summary of them, alongside the hash. Otherwise 145 has to rebuild the reference itself.\n- The spec is also inconsistent about when the hash is taken. Line 81 says \"post-warmup\". Line 460 says \"after the measure phase\".\n- `AgentState` is mutated in place and the `TickResult` is a view. The design must say whether the hash is taken before `finalize()`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473, 533-534"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The spatial backend benchmarked is not the \"default operating point\"",
+   "description": "- The design says `mid-flock` is the \"current default operating point\", \"roughly equivalent to the live-server default config\", but hard-codes `KDTreeQuery`. `config/default.yaml:126-129` documents the default as the adaptive backend.\n- `KDTreeQuery` is described in `kd_tree.py:1-7` as opt-in.\n- Line 542 gives the path as `engine.spatial.KDTreeQuery`. The class lives in `migratory.spatial.kd_tree`.\n- The architecture's budget figures are explicitly \"KD-tree backend, N=2492\" (arch line 50). The N=3500 mid-flock is then compared against an N\u22482500 table (step 9), which is not like for like.\n- Spatial backend choice should be a workload or backend parameter. Slice 143 needs it to compare `KDTreeQuery` against `QuadrantsSpatialQuery`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:136-137, 354-355, 542"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Workload parameters are not fully specified",
+   "description": "- Scope line 70 promises fields for \"density\" and \"formation seed\". The schema has neither. It has `n`, `seed`, and a formation block.\n- No parameters are given for `dispersed` or `packed-herd`: not N, not world size or cluster radius, not a density target. The three-regime claim can't be checked.\n- It's also unspecified how initial velocities are generated, and whether `seed` drives positions only or also profile assignment and velocities.\n- That matters because the parity hash is taken \"for a fixed seed\".\n- Profile fractions are not validated to sum to 1 or to produce integer counts. The `uniform` and `packed` kinds are unspecified.\n- Slice 143 expects N up to 250k and \"a `large-N` workload at N=50k\" (line 528). The NumPy path at that size is untested, and no workload size limit is stated.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-74, 173-181, 347-390"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "CLI and operator walkthrough have gaps",
+   "description": "- The CLI section lists `--workload`, `--backend`, `--all-backends`, and `--workload-dir`. The walkthrough uses `--list-backends` and `--list-workloads`, which are never specified.\n- `--workload mid-flock` resolution is unspecified. The workloads live at repo root while the package lives under `src/`. It is not stated whether lookup is relative to the cwd, or to the repo root found via `__file__`.\n- Nothing says `bench/results/` is created. The `.gitkeep` and `.gitignore` entries already exist in the tree, but the design neither relies on them nor says the writer calls `mkdir`.\n- The \"UTC ISO timestamp\" in the filename (line 236) contains colons unless a format is fixed.\n- Result files from several runs accumulate. The Markdown renderer says \"one row per backend across all backends in `bench/results/`\" (line 440). Which run is selected per backend is not stated. Walkthrough step 6 (three tables on stdout) implies a different behavior from step 3 (one numpy row).\n- The \"sortable on TPS\" claim is meaningless for a static Markdown table.\n- `git rev-parse HEAD` is shown as a short SHA in the sample (`fc989bf`). If the run happens outside a git checkout or on a dirty tree, the failure behavior and dirty-flag recording are undefined.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487, 603-659"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Failure modes miss the runtime paths that matter",
+   "description": "- Only `setup` raising is covered. `tick_once` raising mid-measure is not. Does the run still write a partial report, or nothing? Is `finalize` still called?\n- Result writing is not atomic. A run killed during the write leaves a truncated JSON in `bench/results/`. The Markdown renderer reads every file in that directory, so one bad file would break all later reports. Nothing says the renderer skips or rejects such a file.\n- Old-reader rejection of unknown `schema_version` (line 532) is stated but not wired to the renderer.\n- A TPS below 1 is \"warned and written\", but there is no wall-clock bound. A 600-tick measure at under 1 TPS is a 10-minute stall. A GPU hang in a future backend has no timeout.\n- A NaN or inf state mid-run (unstable force parameters at high density in `packed-herd`) is not detected. The hash and timings would be recorded for a diverged simulation.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Timer accounting and statistics details are thin",
+   "description": "- The per-tick `PhaseTimings` are collected inside the measured loop. The design does not say whether the list append, GC, or `perf_counter_ns` calls themselves are excluded.\n- It does not address GC pauses or P99 over 600 samples. P99 of 600 samples is the 6th-worst value, and the design offers no confidence guidance.\n- JSON sample values are formatted as floats but typed as ints in `PhaseTimings`. The aggregation returns floats (`runner.py:53`). The schema's number type is unspecified.\n- `tps_observed` and `wall_seconds` are not defined. Is wall time the sum of tick times, or the loop's wall clock including timer overhead?",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:489-494, 427-436"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The design restates other documents and leans on unneeded tooling",
+   "description": "- The Value section and the three Open Questions mostly restate the architecture and slice plan. Each Open Question already carries its own \"defer\" recommendation. They can collapse to one line.\n- Line 122-124 says the stub-backend tests \"reuse\" `pytest-benchmark`. Unit tests of timer arithmetic against a synthetic backend do not need it (and no existing benchmark test is present under `tests/`). Drop the claim, along with the \"stays consistent\" rationale.\n- Walkthrough steps 7, 8, and 10 are checks of non-goals and `head -15` output. They don't verify slice behavior.\n- A `--workload-dir` mode, and the `--all-backends` mode with a single backend, are unused for this slice's single backend.\n- The \"5 lines per phase\" estimate and the \"eight new files\" effort figure (line 741) understate the real size. The component listing at lines 157-172 alone is 11 files, and 8 of the 12 steps are scaffolding.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:36-51, 122-125, 599-676"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The design describes a package the worktree already partly contains",
+   "description": "`src/migratory/bench/` already has `runner.py`, `workload.py`, `cli.py`, `__main__.py`, an empty `backends/__init__.py`, and `reports/__init__.py`.\n- The design says \"New package\", with `status: not_started`.\n- The scaffold diverges from the design in several places: 2D `world_size`, the `propulsion` force, `Workload` fields, and `aggregate()` semantics (population stdev).\n- The scaffold comments reference task IDs (T1, T7, T19, T21), but the design has no task numbering.\n- Reconcile the design with the code, or mark the scaffold as superseded.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:155-172"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Stated counts could not be verified",
+   "description": "\"433 pre-existing pyright errors\" and \"1100 passed, 2 skipped\" are stated as pass/fail pins.\n- I did not run the suite or pyright.\n- Pins like these go stale. \"No new errors in `bench/`\" and \"existing suite passes unchanged\" would be sturdier criteria.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:575-582"
+  }
+ ]
+}

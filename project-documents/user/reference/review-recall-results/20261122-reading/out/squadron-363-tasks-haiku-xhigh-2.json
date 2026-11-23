@@ -1,0 +1,615 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preflight staleness prompt asks a question Success Criterion 2 forbids",
+      "description": "On any graph drift, preflight says to \"ask the Project Manager whether to proceed with the stale graph or stop\" (lines 180\u2013182). Task 1.1 makes preflight run unchanged for the concept flow (task lines 86\u201388). Design Success Criterion 2 (design lines 350\u2013352) says the only questions ever asked are the two engagement questions and the one confirmation, and that extraction precedes all interaction. The staleness question is none of the three, and it comes before extraction. Task 8.1's \"nothing else asked\" check (task line 310) therefore fails on any drifted graph.\n\nDrift is likely on this project. The graph is at `1bfbca1` (`.understand-anything/meta.json:3`). The projectState lists later commits 998ab97 and dfce803 (task line 8). In this checkout the repo has a single commit, so `1bfbca1` resolves to outcome 3, drift with unknown distance, and the prompt fires. Neither 5.3 nor 8.1 reconciles this. The fix is a decision: exempt the drift prompt from criterion 2, or have the concept flow record drift in provenance and proceed without asking. Then the task text should say which.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:180"
+    },
+    {
+      "severity": "FAIL",
+      "title": "README does not state a problem or audience; the plan's anchor misquotes the design",
+      "description": "The anchor row says the README lead states \"what problem it addresses\". The lead (README.md:3\u20135) says what squadron is and how it is driven (`sq`, from the terminal). A case-insensitive search of README.md for \"problem\", \"audience\", \"who\", \"users\" and \"developers\" returns nothing. The design's own table says \"what it does\" (design line 119). Its prose then claims a problem and audience (design lines 129\u2013131).\n\nAs a result, Problem & Motivation has no README source. Target Users is sourced from `entry-point` nodes and `frameworks` (design line 180), which say nothing about users. Task 3.2 handles only an absent README, but the design's risk table names an \"absent or uninformative\" README (design line 433). Task 3.4 (\"confirm the README lead answers \u2026 what-problem/who-reaches-it\") and 8.1 (\"Problem & Motivation and Target Users cite README.md\", task line 312) cannot pass as written. Needed: a partial-README rule, the anchor corrected to \"what it does\", and 3.4's check rewritten.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comprehension-flow text left contradicting the new flow",
+      "description": "Line 389 says the comprehension flow \"is the default flow and the only one this skill implements\". Line 392 says \"Any argument other than the comprehension default is unrecognized\". Once `concept` routes, both are false. Task 7.4 says \"no other comprehension-flow text changed\" (task line 295), and 1.1 only says \"extend the argument handling\" without naming these lines. The design's Excluded list bars changes to the comprehension flow (design lines 68\u201369), while Implementation Notes require the 362 sentence edit (design lines 450\u2013451). The plan follows the latter without naming the exception. Fix: have 1.1 rewrite lines 389 and 392, and widen 7.4's \"no other\" clause to match.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:392"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Submodule not initialized; guide-dependent checks cannot run here",
+      "description": "`project-documents/ai-project-guide` is a declared submodule (`.gitmodules:1\u20133`) with no contents in this checkout. Glob returns nothing for it, and the guide read fails. Task 0.1 creates the branch without `git submodule update --init` (task lines 59\u201363). So 0.2's grep (task lines 68\u201369) fails, and its STOP condition (task lines 72\u201374) halts the run at once.\n\nEverything guide-dependent is unverifiable here. That covers the `## User-Provided Concept` count (anchor row, task line 45), the path in 2.1, the checks in 6.1 and 6.3, and the section order in 4.1. The Refined Concept sections in 6.2 are also undefined in the plan. The `prompt.ai-project.system.md` that 9.2 cites is absent too. Add the init step to 0.1 and mark guide-dependent anchors unverified until it runs.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": ".gitmodules:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Decline path inherits the document written by 8.1",
+      "description": "8.1 writes `000-concept.squadron.md` into the real tree. 8.2 then runs \"on a scratch copy of the tree\" and expects \"Document still written\" (line 322). If the copy is taken after 8.1, which is the only order the list allows, the flow finds an existing document. By the stop-default rule (design lines 266\u2013267), it stops, and the decline path never runs. The plan does not say to copy from `main` or to remove the concept from the copy. The design's walkthrough step 4 (design lines 413\u2013415) has the same gap.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Contract-failure walkthrough has no way to point the check at a scratch copy",
+      "description": "8.3 says to copy the guide to scratch, rename its heading, \"point the check at it\", and use a \"scratch copy of the guide only\" (lines 327\u2013328). The guide path is fixed in the flow (task lines 106\u2013108), and the plan defines no override. A copy of the guide alone is not a tree the flow can run in. A `git worktree` copy also drops the uninitialized submodule and fails precondition 2. The workable approach is a whole-tree copy with the copy's guide edited. Specify that, and drop \"guide only\".",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Git-diff checks are vacuous on the untracked 8.1 output",
+      "description": "The generated concept stays untracked until the 8.6 commit, which comes after 8.4 and 8.6. `git diff` (8.4, line 335) and `git diff --name-only main` (8.6, line 346) both skip untracked files. The byte-identity check therefore passes vacuously, and the changed-file set silently omits the concept. Stage the 8.1 output (`git add -N`) or commit it before 8.4, and snapshot it so the augment diff has a real baseline.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No way to clear the flow's own output; re-runs stop by default",
+      "description": "A re-run after a fix found during 8.x (line 352 says to commit those fixes) meets the existing `000-concept.squadron.md`. The flow reports it and stops by default. A killed write is a second route to the same state: 6.2 writes the file in one step (lines 240\u2013241) with no temp-file rule. A half-written file may lack the User-Provided Concept heading, which augment needs. Nothing in the plan removes the flow's own untracked output. Add an explicit reset before a re-run of 8.1, or a write-to-temp-then-rename rule in 6.2.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:333"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 7's absent and unreadable guide cases are never walked through",
+      "description": "Criterion 7 (design lines 362\u2013364) requires a loud stop when the guide is \"absent, unreadable, or missing the expected section title\". 8.3 covers only the renamed heading. Precondition 2's absent-guide stop (task lines 107\u2013109), the unreadable case in 6.1 check 1, and precondition 3's no-registration stop (task lines 110\u2013113) are never run.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Augment's refill path is never exercised",
+      "description": "Criterion 8 and 6.2 (lines 242\u2013244) require augment to fill sections that are empty or exactly `[GAP: ...]`. 8.4 re-runs against the 8.1 document, a happy-path output with real answers and observed signals. It has no gap sections to refill, so 8.4 checks only that populated sections stay byte-identical. Run augment on the 8.2 decline output, which carries gap markers, or add a check that a gap section is refilled.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:334"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 4 (dropped topics absent from the document) is never verified",
+      "description": "4.1 authors the dropped-topics rule (lines 172\u2013174), and 4.2 diffs only the table. 8.1's \"nothing else asked\" covers the interaction surface, not the written document. Nothing checks that the output has no why-now, audience-evolution, or methodology-preference content, and no gap marker naming them. Add that check to 8.1.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:310"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 10's outcome set and `[INFERRED]` rule are never checked",
+      "description": "Criterion 10 (design lines 370\u2013371) requires per-section sourcing over the full outcome set and that every `[INFERRED]` sentence satisfies the checkable rule. 8.1 (lines 315\u2013316) checks only that the engagement-questions and inferred-claims lines exist. 7.1 defines the rule, but nothing applies it to the document.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 names the wrong file for `lastAnalyzedAt`",
+      "description": "5.2 says \"the graph's `lastAnalyzedAt`\" (lines 204\u2013205). The graph has no such key. The field is in `.understand-anything/meta.json:2`, and the skill's own provenance rule reads it from there (understand.md:325). Taken literally, the instruction returns null. The design repeats the error (design line 229). Change the task to \"`meta.json`'s `lastAnalyzedAt`\".",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes",
+      "description": "All eight markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are checkbox items (`- [ ] Commit: \u2026`). The required form is a plain `**Commit**:` line. The 361 precedent also uses checkboxes (`361-tasks\u2026md:107`), so this is inherited. But 9.1 requires every checkbox to be ticked, so a commit that never happens can be closed out as a task. Rewrite them as plain lines.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commits land where nothing is runnable or tested",
+      "description": "The commit after 1.2 leaves `concept` routing to an empty section (1.1), with no test until 8.5. The commits after 2.2, 3.4, 4.2, 5.3, 6.3 and 7.4 each land a partly authored flow that nothing runs until Task 8. The first runnable state is after 7.4, and the first test of it is 8.1. Move the markers to after 7.4 and 8.6, or label the intermediate commits as partial.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7 has no verification step after its authoring tasks",
+      "description": "Tasks 1\u20136 each put a verify task straight after the authoring (1.2, 2.2, 3.4, 4.2, 5.3, 6.3). Task 7 has none. 7.2 (frontmatter, criterion 9) and 7.3 (provenance, criterion 10) go unchecked until 8.1, after the 7.4 commit. Add a verify step after 7.3.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:256"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight: 31 sub-tasks, 8 commits, verify tasks that repeat Task 8",
+      "description": "For one skill file and a one-sentence edit, the plan has 10 groups, 31 sub-tasks and 8 commit markers. Six verify tasks (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) re-check text that 8.1\u20138.5 check again against the written output. 8.5 repeats 1.2's routing check. Cut: fold 1.2 into 1.1, 2.2 into 2.1, 4.2 into 4.1 and 5.3 into 5.1\u20135.2, and fold 8.5 into 8.1. Keep 0.2 and 3.4, since they are the only checks of the real graph and README. Merge 9.1\u20139.3 into one close-out step.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 8.6's pytest run does not exercise the skill",
+      "description": "`tests/skills/` never references `commands/analysis/understand.md` or the pack's contents. A green `pytest tests/skills/` cannot show the skill is intact, and no criterion asks for ruff or pytest. It is a cheap guard, but it is not evidence for \"pack install path undisturbed\".",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:348"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two live DEVLOG files; the plan does not name one",
+      "description": "`DEVLOG.md` at the root (`dateUpdated: 20260822`) and `project-documents/DEVLOG.md` both exist and both record 361\u2013363 work. 8.6 says \"the DEVLOG\" and 9.2 says \"DEVLOG entry\". Name the file.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:347"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf get` key is `name`, and squadron's reader turns a missing name into \"unknown\"",
+      "description": "2.2 says \"`cf get` Name field\" (task lines 121\u2013122). The JSON key is `name` (`context_forge.py:154`, `:171`). That reader substitutes the string `\"unknown\"` when the name is absent. Precondition 3 forbids a fallback (task lines 110\u2013113), so the flow must treat an empty or absent `name` as unresolved, or it may write `000-concept.unknown.md`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:171"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Provenance task omits two 361 lines and the placement rule",
+      "description": "7.3 says \"361's shape\" but does not list \"Generated on\" or \"Graph identity\", which 361 requires under its no-silent-omission rule (understand.md:320\u2013337). It also omits that the block sits above content as body prose, not frontmatter (understand.md:313\u2013315). 8.1's \"all block lines present\" cannot be checked against this list.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:282"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pointer update names no target heading",
+      "description": "7.1 says to point the pointer at \"the actual subsection (Implementation Notes, design line 448)\". Design line 448 is the instruction itself, not a heading. The pointer to update is at understand.md:307\u2013309 (\"Governance for that use belongs to 363\"). Name the heading 7.1 creates so the pointer and its target match.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:266"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Criterion 12 has no stated check",
+      "description": "Criterion 12 (design line 374) asks for a concept \"a PM would edit rather than discard\". 8.1's success line is \"every listed check passes\", which does not include it. State what evidence in 8.1 would show it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:317"
+    },
+    {
+      "severity": "NOTE",
+      "title": "projectState references and the \"v2.8.1\" label do not match the checkout",
+      "description": "The repo has one commit, `68c4cb8 case tree` (`.git/logs/HEAD:1`), so 998ab97 and dfce803 cannot be confirmed here. The graph's own `version` is `\"1.0.0\"` (`.understand-anything/knowledge-graph.json:2`), not 2.8.1. If 2.8.1 is the plugin release, say so. No task checks either claim.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:8"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Skill header describes only the comprehension flow",
+      "description": "The frontmatter description (\"Use when the user asks for a codebase comprehension analysis\") and the intro (lines 9\u201310) describe only the comprehension flow. `disable-model-invocation: true` limits the impact, but no task updates them.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:3"
+    },
+    {
+      "severity": "PASS",
+      "title": "Criteria 1, 5, 6, 9 and 11 map to tasks and checks",
+      "description": "Criterion 1: 1.1, 1.2, 8.5. Criterion 5: 5.1, 7.3, 8.2. Criterion 6: 6.1, 6.2, 8.1, 8.4. Criterion 9: 7.2 and 8.1 (`cf validate frontmatter`). Criterion 11: 3.1 and 8.6 (`git diff --name-only`, `git diff --stat main -- src/`). Each has an authoring task and a walkthrough check. The mapping is sound; the findings above concern how the checks run.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304"
+    },
+    {
+      "severity": "PASS",
+      "title": "No existing test pins the skill or the pack's file list",
+      "description": "A search of `tests/` for `understand` and `commands/analysis` finds no reference to `understand.md`, and `tests/skills` installs into temporary directories. The skill edits break no existing test. The `.gitignore` hygiene probe already passes, since `.gitignore:181\u2013184` covers `.understand-anything/.trash-*/`, so no `.gitignore` diff is expected.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "tests/skills"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Preflight staleness prompt asks a question Success Criterion 2 forbids",
+      "location": "commands/analysis/understand.md:180",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "README does not state a problem or audience; the plan's anchor misquotes the design",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:44",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Comprehension-flow text left contradicting the new flow",
+      "location": "commands/analysis/understand.md:392",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Submodule not initialized; guide-dependent checks cannot run here",
+      "location": ".gitmodules:1",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Decline path inherits the document written by 8.1",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Contract-failure walkthrough has no way to point the check at a scratch copy",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Git-diff checks are vacuous on the untracked 8.1 output",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "No way to clear the flow's own output; re-runs stop by default",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:333",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion 7's absent and unreadable guide cases are never walked through",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Augment's refill path is never exercised",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:334",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion 4 (dropped topics absent from the document) is never verified",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:310",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion 10's outcome set and `[INFERRED]` rule are never checked",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 5.2 names the wrong file for `lastAnalyzedAt`",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:204",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commits land where nothing is runnable or tested",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 7 has no verification step after its authoring tasks",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:256",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Overweight: 31 sub-tasks, 8 commits, verify tasks that repeat Task 8",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 8.6's pytest run does not exercise the skill",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:348",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Two live DEVLOG files; the plan does not name one",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:347",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`cf get` key is `name`, and squadron's reader turns a missing name into \"unknown\"",
+      "location": "src/squadron/integrations/context_forge.py:171",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Provenance task omits two 361 lines and the placement rule",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:282",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Pointer update names no target heading",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:266",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion 12 has no stated check",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:317",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "projectState references and the \"v2.8.1\" label do not match the checkout",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:8",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Skill header describes only the comprehension flow",
+      "location": "commands/analysis/understand.md:3",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criteria 1, 5, 6, 9 and 11 map to tasks and checks",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "No existing test pins the skill or the pack's file list",
+      "location": "tests/skills",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-22T23:10:28.002080",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "chars": 24055,
+      "sha256": "52ed0497db7a8fdb24105a831a84217e994c4e808f1190a93d699586bc6a8bfb",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/363-slice.concept-generation.md",
+      "chars": 25321,
+      "sha256": "8af83c5db83c5657c355ac5beaa315a18e95f09d0374cb889b9df9cc646df0a6",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "commands/analysis/understand.md",
+    ".understand-anything/meta.json",
+    "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "src/squadron/documents/schema.py",
+    ".gitmodules",
+    "src/squadron/events/builtin/frontmatter_gate.py",
+    ".git/HEAD",
+    "src/squadron/integrations/context_forge.py",
+    "README.md",
+    "DEVLOG.md",
+    "project-documents/DEVLOG.md",
+    ".understand-anything/knowledge-graph.json"
+  ],
+  "searches": [
+    "list_files project-documents/user/project-guides/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files project-documents/user/architecture/360-slices* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files .understand-anything/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files {.understandignore,.gitignore,pyproject.toml,README.md,.gitlab-ci.yml,.pre-commit-config.yaml,.github/workflows/*,tests/**/*.py} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files project-documents/ai-project-guide/**/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "grep trash|understand-anything in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.gitignore",
+    "grep docType|phaseName|needs_review|not_started in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/src",
+    "list_files tests/skills/**/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "grep understand|analysis/|commands/analysis|tech-debt-audit in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/tests",
+    "grep cf validate|validate frontmatter|\\bcf get\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files .git* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files project-documents/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "list_files {README.md,.github/workflows/ci.yml,.understand-anything/.understandignore,.pre-commit-config.yaml,.gitlab-ci.yml,commands/analysis/*.md,DEVLOG.md,project-documents/DEVLOG.md} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "grep ^\\[tool\\.(ruff|pytest\\.ini_options)\\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/pyproject.toml",
+    "grep 1bfbca1|dfce803|998ab97|68c4cb8 in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.git/logs/HEAD",
+    "grep \\bget\\b|registration|project_name|Name in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/src/squadron/integrations/context_forge.py",
+    "grep ^\\s*(\\[tool|project_name|## |Name|cf get) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/README.md",
+    "grep \"filePath\": \"(tests|\\.github)/ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep \"lastAnalyzedAt\"|\"entry-point\"|\"squadron-ai\"|\"type\": \"config\"|\"tour\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep filePath\"\\s*:\\s*\"(tests|\\.github)/ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "list_files **/prompt.ai-project.system.md in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "grep Commit|DEVLOG|status: complete|dropped|\\[x\\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md",
+    "grep \"filePath\"\\s*:\\s*\"[^\"]{0,40} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep \"filePath\"\\s*:\\s*\"commands/|\"lastAnalyzedAt\"|\"gitCommitHash\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep \\b36[123]\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks",
+    "grep commands/analysis|skills/|_resolve_bundled|commands/ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/tests/skills",
+    "grep \"lastAnalyzedAt\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep \"filePath\"\\s*:\\s*\"commands/ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep problem|audience|who |for teams|developers|engineers|people who|users in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/README.md",
+    "grep \"type\"\\s*:\\s*\"(config|pipeline)\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks/.understand-anything/knowledge-graph.json",
+    "grep onboard in /Users/manta/.config/squadron/reading-20261122"
+  ],
+  "sections_in_document": 13,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 27,
+    "in_fences": 0,
+    "in_section": 27,
+    "surviving": 27
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 46,
+  "prompt_tokens": 854741,
+  "cached_tokens": 736362,
+  "cache_write_tokens": 118359,
+  "completion_tokens": 128793,
+  "reasoning_tokens": null,
+  "duration_seconds": 547.2452294169925,
+  "cost_usd": 0.32034782,
+  "cost_basis": "provider"
+}

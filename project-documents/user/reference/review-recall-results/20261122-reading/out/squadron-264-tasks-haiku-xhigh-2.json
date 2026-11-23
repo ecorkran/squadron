@@ -1,0 +1,571 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 6 leaves the suite red, and no task updates the registry pins",
+      "description": "`test_exactly_the_three_builtin_tools_are_registered` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}` (line 11). `test_materialize_binds_every_registered_tool` asserts `len(executors) == 3` after materializing `list_tools()` (line 22). Task 6.4 (L210-211) registers five more names at import, so both fail at the Task 6 commit (L220). The Context Summary says the names are read \"via `tools.list_tools()`, never hard-coded\" (L50-51), but this existing file hard-codes them. The slice's Files-changed table (slice L197-206) omits it too, and no task names it. Fix: add an explicit step to Task 6 (or Task 7) that updates both assertions to the eight-name set and count.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "tests/tools/test_package.py:11"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The plan assumes CI has no Node, but ci.yml installs Node 22 and runs the live test",
+      "description": "Task 8.1 (L258-259) and the Task 8 criteria (L270-274) say the gate keeps \"CI without node stays green.\" `ci.yml` sets up Node 22 (L20-22), runs `npm i -g @context-forge/cli` (L23) and `cf init --lite --no-ide` (L24), then runs `uv run pytest` on Ubuntu (L32). The availability gate therefore passes in CI and the live contract test runs there. It launches the unpinned default `npx -y @context-forge/mcp` (slice L163) on every run, and no task decides whether that should gate merges. Decide explicitly: pin the CI command, or make the live test opt-in through an environment variable, and state the expected CI behavior in Task 8.",
+      "file_ref": null,
+      "category": "ci",
+      "raw_category": null,
+      "location": ".github/workflows/ci.yml:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's exact-default tests read the developer's real user config",
+      "description": "Task 2 (L90-91) asserts the exact default `\"npx -y @context-forge/mcp\"` and `60` without isolation. The sibling tests in this module take the `patch_config_paths` fixture (defined at `tests/conftest.py:30`, used at `test_keys.py:43`, `81`, `93`). `tests/review/conftest.py:16-27` documents this exact leak. The slice recommends a local-dev override (slice L164-165), so a developer who uses it fails `test_cf_mcp_command_default` for reasons unrelated to the code. The task also says only \"locate the tests covering `CONFIG_KEYS` defaults\" (L88-89); name `tests/config/test_keys.py`. Require `patch_config_paths` for every default assertion, including Task 1's \"no config file present\" criterion (L81-82).",
+      "file_ref": null,
+      "category": "test-isolation",
+      "raw_category": null,
+      "location": "tests/config/test_keys.py:51-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 3 overwrites, then deletes, a developer's existing user-level override",
+      "description": "Step 3 (L283) and the slice walkthrough (slice L311-313) run `sq config set cf.mcp_command \"definitely-not-a-command\"`, then `sq config unset`. `config_set` writes the user file unless `--project` is passed (`config.py:25-40`), and `unset_config` deletes the key outright (`config/manager.py:139-160`). A developer who had the local-dev override the slice recommends (slice L164-165) loses it, and nothing restores it. If the run is killed between set and unset, every CF tool call in every project fails until someone notices. Nothing in the plan undoes this. Fix: read the prior value with `sq config get`, restore it afterwards, or use `--project` against a scratch `--cwd`.",
+      "file_ref": null,
+      "category": "safety",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/config.py:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The timeout test asserts only the direct child, so it cannot pin group teardown",
+      "description": "Task 5.2 (L167-169) says the child-is-gone assertion \"pins the SDK process-group teardown fact.\" It does not. The fake server is one Python process with no children, so a plain terminate of the direct child passes the same assertion. The design's claim concerns npx's grandchildren (slice L152-157). Fix: have the `sleep` tool spawn a grandchild that records its PID in the same temp file, and assert both processes are gone. Fact 6 (L42-45) makes the same claim.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:164-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The timeout bound ignores the SDK's teardown grace period",
+      "description": "5.2 expects `is_error` \"within ~timeout wall-clock\" with `timeout 1`. Stdio teardown waits up to 2s for the child to exit after stdin closes (`mcp/client/stdio/__init__.py:202-205`). It then sends SIGTERM to the process group and polls for up to 2s before SIGKILL (`mcp/os/posix/utilities.py:33-47`). A timed-out call can therefore return about 2s after the cap. With `timeout_s=1`, a Python child's spawn and `initialize()` may also consume most of the budget, so the test could fire during initialize instead of during `sleep`. Fix: bound the assertion at timeout plus about 4s, and choose a timeout (for example 3s) that clears spawn and initialize.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:165-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The result-mapping rules have no test",
+      "description": "Task 4.2 specifies three rules: join all text blocks with `\\n`, note non-text blocks by type, and map zero text blocks to an explicit error. Task 5 covers only a single-text echo, `fail`, `empty`, and an unknown tool (L156-161). Nothing checks a multi-block join or that a non-text block appears by type rather than vanishing. Slice success criterion 2 (slice L221-222) requires the executors to \"map results per the Result mapping rules,\" and the slice calls out silent drops (slice L137). Fix: add a two-text-block tool and a mixed text-plus-image tool to the fake server, with assertions in 5.1.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:133-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The protocol-error row (McpError or closed stream) has no test",
+      "description": "The slice says every failure-mode row has a test asserting its signal (slice L149-150). Task 5.4 (L173-176) covers timeout, `isError`, and spawn only. The fake server cannot produce a protocol error: its tools return `isError` results, and the low-level server builds those through `_make_error_result` (`mcp/server/lowlevel/server.py:467-474`). So no planned test reaches the McpError or closed-stream branch in 4.3. Fix: add a fixture tool that raises `McpError` (or closes its stdout), plus a test asserting `is_error=True` and the WARNING.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:173-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4.3 names no exception types, and spawn failure surfaces as OSError",
+      "description": "4.3 requires specific `except` clauses that satisfy CLAUDE.md:32, but it names only \"spawn failure\" and \"`McpError` / closed-stream.\" The SDK re-raises `OSError` at spawn (`mcp/client/stdio/__init__.py:131-137`), and `McpError` lives in `mcp.shared.exceptions`. Closed-stream failures arrive as anyio stream errors, which the task never names. A junior implementer may reach for `except Exception`, which CLAUDE.md:32 forbids, or leave spawn failure uncaught. Fix: name the class for each branch: `OSError` for spawn, `TimeoutError` for the `asyncio.timeout` case, `McpError` for protocol errors, and the anyio closed-stream errors.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:138-145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Executor config reads ignore the bound working directory",
+      "description": "6.3 (L205-206) says to read `cf.mcp_command` and `cf.mcp_timeout_s` \"through the config manager at execute time\" with no `cwd`. `get_config(key, cwd=\".\")` (`manager.py:87`) and `get_typed_config(..., cwd=\".\")` (`manager.py:94`) read the project's `.squadron.toml` from the process's working directory, not the bound one. The codebase passes `cwd` explicitly elsewhere (`events/dispatcher.py:92`). As written, a project-level `cf.mcp_command` is ignored whenever squadron runs outside that project. Fix: pass `cwd=str(bound_cwd)` in 6.3, and add a 7.3 test with a `.squadron.toml` in the bound directory, using `patch_config_paths`.",
+      "file_ref": null,
+      "category": "config",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-read and parse errors escape the executor, which the plan says never happens",
+      "description": "Fact 2 (L29-32) and the slice (slice L149-150) say executors never raise. In 6.3, the config reads and `shlex.split` run before any of the bridge's try blocks (4.3 covers spawn, timeout, and protocol only). So several failures escape. `_read_toml` calls `tomllib.load` with no guard (`manager.py:46-51`), so a malformed `config.toml` raises on every CF call. `get_typed_config` raises ValueError on a non-int value (`manager.py:103-105`). `shlex.split` raises on unbalanced quotes. An empty `cf.mcp_command` gives an IndexError on `args[0]`. A `cf.mcp_timeout_s` of 0 or less is not rejected. The 262 loop's catch-all (`src/squadron/providers/openai/agent.py:280-284`) keeps the run alive, but the model then gets a generic message, and the design's \"bridge unavailable\" text never appears. Fix: wrap the config reads and parse in 6.3 and return `is_error=True` naming the key, with tests for bad quoting and an empty command.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:46-51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Optional-argument handling is unspecified, so null and wrong-type values reach CF",
+      "description": "6.3 (L203-204) validates only required arguments, and only for missing or blank values. For `cf_build_context`, L195 says \"only supplied keys forwarded,\" and 7.2 tests only absent keys (L233-234). Nothing covers JSON `null`, which arrives as Python `None` and would be sent as a value. Nothing covers a non-string optional such as `phase: 5`, or a non-string required value such as `cf_set_phase({\"phase\": 5})`. The builtins reject non-strings at the boundary (`src/squadron/tools/builtin.py:120-131`). Fix: specify that optional keys are forwarded only when they are non-null strings (or that wrong types are an explicit error), state how blank optionals are handled, and add tests for `None`, non-string, and blank values.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:194-195"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 1 and 2 are too granular and duplicate each other",
+      "description": "Two config keys take two tasks, two commits, and two 1/5 efforts. Task 1's success criteria already check the defaults (L81-82), so Task 2 repeats them. Merge them into one task with one commit, keeping the test items under the key entries.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 3, 4 and 6 have no scoped test command, so the commit protocol cannot be applied as written",
+      "description": "The commit protocol requires \"the task's scoped test command passes first\" (L61). Task 3's criterion is a manual round-trip (L118-119), Task 4's is a manual smoke (L151), and Task 6's is a command-line check (L217). None names a pytest target. Give each an automated check: a smoke test in `tests/tools/` for Task 3, the echo case moved up from Task 5 for Task 4, and the registration test from 7.1 run after Task 6.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:118-120"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9.3 marks the slice complete while success criterion 6 is still open",
+      "description": "9.3 says to mark the slice design `status: complete` and to leave walkthrough step 4 open \"alongside 263's demo\" (L289-292). Success criterion 6 (slice L229-231) has two parts. The first, a materialized `cf_workflow_status` call, is covered by 9.1 step 2. The second, a live dispatch in which a non-SDK model calls `cf_build_context` and receives assembled context, is covered by no task in this file. Marking the slice complete while that part is open misstates its state. Keep `status` at in-progress until step 4 runs, or record criterion 6b as explicitly deferred in the slice.",
+      "file_ref": null,
+      "category": "docs",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.1's availability gate is unresolved, and a launch-based gate runs npm at collection time",
+      "description": "8.1 says \"attempt to launch ... (or detect a launchable command).\" Those are different mechanisms with different costs. A launch attempt runs `npx -y` at collection, so every `pytest` run, including CI, pays for an npm fetch, bounded only by `cf.mcp_timeout_s` (default 60s). A `shutil.which` check on the first token of `cf.mcp_command` is cheap, but it cannot tell a broken package from a missing one. The slice says \"gated with a skip marker when the server cannot be launched\" (slice L214-215). Choose one mechanism, state it, and say how the collection-time work is bounded.",
+      "file_ref": null,
+      "category": "ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3's rationale is wrong: Task 6 needs no real stdio peer",
+      "description": "L100 says \"tasks 5, 6 both need a real stdio peer.\" Task 6 has no tests of its own (Task 7 mocks the transport), and its criteria are an import check and pyright. Only Task 5 needs the fixture.",
+      "file_ref": null,
+      "category": "docs",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Env handling conflicts between 4.1 and 6.3, and the SDK default drops proxy variables",
+      "description": "4.1 says the bridge uses `get_default_environment()` as the spawned environment, but the bridge only receives a `StdioServerParameters` and never builds one (L129-131). 6.3 (L207) sets `env=get_default_environment()` on the params, which is also the SDK's default when `env` is None. Assign it to one place, the caller. Separately, `get_default_environment()` on POSIX passes only HOME, LOGNAME, PATH, SHELL, TERM, and USER (`mcp/client/stdio/__init__.py:28-45`), so `HTTPS_PROXY` and npm settings are dropped. On a proxy-only network, `npx -y` cannot fetch the package. The slice's Risks (slice L273-275) do not mention this; record it as a known limitation.",
+      "file_ref": null,
+      "category": "ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7.4's pipeline test belongs beside the existing validator tests",
+      "description": "7.4 (L244-247) places the `validate_allowed_tools` test in `tests/tools/test_cf_tools.py`. The 263 validator already has `tests/pipeline/steps/test_allowed_tools_validation.py`, which tests that same function (`utils.py:32`). Add the `cf_workflow_status` and `cf_bogus` cases there.",
+      "file_ref": null,
+      "category": "placement",
+      "raw_category": null,
+      "location": "tests/pipeline/steps/test_allowed_tools_validation.py:1-11"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 8.2 leaves the repo root and the \"mentioning the project\" check undefined",
+      "description": "8.2 says the executor runs \"from the squadron repo root\" and returns content \"mentioning the project,\" without saying how the test finds the root or what to assert. A test that checks only for non-error content passes on any project. Specify the root (for example `Path(__file__).resolve().parents[2]`) and the expected project identifier.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:266-268"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The layering and single-location rules have no automated check",
+      "description": "Fact 1 (`cf_tools` imports `mcp_bridge`, never the reverse) and Fact 4 (CF argument names appear only in the mapping table) are checked only by reading (L219, L150). Add a small test asserting that `mcp_bridge.py` imports nothing from `cf_tools` and contains no CF vocabulary. Also scope Fact 4 to MCP argument names: `src/squadron/integrations/context_forge.py:162-169` already reads `fileSlice` and `developmentPhase` from CLI JSON, so a literal grep-based check would flag an existing file.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:219-220"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `mcp>=1.0.0` floor does not match the behavior the plan depends on",
+      "description": "The lock pins mcp 1.26.0 (`uv.lock`, `name = \"mcp\"` / `version = \"1.26.0\"`), but `pyproject.toml:29` allows any `>=1.0.0`. The design's `cwd` and teardown claims (slice L152-157, L174-176) were checked only against 1.26.0. Task 5.2 would catch a teardown regression, but a fresh resolve to an older version would fail late. Raise the floor to the verified version.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "pyproject.toml:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The mcp SDK becomes a load-time import for every consumer of `squadron.tools`",
+      "description": "No file under `src/squadron` imports the mcp SDK today. After Task 6, importing `squadron.tools` loads `cf_tools`, which loads `mcp_bridge`, which loads `mcp.client.stdio`. Every consumer pays that cost, including the OpenAI agent and pipeline validation through `validate_allowed_tools`. The package docstring says importing it \"does nothing else\" (`tools/__init__.py:3-4`). Either defer the `mcp` import into the function body or record the cost.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "src/squadron/tools/__init__.py:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two DEVLOG.md files exist, and 9.3 names neither",
+      "description": "9.3 (L287-288) says to write a DEVLOG entry under today's date. Two files exist: the root `DEVLOG.md` (dated, newest-first entries) and `project-documents/DEVLOG.md`. Name the path in the task.",
+      "file_ref": null,
+      "category": "docs",
+      "raw_category": null,
+      "location": "DEVLOG.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 6 leaves the suite red, and no task updates the registry pins",
+      "location": "tests/tools/test_package.py:11",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "ci",
+      "raw_category": null,
+      "summary": "The plan assumes CI has no Node, but ci.yml installs Node 22 and runs the live test",
+      "location": ".github/workflows/ci.yml:20",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-isolation",
+      "raw_category": null,
+      "summary": "Task 2's exact-default tests read the developer's real user config",
+      "location": "tests/config/test_keys.py:51-97",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "safety",
+      "raw_category": null,
+      "summary": "Walkthrough step 3 overwrites, then deletes, a developer's existing user-level override",
+      "location": "src/squadron/cli/commands/config.py:25",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The timeout test asserts only the direct child, so it cannot pin group teardown",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:164-169",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "The timeout bound ignores the SDK's teardown grace period",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:165-166",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The result-mapping rules have no test",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:133-137",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The protocol-error row (McpError or closed stream) has no test",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:173-176",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 4.3 names no exception types, and spawn failure surfaces as OSError",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:138-145",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "config",
+      "raw_category": null,
+      "summary": "Executor config reads ignore the bound working directory",
+      "location": "src/squadron/config/manager.py:87",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Config-read and parse errors escape the executor, which the plan says never happens",
+      "location": "src/squadron/config/manager.py:46-51",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Optional-argument handling is unspecified, so null and wrong-type values reach CF",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:194-195",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Tasks 1 and 2 are too granular and duplicate each other",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Tasks 3, 4 and 6 have no scoped test command, so the commit protocol cannot be applied as written",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:118-120",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "docs",
+      "raw_category": null,
+      "summary": "Task 9.3 marks the slice complete while success criterion 6 is still open",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "ambiguity",
+      "raw_category": null,
+      "summary": "Task 8.1's availability gate is unresolved, and a launch-based gate runs npm at collection time",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "docs",
+      "raw_category": null,
+      "summary": "Task 3's rationale is wrong: Task 6 needs no real stdio peer",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "ambiguity",
+      "raw_category": null,
+      "summary": "Env handling conflicts between 4.1 and 6.3, and the SDK default drops proxy variables",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "placement",
+      "raw_category": null,
+      "summary": "Task 7.4's pipeline test belongs beside the existing validator tests",
+      "location": "tests/pipeline/steps/test_allowed_tools_validation.py:1-11",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 8.2 leaves the repo root and the \"mentioning the project\" check undefined",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:266-268",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The layering and single-location rules have no automated check",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:219-220",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The `mcp>=1.0.0` floor does not match the behavior the plan depends on",
+      "location": "pyproject.toml:29",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "The mcp SDK becomes a load-time import for every consumer of `squadron.tools`",
+      "location": "src/squadron/tools/__init__.py:9",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "docs",
+      "raw_category": null,
+      "summary": "Two DEVLOG.md files exist, and 9.3 names neither",
+      "location": "DEVLOG.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-22T23:06:39.286566",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 53,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "chars": 17285,
+      "sha256": "2341988cf7313b3efe143cc56a27107dcc606cbf490ca2d09cd569f0bd336e9f",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+      "chars": 17441,
+      "sha256": "afc2f0c4a865433fc609eb946863d87736e3b2820af736315d6bdc6cd3925e80",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/tools/__init__.py",
+    "src/squadron/tools/registry.py",
+    "src/squadron/tools/models.py",
+    "src/squadron/tools/builtin.py",
+    "src/squadron/tools/errors.py",
+    "src/squadron/tools/limits.py",
+    "tests/tools/test_package.py",
+    "tests/tools/test_registry.py",
+    "src/squadron/config/keys.py",
+    "src/squadron/config/manager.py",
+    "tests/config/test_keys.py",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/client/stdio/__init__.py",
+    "tests/pipeline/steps/test_allowed_tools_validation.py",
+    "src/squadron/cli/commands/config.py",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/os/posix/utilities.py",
+    ".github/workflows/ci.yml",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/shared/exceptions.py",
+    "DEVLOG.md",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/server/lowlevel/server.py"
+  ],
+  "searches": [
+    "list_files src/squadron/tools/**/*.py in .",
+    "list_files tests/**/*config*.py in .",
+    "list_files tests/tools/**/* in .",
+    "list_files tests/load/**/* in .",
+    "grep mcp in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/pyproject.toml",
+    "grep CONFIG_KEYS|len\\(.*CONFIG|get_typed_config|get_config\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep len\\(|== \\d+|sorted|unset|keys\\(\\)|CONFIG_KEYS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/tests/config/test_cli_config.py",
+    "grep def unset|@config_app.command|@app.command|\"unset\"|def set_|def get_|def list in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src/squadron/cli/commands/config.py",
+    "list_files **/mcp/client/stdio/__init__.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep ^name = \"mcp\"|^version = \"1\\.|^name = \"pytest-asyncio\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/uv.lock",
+    "grep asyncio_mode|\\[tool.pytest|\\[tool.pyright|strict|asyncio in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/pyproject.toml",
+    "list_files .venv/lib/**/mcp/client/stdio/__init__.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "list_files **/client/stdio/__init__.py in /Users/manta/.config",
+    "grep start_new_session|killpg|get_default_environment|cwd|def stdio_client|DEFAULT_SHUTDOWN_TIMEOUT|terminate|kill in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/client/stdio",
+    "grep ^Version|^version in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages",
+    "grep def validate_allowed_tools|validate_allowed_tools\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src",
+    "grep read_file|list_tools|\"bash\"|materialize\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/tests",
+    "grep ^from mcp|^import mcp|from mcp\\.|import mcp\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src",
+    "grep CLAUDECODE|integration_branch|def get_config|\"config\", \"get\"|\\[\"config\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src",
+    "grep def patch_config_paths|autouse in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/tests",
+    "list_files **/{DEVLOG*,prompt.ai-project*,*devlog*} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep Session State Summary|prompt\\.ai-project in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep ^## |^###  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/project-documents/DEVLOG.md",
+    "list_files mcp-*.dist-info/METADATA in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages",
+    "grep developmentPhase|fileSlice|templateName|context_build|workflow_status|project_update|prompt_get in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "list_files .github/workflows/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep developmentPhase|fileSlice|templateName|context_build|workflow_status|project_update|prompt_get in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep bare except|silent|hard cap|300 lines|exception in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks",
+    "grep class McpError|class ClientSession\\b|def call_tool in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp",
+    "grep \"not_started\"|not_started in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src",
+    "grep executor|except |except\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src/squadron/providers/openai/agent.py",
+    "grep Unknown tool in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/server",
+    "grep Unknown tool|isError=True|raise McpError|McpError\\( in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/mcp/server/lowlevel/server.py",
+    "grep from mcp import|from mcp\\.|import mcp in /Users/manta/.config/squadron/reading-20261122/wt/squadron-264-tasks/src"
+  ],
+  "sections_in_document": 10,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 24,
+    "in_fences": 0,
+    "in_section": 24,
+    "surviving": 24
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 54,
+  "prompt_tokens": 1665571,
+  "cached_tokens": 1521775,
+  "cache_write_tokens": 143754,
+  "completion_tokens": 102292,
+  "reasoning_tokens": null,
+  "duration_seconds": 448.89080987498164,
+  "cost_usd": 0.30774055,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,6 @@
+{"case": "migratory-100-arch", "flaws": [
+ {"id": "F1", "text": "Related Work links `200-arch.world-server-foundation.md`. At `09dd31b` the repo holds `300-arch.worldserver-foundation.md` and no 200-arch file. **VALID** (minor): contradicts repo. Needs: doc (file list). Raised by the original review (F-1; the review also says the slice plan has the same link).",
+  "hits": {"r01": [10], "r02": [10], "r03": [8], "r04": [18], "r05": [11], "r06": [17], "r07": [10], "r08": [21], "r09": [9], "r10": [12]}},
+ {"id": "F2", "text": "Envisioned State says the narrow interface is \"tick the simulation forward, query agent state, register/remove agents\", while the same section says the engine is stateless between ticks and all state lives in the arrays the caller passes. There is nothing in the engine to register into. **VALID**: self-contradiction. Needs: doc alone. Raised by the original review. The response removed the phrase and gave lifecycle to the world server (as 300-arch already did).",
+  "hits": {"r01": [0], "r02": [1], "r03": [0], "r04": [3], "r05": [1], "r06": [1], "r07": [2], "r08": [1], "r09": [1], "r10": [1]}}
+], "note": "No borderline calls"}

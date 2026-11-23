@@ -1,0 +1,354 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "\"Already planned\" makes an interrupted adoption or a false greenfield permanent",
+      "description": "Line 76 classifies any repo holding an initiative plan, an architecture doc or a slice plan as \"already planned,\" and says \"no completion state is needed.\" Line 91 has the agent write the derived architecture and then the existing-state slice plan. If the session ends after the architecture write, the next `sq onboard` gets \"adoption doesn't apply\" (line 88), and `cf next` navigates the project as planned (line 104). It then recommends planning new slices, and the built work never gets retroactive entries. The concept is excluded from the predicate on purpose (\"A concept on its own does not count\"), so the doc treats the concept as resumable and the architecture as complete. Nothing explains the difference.\n\nThe cost model is also wrong. Line 133 says a false greenfield \"wastes a conversation.\" The only stored value is the opt-out (line 79), and the both-direction override from slice 261 is gone. A brownfield repo classified greenfield can gain an initiative plan, become \"already planned,\" and has no path back into adoption.\n\nSquadron 364's candidate adoption writes an initiative plan (line 126). By line 76, that alone flips a brownfield project to \"already planned\" before any retroactive baseline exists. Nothing orders squadron's write after adoption.\n\nDirection: define the planned predicate in terms of adoption's completion (for example, a retroactive entry, or the existing-state plan written last). Specify resume behavior for a partial run. Give classification a forced path in both directions, or state why there isn't one.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Opt-out is checked before \"already planned\"",
+      "description": "Opt-out is first in the order and returns greenfield. Line 76 says \"Development continues from the artifacts.\" A project that already has an architecture and slice plan, and is later opted out, is reported as greenfield. The doc doesn't say what the greenfield outcome does to `cf next` for a planned project. If navigation branches on the outcome, a planned project gets first-run guidance. Either opt-out decides only the adoption question and planned status wins for navigation, or the doc defines what greenfield means for a planned project.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-76"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The retroactive marker's \"cannot bypass the gate\" guarantee depends on process",
+      "description": "Line 100 says the marker is \"set only by the adoption flow\" and \"can't be used to bypass the gate,\" because \"real new work always produces\" a design or task file. Neither holds in the shipped code:\n- The marker is a backticked token at the start of a plan entry (`packages/core/src/introspection/parsers/slicePlanParser.ts:23`). Nothing restricts who writes it.\n- The checker's three guards (`packages/core/src/introspection/retroactiveRules.ts:80-120`) are: no design or task file present (rule 1 fires only when a file exists), checked, and indexed before new work (rule 3 compares against the lowest non-retroactive index). A design-less entry that is checked and lowest passes all three.\n- The gate then skips it (`reviewGate.ts:376`). `missing-artifact` (`ConsistencyChecker.ts:468-487`) flags only design-without-tasks and tasks-without-plan. A plan entry with no design is silent.\n\nSo a new slice that is checked off with no design and no tasks, and marked retroactive, loses its code-review requirement with no finding. That violation is what the gate exists to catch. Line 51 also separates the marker from \"the PM-only review exemption\" without defining it. The 240 doc's `codeReview: none` (240 doc, line 75) is the likely referent, and it should be named here.\n\nDirection: either the checker flags checked, design-less new entries, or the doc states that the marker is a trust decision and the gate skip is accepted on that basis.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The derived architecture's review, verification and carry-forward are unspecified",
+      "description": "Line 98 calls the derived architecture \"an ordinary architecture document\" that \"downstream phases consume ... like any other.\" Three gaps:\n1. The retroactive skip doesn't cover the architecture boundary. `reviewGate.ts:376` skips retroactive entries at every boundary except `preSlicePlan`, which \"gates the architecture, not an entry\" (comment, lines 360-363). With `workflow.review_enabled` on, the derived architecture needs an arch review before the existing-state plan clears the pre-slice-plan gate. Steps 5\u20136 (lines 91\u201392) assume no review. Either that is intended, and adoption waits on a review of an AI-derived document, or the doc should say the derived architecture is exempt and why.\n2. Nothing checks that the derived architecture matches the code. The concept is the only artifact a person reads (line 91).\n3. Later phases get the graph's understanding only through the derived architecture. The comprehension doc is seen by one profile, per the slice plan's item 274 (\"the benefit that justifies adoption at all,\" `260-slices.brownfield-adoption.md`). This architecture never mentions 274. The \"Later in the initiative\" section (lines 106\u2013109) lists only reconciliation and docs mapping. Nothing refreshes the derived architecture as the code changes.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:91-92,98,106-109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load-bearing decisions are deferred, and the doc is stale where the code has moved",
+      "description": "- **Thresholds** (line 133) are \"set in slice design.\" The shipped code already decides some: the source walk excludes `node_modules`, `vendor`, `dist`, `build`, `project-documents` and dot-directories (`packages/core/src/detection/sourceVolume.ts:19-29`). The doc says nothing about which files count, shallow clones, squashed history, or scaffolds, which is its own example at line 133. Those outcomes exist only in code.\n- **Index scheme** (line 134) is deferred, but `project-documents/ai-project-guide/file-naming-conventions.md` already fixes the working range: a base index, increments of 10, and 000\u2013099 reserved. The doc should say whether the existing-state plan gets its own base band.\n- **Marker syntax** is never stated here. It is implemented (`slicePlanParser.ts:19-23`), and slice 263 is marked shipped. The guide rule that the adoption prompt (the one writer) depends on is still pending (line 159).\n- **Opt-out storage** (line 79) has no key, no file and no checkout scope. The slice plan leaves that open (item 269).\n- **Current State** (lines 57\u201363) describes the repo before the first build. `packages/core/src/adoption/adoptionResolver.ts`, `packages/core/src/adoption/adoptionFacts.ts`, `packages/core/src/detection/squadronProbe.ts` and `packages/core/src/introspection/adoptionNavigation.ts` now exist, and the rework deletes some of them. The doc never maps the rework to those modules.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133-134,159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection's facts don't match the code's signals, and the setup-ci offer is a second detector",
+      "description": "Line 48 says \"No surface carries its own heuristic.\" Line 73 lists the report's facts. There are two mismatches:\n- **History.** Line 49 says core maps \"commit history\" to an outcome, and line 133 treats shallow clones and squashed history as misfire risks. The code says the opposite: `packages/core/src/detection/history.ts:1` reads \"Reported for the prompt, never decides the outcome.\" The doc and the code disagree on which facts decide.\n- **Build manifest.** The `/setup-ci` offer fires once \"a stack is detected\" (`260-slices.brownfield-adoption.md:18`). The shipped check is `hasBuildManifest`, called directly from `packages/core/src/introspection/setupCiOffer.ts:38`. That fact is not in the report, and the offer does its own CI check. Line 69 says the offer \"lives in `cf next`\" without saying what it reads.\n\nEither the report gains the build-manifest fact, or the doc records the offer as a second detection consumer and revises the \"one detection\" principle to match.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48-49,69,73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Concept ownership and the \"one point of contact\" rule contradict the doc",
+      "description": "- Line 50 says \"The one point of contact is squadron's comprehension doc.\" Row (d), line 121, has squadron 364 supply `layers[]` to retroactive boundaries, and no channel is defined for that.\n- Line 125 says \"Exactly one writer per run\" for the concept, and names two candidates (squadron 363, or the guide's adoption prompt) with no rule for choosing. Step 5 (line 91) has the agent draft it.\n- Row (c), line 120, says CF writes the architecture \"on both paths.\" Line 129 says there is no CF-only path.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:50,91,120,121,125,129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adoption flow has no failure branches",
+      "description": "Only the happy path is written. Not covered:\n- **Step 3** (line 89): the graph question is answered no, or the build fails partway. Line 129 says there is no CF-only fallback, so the project stays brownfield and unadopted. Line 104's hint repeats indefinitely, or the user opts out, which the first finding says forecloses adoption later.\n- **Step 4** (line 90): the comprehension doc is missing or partly written. The prompt's behavior in that case appears only in the superseded contract (line 136).\n- **Step 5** (line 91): the agent stops mid-run, or the drafted concept is rejected. The doc doesn't say what state the project is left in.\n\nSquadron owns the orchestration, but cf owns the state these branches leave on disk, and the doc doesn't describe it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:87-92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-repo contracts are unversioned, and \"counts as complete\" has no single owner",
+      "description": "The probe's `probe_version` was the only versioned contract. Line 135 marks it superseded, and nothing replaces it:\n- The detection report JSON (line 81) and prompt delivery (line 90) are called by `sq onboard` (line 50). The doc gives no schema version, compatibility rule or fixture location.\n- Line 94 says cf \"neither knows nor tests\" squadron's side. The slice 271 criteria require matching JSON, not a pinned schema, so nothing tests the contract cf exposes.\n- \"Counts as complete\" is implemented in `WorkflowNavigator.ts:781`, in the checker, and in the gate. It is also relied on by squadron's pipeline gates (line 121) and by the guide's rule (line 159, pending). Line 48's \"one detection, many consumers\" covers detection, not this predicate, and no single owner is named.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81,90,121,135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Superseded contract text is still in the document as contract",
+      "description": "Lines 135\u2013137 keep the probe contract (\"locked at `probe_version` 1\", the `surfaces` shape, `graph{present, path, commit, commits_behind}`), the original profile contract (`fileComprehension`, and an \"Adoption Facts\" section that `cf build` appends), and the \"`cf build` fails with a named error\" rule. Each is labelled superseded or \"for history,\" but it sits in the section squadron and the guide read to learn what to build against. Slices 268 and 271 remove all of it. Move it to a dated appendix or delete it. Otherwise an implementer can build against a contract the doc says is gone.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Later\" items bundle two unrelated subsystems into the adoption architecture",
+      "description": "Conventions reconciliation (266) adds a persisted, keyed resolution format and changes what `setup-ide` delivers into CLAUDE.md and AGENTS.md, which the doc rates high risk. That conflicts with \"Additive and reversible\" (line 52), which says adoption does not rewrite the project's rules. Docs and ADR mapping (267) is self-contained. The slice plan says both \"stand on [their] own\" and are \"not part of the `cf build` and `cf next` problem.\" Each should have its own architecture document. This one should keep the adoption scope, its dependencies (lines 155\u2013160) and its risks.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:106-109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The one-time notice needs state the doc says doesn't exist, and shipped remedy text names keys that are being removed",
+      "description": "Line 28 says \"There is no adoption state machine ... and only an opt-out is stored.\" The slice plan's item 269 (`260-slices.brownfield-adoption.md:83`) says existing `in_progress` and `complete` values are \"ignored with a one-time notice.\" A one-time notice needs persisted state recording that it was shown. The shipped remedy text (`packages/core/src/detection/sourceVolume.ts:37-39`) tells users to run `cf config set adoption.state in_progress` or `declined`, and 269 removes those values. The slice plan's \"no migration of user data\" note (line 124) doesn't cover a user whose config holds `in_progress` and whose adoption is now parked.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Detection cost on every `cf next` is unstated",
+      "description": "Line 79 says the report is \"derived from the files every time,\" and line 81 has `cf next` consume it. Agents call `cf next` and `workflow_next` repeatedly. The shipped report runs `git rev-list --count HEAD -- .` with a 5-second timeout (`history.ts:8,14`) and a tree walk capped at 20,000 entries (`sourceVolume.ts:35`). The doc doesn't say whether the source walk is skipped when \"already planned\" settles the outcome first (line 76). The cost is probably bounded, but no budget is stated for a large monorepo.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79-81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Related Work links a review file that isn't in this checkout",
+      "description": "The entry links `../reviews/260-review.arch.brownfield-adoption.md` and says all 11 findings are addressed. `project-documents/user/reviews/` has no files in this checkout, so the link doesn't resolve here and the resolution claim can't be checked. The other Related Work links resolve.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:169"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Already planned\" makes an interrupted adoption or a false greenfield permanent",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Opt-out is checked before \"already planned\"",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-76",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The retroactive marker's \"cannot bypass the gate\" guarantee depends on process",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The derived architecture's review, verification and carry-forward are unspecified",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:91-92,98,106-109",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Load-bearing decisions are deferred, and the doc is stale where the code has moved",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133-134,159",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Detection's facts don't match the code's signals, and the setup-ci offer is a second detector",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48-49,69,73",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Concept ownership and the \"one point of contact\" rule contradict the doc",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:50,91,120,121,125,129",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The adoption flow has no failure branches",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:87-92",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Cross-repo contracts are unversioned, and \"counts as complete\" has no single owner",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81,90,121,135",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Superseded contract text is still in the document as contract",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135-137",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "\"Later\" items bundle two unrelated subsystems into the adoption architecture",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:106-109",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The one-time notice needs state the doc says doesn't exist, and shipped remedy text names keys that are being removed",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:28",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Detection cost on every `cf next` is unstated",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79-81",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Related Work links a review file that isn't in this checkout",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:169",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-22T21:04:55.162722",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+      "chars": 25593,
+      "sha256": "bf853913212f41db7b03d0137a11acd8453ab176a997fc673ce701e21f9c10b3",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md",
+    "project-documents/user/architecture/260-slices.brownfield-adoption.md",
+    "packages/core/src/introspection/reviewGate.ts",
+    "project-documents/ai-project-guide/file-naming-conventions.md",
+    "packages/core/src/introspection/retroactiveRules.ts",
+    "packages/core/src/detection/sourceVolume.ts",
+    "packages/core/src/detection/history.ts"
+  ],
+  "searches": [
+    "list_files project-documents/user/architecture/*.md in .",
+    "list_files project-documents/user/reviews/260-review* in .",
+    "grep detectFirstRunContext|agent_onboard|agentOnboardTool in .",
+    "list_files CLAUDE.md in .",
+    "grep recognizeCi|detectFirstRunContext|probe|brownfield in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages",
+    "grep execSync|spawnSync|execFileSync|readdirSync|walk in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages/core/src/detection",
+    "grep retroactive in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages",
+    "grep stack in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages/core/src/detection",
+    "list_files project-documents/**/*brownfield*review* in .",
+    "list_files project-documents/**/file-naming-conventions* in .",
+    "grep retroactive|Retroactive in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages/core/src/introspection",
+    "grep rev-list|git log|--is-shallow|\\bgit\\b.*\\[ in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages/core/src",
+    "grep (?i)index|slice number|NNN|prefix in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/project-documents/ai-project-guide/file-naming-conventions.md",
+    "grep missing-artifact in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages/core/src/introspection/ConsistencyChecker.ts",
+    "list_files project-documents/user/reviews/* in .",
+    "grep setup-ci|buildManifest|hasBuildManifest|stackDetect in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-260-arch/packages"
+  ],
+  "sections_in_document": 16,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 570985,
+  "cached_tokens": 477056,
+  "cache_write_tokens": 93911,
+  "completion_tokens": 87865,
+  "reasoning_tokens": null,
+  "duration_seconds": 387.4394724997692,
+  "cost_usd": 0.16815226,
+  "cost_basis": "provider"
+}

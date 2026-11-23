@@ -1,0 +1,68 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "3.2a commit gate cannot pass: tests that assert rendered facts and `Comprehension:` survive until 3.3 and 4.1",
+   "description": "3.1 and 3.2 stop rendering `Comprehension:` and the Adoption Facts section while the resolver is still wired in. 3.2a then requires `pnpm --filter @context-forge/core test` to pass. Tests that fail at that point:\n- `pipeline-integration.test.ts:154-173` asserts the probe JSON, the WARNING line and `- Squadron: unavailable...`. All three come from the Adoption Facts section.\n- `pipeline-integration.test.ts:184` asserts `Comprehension: ${COMPREHENSION}`.\n- `adoptionBuild.integration.test.ts` expects `FACTS_HEADING` in `expectBrownfield` (lines 24 and 99-103).\n\nThe first two are deleted in 3.3 and the third in 4.1, both after the 3.2a commit. 3.1's own success check runs only the `SectionBuilder` tests, so it hides the break at `pipeline-integration.test.ts:184`.\n\nFix: delete the pipeline-integration brownfield block and `adoptionBuild.integration.test.ts` in 3.1/3.2. Or drop 3.2a and fold 3.1\u20133.2 into the 3.7 commit.",
+   "location": "packages/core/tests/pipeline-integration.test.ts:124-190"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "3.7 `pnpm -r test` fails because `adoptionBuild.integration.test.ts` is not deleted until 4.1",
+   "description": "After 3.3 the signature is `createContextPipeline(projectPath)`. That test still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` at line 68 and asserts brownfield selection, facts and state writes. It fails at runtime, because vitest does not type-check. 3.3 lists the test files to update but omits this one. 3.7 requires \"all four pass\" and commits the seam removal.\n\nFix: move the `adoptionBuild.integration.test.ts` deletion from 4.1 into 3.3.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`pnpm typecheck` and `pnpm lint` never cover tests, so several success checks verify nothing about test files",
+   "description": "All three package `tsconfig.json` files set `include: [\"src/**/*\"]`, and each `typecheck` script is `tsc --noEmit` on that config. `eslint.config.mjs:9` ignores `**/tests/**`. Affected claims:\n- 3.4 \"Remove any remaining references in core tests and helpers\" has no check at all.\n- 3.5 and 3.6 treat typecheck as proof that the tests were updated.\n- 4.3 says \"any leftover `switch` on `kind` fails to compile\". That holds only for `src`.\n- 6.1 treats full typecheck and lint as covering test edits.\n\nA stale `adoptionStateWrites` argument or `adoptionFacts` field in a test would pass silently. `tsconfig.test.json` exists for core and mcp-server but is not wired to any script.\n\nFix: add `tsc -p tsconfig.test.json --noEmit` for core and mcp-server to 3.4, 3.6 and 6.1. Or add greps over `packages/*/tests` for the removed names. The `cli` package has no test tsconfig, so use greps there.",
+   "location": "packages/core/tsconfig.json:20"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "3.6 skips `generateContext`'s `options` parameter, and one of its steps has nothing to do",
+   "description": "3.6 removes `adoptionStateWrites` from `generateContext`. It never says to remove the trailing `options?: ContextToolOptions` parameter (line 69), the `...options` spread at line 100, or the `options` argument both callers pass (lines 214 and 281). Deleting `ContextToolOptions` makes `src` fail to compile, so the gap is found only after the fact.\n\n3.6 also says to \"Update its caller in the server setup\". `mcp-server/src/index.ts:40` already calls `registerContextTools(server)` with no options, so nothing changes there.\n\nIn `integrationSetup.ts`, `createIntegrationClient(options?: ContextToolOptions)` must lose the parameter itself, not only the doc comment. `mcpIntegration.test.ts:50` calls it with no arguments, so it is unaffected.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:69"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "4.3 \"keep the read cases\" in `adoptionState.test.ts` drops per-state read coverage",
+   "description": "The `it.each(ADOPTION_STATES)('round-trips %j')` test at lines 38-41 uses `writeAdoptionState` to seed state, then calls `readAdoptionState`. The test at lines 43-48 is write-only. Deleting both removes the only test that reads each valid state, and `readAdoptionState` stays in use for navigation until 270. The plan should say to rewrite the round-trip test as a read test that seeds TOML with `writeFile`. The remaining tests at lines 34-36 and 50-64 are already read-only and need no change.",
+   "location": "packages/core/tests/adoption/adoptionState.test.ts:38-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, not `**Commit**:` marker lines",
+   "description": "2.3 is a checkbox task, 3.2a is a checkbox task, and the commits in 3.7, 4.1\u20134.4, 5.1 and 6.3 are `- [ ] Commit:` sub-checkboxes. Markers must be plain `**Commit**:` lines. Convert them and keep them at the working points (after 2.2, after the 3.x seam removal, after each 4.x, after 5.1). With the two FAIL findings fixed, 3.2a probably disappears.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "5.1 omits the project registration the MCP calls need",
+   "description": "The 5.1 fixture steps list copying the fixture, installing the guide, writing source and adding the comprehension doc. They leave out the step that makes `context_build` and `template_preview` addressable: patching `projects.json` in `fixtureEnv.tempDir` with the checkout path (adoptionParity lines 81-84). The `FIXTURE_PROJECT_ID` is also needed.\n\nThe \"copy `fixtures/integration-project`\" wording is imprecise. The real project root is the nested `tests/fixtures/integration-project/integration-project`, and `projects.json` sits one level above it. The `git show` pointer mitigates this, but the step list should name these.",
+   "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:67-86"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Section 3 intro misstates which package fails to typecheck",
+   "description": "It says \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail.\" After the 3.4 rebuild, `cli/src/commands/build.ts:84` still passes two arguments until 3.5. So `cli` also fails in that window. The sentence should say \"between 3.4 and 3.5 `cli` and `mcp-server` fail, and between 3.5 and 3.6 only `mcp-server` fails\".",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "3.3's services grep also matches a comment and leaves an unused local",
+   "description": "- The 3.3 success grep `adoption/\\|detection/` over `services/` matches the comment at `ContextIntegrator.ts:9-10` (\"never adoption/index.ts\u2026 services/ and adoption/\"). The comment must be deleted along with the import. The step says only \"remove every import\".\n- After the swap is removed, `const instruction = project.instruction || 'implementation'` (line 148) is unused. `noUnusedLocals` is on in `tsconfig.json`, so the build breaks until it goes.\n- Neither is blocking, because the grep and compiler will catch them.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:9"
+  }
+ ]
+}

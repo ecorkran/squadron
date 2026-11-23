@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tasks 5/5C and 6/6C are conditional, partly notes-only commits, and arguably one task",
+   "description": "- **Notes-only commit:** Task 5C commits `docs: record slice 214 parity sweep results` if Task 5 changed anything. The only expected change is a \"Parity differences\" note in the slice design. The project rule says \"Never make a commit that only checks boxes or only adds notes.\"\n- **Commit message mismatch:** If Task 5 finds a real bug, the commit would also contain a code fix and a test. The message `docs:` would then be wrong.\n- **Task 6 is unlikely to change anything:** The context summary already says the README needs no change. Task 6C will probably never fire.\n- **Suggested fix:** Merge Tasks 5 and 6 into one \"verify and finalize\" task. It would run the walkthrough and parity sweep, fix any real bug with a test, record any parity differences, run the root build, lint and test, and confirm file sizes. It would end in a single commit marker. If it produces only notes, they should ride along with the 4C commit. Alternatively, say a bug fix is committed as `fix:` and notes are never committed alone.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-134"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 4T leaves test inputs ambiguous",
+   "description": "- **Real slice designs (line 108):** The task says \"several files in `project-documents/user/slices/` that pass the bash script today\". A junior would have to run the bash script to find them. The result also depends on whichever slice files exist in the repo at test time. Name the specific files, or state a deterministic rule such as a fixed list of 3\u20135 filenames plus the 214 design. The test must not invoke the bash script.\n- **Worktree test (line 114):** The task says \"with `--project` or a worktree checkout fixture\". Pick one, or require both. Say how the fixture's guide copy differs from the main one, for example a distinguishable template path under a temp checkout, so the `template` assertion proves which guide was read.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 1 is very granular",
+   "description": "Task 1 is a one-line constant. Only Task 4 consumes it, so it sits unused through Tasks 2 and 3. Folding it into Task 4's first step would remove a task, with no loss of independence.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Test coverage overlaps between layers",
+   "description": "Tasks 3T and 4T both cover the broken copy, the missing `docType` and the failing-then-passing multi-file case. The layers differ, so this is defensible. The CLI tests need only assert output formatting and exit codes, so they could drop the repeated semantic variants. That keeps Task 4T from growing.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:88-90, 109-111"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` and stops if an integration branch is set",
+   "description": "The git rules say to fork the slice branch from the configured target, whatever it is. The task instead hard-codes `main` and stops if `git.integration_branch` is non-empty. Rewrite it as: read the target with `cf config get git.integration_branch` (or `main` if empty), then create the slice branch from that target.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  }
+ ]
+}

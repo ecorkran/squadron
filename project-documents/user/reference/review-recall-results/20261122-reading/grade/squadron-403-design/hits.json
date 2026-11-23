@@ -1,0 +1,11 @@
+{
+ "case": "squadron-403-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D1 requires every landing of a slice (a slice can land twice; slices 172, 305 and 940 each have two merges on first-parent history), but D2 resolves them by reusing `_search_merge_commit` with a `first_parent` flag. At `90725f6d` that helper runs `git log --merges ... -1` and returns only the newest merge, as `str | None` (`review/git_utils.py:221-243`). It cannot return multiple landings. The correction stops reusing it and has the resolver run `git log --first-parent` itself, sharing only the pattern and parse functions. **VALID**: contradicts code. Needs: code (read the helper at `90725f6d`). Not found by the original review.",
+   "hits": {"r01": [1], "r02": [5], "r03": [5], "r04": [], "r05": [1], "r06": [], "r07": [4], "r08": [], "r09": [2], "r10": []}
+  }
+ ],
+ "note": "r01 i1 and r09 i2 frame the problem as a dead `first_parent` argument (reading the data flow as issuing its own list query), but both state the helper returns only the newest match via `-1` while D1 needs every landing, and recommend sharing only the pattern function; counted. r06 i3 discusses the `first_parent` argument only as a test-signature break, not the single-result limitation; not counted."
+}

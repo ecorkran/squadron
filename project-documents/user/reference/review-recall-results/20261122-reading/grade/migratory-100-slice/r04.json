@@ -1,0 +1,117 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The tick signature only accepts `BulkForce`, but other sections describe a per-agent `Force` path in the tick",
+   "description": "- The tick signature takes `forces: list[BulkForce]` only (line 185).\n- Data Flow step 4 (line 89) describes the per-agent `Force` shape: \"receives the active agent's state, its neighbors' state, and its profile, and returns a force vector\".\n- Line 152 says \"the tick loop prefers the bulk variant when available\", which implies the tick accepts both.\n- Line 248 requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\". The tick has no `Force` path, so `ConstantDriftSingle` (task 6.2) is only ever called directly by its own test.\n- Line 223 tells archetype slices they can register forces of either kind.\n\nA per-agent `Force` inside the hot loop would also break architecture line 99 (\"no callbacks into Python during the hot loop\") and slice line 247.\n\n**Fix:** Cut the `Force` protocol from this slice (recommended), or state plainly that it is a test-only reference shape the tick never accepts. Then rewrite lines 89, 152, 223 and 248 to match.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:185"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The design forbids per-agent loops in the hot path, but its spatial interface requires one",
+   "description": "- Line 88 says \"For each active agent, `SpatialQuery.query_radius(position, radius)`\". The protocol (lines 165\u2013170) only offers a single-point query, so neighbor finding is a Python loop over active agents.\n- `BulkForce` then receives `neighbor_lists: list[NDArray[np.intp]]` (line 145), which is a ragged Python list with one allocation per agent.\n- This contradicts line 247 (\"No Python-level per-agent loops in the hot path\") and architecture lines 33, 87 and 99. Line 87 notes that neighbor finding dominates tick cost. Line 99 asks for no dynamic allocation.\n- The slice plan (line 34) says 105 swaps the spatial hash in \"behind the existing query interface\". So the per-point shape set here caps what 105 can achieve.\n\n**Fix:** Add a batch query to the protocol, for example `query_radius_batch(indices, radii)` returning a CSR-style `(offsets, neighbor_indices)` pair, and pass that to `BulkForce` instead of a Python list. Alternatively, explicitly relax line 247 for neighbor queries and record the limit.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:88"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `BulkForce` description implies inactive agents get integrated, which contradicts \"inactive state untouched\"",
+   "description": "- Line 152 says the full-size return \"keeps the integration step simple (add force to velocity for all, but only active agents have non-zero forces)\".\n- Integrating everyone with zero force still applies `position += velocity*dt` and the speed clamp to inactive agents. That breaks line 91 (\"Inactive agents' state is untouched\") and line 241, and contradicts line 215 (fancy-indexed integration).\n- The full-population N\u00d72 return also allocates an array the size of the whole population per force per tick. Under the multi-resolution use case (a few active agents out of many) this defeats the point of the subset and goes against architecture line 99 (\"no dynamic allocation\").\n\n**Fix:** Either return `len(active)\u00d72` aligned to `active_indices`, or keep N\u00d72 and delete the \"add force to velocity for all\" rationale.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The neighbor-query contract is under-specified, but slices 101\u2013105 depend on it",
+   "description": "The design leaves these questions open:\n- **Self-inclusion:** Does `query_radius` include the querying agent? Task 5.3 defers this (\"depending on design decision \u2014 document which\"). Slice 101's separation force divides by distance, so self-inclusion gives a zero-distance neighbor.\n- **Boundary:** Is the test `<` or `<=`?\n- **Result order:** If order is unspecified, the order in which floats get summed depends on the index structure. The slice plan (line 34) requires 105 to produce output identical to brute force, which cannot hold unless results are, for example, sorted ascending.\n- **`neighbor_lists` shape:** Is it length N (empty entries for inactive agents) or `len(active_indices)` aligned?\n- **Multiple radii:** Line 88 uses one `query_radius` per profile. Slices 101 and 104 need several radii (separation, avoidance at distance), so the design should say the query uses the maximum radius and forces filter the results.\n\n**Fix:** Pin all five points in the protocol docstring.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#spatial-query-protocol"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The brute-force pairwise-distance matrix does not serve `query_radius(position)`",
+   "description": "- Line 173 says `build()` computes all pairwise distances. But `query_radius` takes an arbitrary position, not an agent index, so the matrix can only be used by matching float positions back to rows. That match is fragile when agents share a position. Task 5.2 hedges between the two approaches.\n- \"O(n) per query\" holds only if the query computes distances from the given point, which makes the matrix dead weight.\n- The N\u00d7N float64 matrix is O(n\u00b2) memory: about 800 MB at 10K agents.\n\n**Fix:** Have `build()` store the positions. Have each query compute distances in O(n).",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slices 102\u2013104 will need per-agent state, so \"slices use `tick()` as-is\" is unlikely to hold",
+   "description": "- Lines 221\u2013225 promise that behavioral slices \"add forces; they don't modify the tick loop\". Line 203 says the interface \"doesn't need to be retrofitted\".\n- But the slice plan needs per-agent data, not per-profile data:\n  - 102: \"experienced individuals\" (leadership)\n  - 103: a target held across ticks\n  - 104: a per-agent home-range center\n- Architecture lines 47 and 64 also say the tick receives \"environmental context\", and the signature has no parameter for it.\n- `AgentState` defines no way to add arrays, and `add_agent`/`remove_agent` (task 3.2) only know the fixed four arrays.\n\n**Fix:** Either define how extra per-agent arrays get registered and resized, or soften the claim and name the expected changes for those slices.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:221-225"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Removing an agent shifts indices, and no stable identity is defined",
+   "description": "- Line 98 says add/remove \"resize arrays\" but doesn't specify the semantics: order-preserving delete or swap-remove.\n- Either way, indices held by callers go stale after a removal: the world server's entity\u2192index map, cached `active_indices`, and slice 103 target indices.\n- Nothing documents that indices are unstable, and there is no ID array.\n\n**Fix:** Specify the removal semantics and state that indices are not stable across `remove_agent`. Either add an ID array or name this as a world-server responsibility.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`active_indices` input contract is unspecified, so invalid input fails silently",
+   "description": "With fancy indexing (line 215):\n- Negative indices wrap silently (`-1` updates the last agent).\n- Duplicate indices make `+=` apply once without any error.\n- Out-of-range indices raise `IndexError` only partway through the tick.\n\nThe architecture (lines 49 and 64) allows \"index array or mask\". The design quietly supports indices only. Each `BulkForce` also has to handle both `None` and an array itself.\n\n**Fix:** Specify:\n- the dtype (`intp`, no masks);\n- unique, in-range, non-negative indices, validated once with an explicit `ValueError`;\n- behavior for an empty array;\n- normalizing `None` to `arange(N)` once in `tick`, so forces handle a single form.\n\nThis fits the project rule against silent fallbacks.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:186-199"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The integration math and state have unexplained elements",
+   "description": "- **Dead `accelerations` array:** It is declared (lines 35 and 96), but no step reads or writes it. The input on line 86 and the architecture (line 39) don't list it. Cut it, or say tick stores the accumulated force there.\n- **Unit mass is implicit:** `velocity += force * dt` (lines 90 and 208) assumes unit mass without saying so.\n- **Clamp is unspecified:** `clamp(velocity, max_speed)` doesn't say it clamps the vector magnitude, or how to handle zero speed. Agents start at zero velocity (task 3.1), and a naive `v/|v|` produces NaN and divide warnings. Task 8.1 requires \"No warnings\".",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Some verification walkthrough steps cannot run or pass as written",
+   "description": "- **Step 1:** `cd migratory` (line 256) doesn't say where it runs from. The repo root already contains `project-documents/`, and the tree at line 56 shows `migratory/` as the top level. It is unclear whether `pyproject.toml` goes at the repo root or in a subdirectory.\n- **Step 3:** The snippet never imports `np`. `forces=[...]` passes an `Ellipsis` that `tick` will try to call. `AgentState.create(n, profiles)` (line 275) is never specified anywhere else: initial positions, how profile indices are assigned across several profiles, and any RNG seed. Determinism depends on those.\n- **Step 4:** \"Proportional to t\u00b2\" is wrong for discrete semi-implicit Euler, where x_n = F\u00b7dt\u00b2\u00b7n(n+1)/2. With `max_speed=5.0` the clamp also makes motion linear once the speed saturates. The expected value needs to be the discrete formula, with force and N chosen below the clamp.\n- **Step 5:** `tick` returns `None` and keeps the neighbor lists internal, so \"agent 0's neighbor query can still find agent 50\" can't be observed. Calling `spatial.query_radius` after the tick proves nothing about the tick. The step needs a spy `BulkForce` that records `neighbor_lists`, plus agents placed explicitly.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:250-290"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The architecture's scaling NFR is not restated",
+   "description": "- Architecture line 33 targets \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". This slice builds that hot path, but only mentions \"hundreds-of-agents scale\" in passing (line 173).\n- It should restate the NFR, give this slice's own bound (for example, brute force acceptable up to about 1K agents), and state that 105 owns the tens-of-thousands target.\n- It should also note that the per-agent query loop (see the earlier finding) limits throughput no matter which index 105 swaps in.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"Return updated state\" conflicts with mutating in place and returning `None`",
+   "description": "- Line 39 says \"return updated state\". Lines 91 and 187 mutate in place and return `None`. Architecture lines 68\u201370 say \"Returns the updated state array\".\n- Mutating in place is reasonable, but line 39 should be fixed.\n- The design should also state that all forces are computed before any mutation, so a force that raises leaves the state unchanged. Replay callers need to know to copy state before a tick.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The Float32 conversion is assigned to the world server, but the architecture gives it to the engine",
+   "description": "- Architecture line 95 says the engine should \"provide an efficient conversion path at the serialization boundary\". Lines 49 and 100 assign this to the world server.\n- Deferring it is fine because the slice plan doesn't give it to (100). But the doc should say \"deferred\" rather than move ownership, unless the architecture is updated.\n- `200-arch.world-server-foundation.md`, which both documents cite, is not in the repo, so the ownership claim can't be checked.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:49"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The Integration section is indented into a code block",
+   "description": "Lines 205\u2013215 are indented four spaces. In Markdown, \"### Integration: Semi-Implicit Euler\" therefore renders as preformatted text rather than a heading, and drops out of tables of contents and heading parsers.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Scaffolding omits tools the project's Python rules require",
+   "description": "- `.claude/rules/python.md` requires `uv`, `ruff`, and strict `mypy`/`pyright` with zero errors.\n- The design uses `pip install -e` (line 257) and configures none of these. Line 245 (\"type annotations\") has nothing to enforce it.\n- The location of `DIMS` is not in the component tree. Task 1.1 guesses `migratory/__init__.py`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:106-112"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Adding required profile fields later breaks existing construction sites",
+   "description": "- Making every field required (line 118) and extending the profile in every later slice (line 308) means each new field breaks every existing `BehavioralProfile(...)` call, including the walkthrough at line 274.\n- The design should require that tests build profiles only through `conftest` fixtures, so each later slice updates one place.\n- Value validation (for example, `max_speed > 0`) is unspecified.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:308"
+  }
+ ]
+}

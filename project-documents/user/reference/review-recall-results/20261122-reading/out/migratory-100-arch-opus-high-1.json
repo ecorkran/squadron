@@ -1,0 +1,328 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The neighbor-query interface rules out the vectorized hot loop the doc requires",
+      "description": "Line 33 says the hot loop \"must be structured for vectorized computation over arrays of agent state, not object-by-object iteration.\" Line 99 adds \"no Python-level per-agent branching.\" But the only description of the neighbor query is per agent: \"which agents are within radius R of agent A\" (line 87), and step 2 of the Envisioned State (line 65) says \"For each active agent, queries nearby neighbors.\" The doc never says what shape a neighbor result takes, and that is the load-bearing decision. A per-agent query that returns a variable-length index array leads to:\n- a Python `for` loop over agents calling `query_radius` (`src/migratory/engine/tick.py:48-52`)\n- a ragged `list[NDArray]` handed to every force\n- each force looping over agents again in Python (`src/migratory/engine/flocking.py:30`, `:65`, `:114`).\n\nAt 10K agents with three forces, that is about 40K Python-level iterations per tick, each doing small NumPy calls (~5\u201320 \u00b5s each). That costs hundreds of milliseconds against the 17\u201350 ms budget the world server implies (300-arch line 78: 20\u201360 Hz). The \"tens of thousands at full fidelity\" goal (line 33) can't be met. The ragged-list shape also can't be dispatched to a GPU (line 99).\n\nPer-profile radii make it worse. Line 45 says each profile has its own query radius, and a spatial hash with one cell size handles mixed radii poorly. The doc doesn't address this.\n\n**Fix:** state the batched contract in the architecture:\n- `query(positions[active], radii[active]) -> (offsets, indices)` in CSR form, or a fixed-K neighbor matrix with a validity mask.\n- Forces consume that CSR structure through segment reductions (`np.add.reduceat`, `np.bincount`).\n- Profiles become a structure-of-arrays parameter table indexed by `profile_indices`, so per-agent weights come from one gather instead of `profiles[state.profile_indices[i]]` inside a loop. `tick.py:60-63` currently rebuilds `max_speeds` with a list comprehension every tick.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The engine is called stateless, a returner of state, and a registrar of agents all at once",
+      "description": "These three claims don't fit together:\n- Line 68: the tick \"Returns the updated state array.\"\n- Line 70: \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\"\n- Line 81: the engine interface includes \"query agent state, register/remove agents.\"\n\nYou can only register agents with, or query state from, something that holds state. The world-server architecture (300-arch line 70) says the server \"assigns entity IDs, allocates space in the state arrays, and removes entities.\" So the register/remove piece of the engine interface either duplicates `EntityManager` or doesn't exist.\n\nThe return contract is also wrong. The code mutates in place and returns `None` (`tick.py:20`, \"mutated in place\"). Note that \"feed in state, get back state\" (line 70) and in-place mutation give different guarantees for replay and testing.\n\n**Fix:** line 81 should say the engine exposes only `tick()`, and that state and lifecycle belong to the world server. Pick one of in-place mutation or return-new, and say which.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agent state has no room for per-agent behavioral data that four archetypes need",
+      "description": "Line 39 fixes agent state as \"positions, velocities, profile indices.\" Line 43 says all variation comes from profiles. But the planned archetypes need data that differs per agent, not per profile:\n- **Territorial** (lines 76, 113): each agent has its own home-range center. A profile-level center would pull every territorial agent to the same point.\n- **Herding** (line 109): \"leadership tendency,\" and the slice plan's \"experienced individuals.\" Individuals differ within one profile.\n- **Predator-prey** (line 111): \"target selection\" means each predator remembers a current target across ticks. It also refers to another agent by index, which breaks when arrays shift (see the index-stability finding).\n- **Migration** (concept): per-agent energy or fatigue.\n\nTarget selection is also a decision. That contradicts \"Forces, not decisions \u2026 rather than implementing behavioral state machines\" (line 41), and the doc doesn't reconcile the two.\n\nThe architecture needs a mechanism for extra per-agent columns: a registered attribute schema stored as additional SoA arrays, which forces declare they read. Otherwise slices 102\u2013104 will each bolt fields onto `AgentState` ad hoc.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39-43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The model for interactions between profiles is left as an open \"dimension\"",
+      "description": "Line 91 correctly says predator-prey requires \"profile-to-profile interaction rules\" that add \"a combinatorial dimension.\" Then it stops. The profile definition (line 43, \"a set of named weights\") is per profile, so it has no place for a P\u00d7P relation. Without one, the elk\u2013wolf vs elk\u2013elk distinction in that same paragraph can't be expressed.\n\nThis decision shapes:\n- the profile schema\n- the parameter table layout (a P\u00d7P\u00d7k array indexed by `profile_indices[i], profile_indices[j]`)\n- whether separation or alignment should even count neighbors from other profiles. Today's flocking forces average over every neighbor, so wolves would join an elk herd's cohesion and alignment.\n\nIt needs to be settled before slice 103, not inside it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset ticking at reduced rates ignores timestep scaling",
+      "description": "Line 49 makes \"variable-rate ticking (some agents evaluated every tick, others at 1/4 or 1/16 rate)\" the reason for the subset interface. But the tick takes one scalar `dt` (`tick.py:17`), and line 93 fixes the timestep.\n\nAn agent evaluated every 4th tick with the base `dt` moves at a quarter of the speed. So the interface needs either:\n- a `dt` per agent (or per subset), which hurts the stability the doc relies on at high force magnitudes (line 93); or\n- substepping, which brings back the cost being saved.\n\nThe doc also says nothing about how stale neighbors are handled. A reduced-rate agent is \"still visible to its neighbors\" (line 65) at a position up to 15 ticks old. The world server's \"interpolated positions between evaluations\" (300-arch line 105) would have to write into the same `positions` array the engine reads, and the doc doesn't define who owns that.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The determinism guarantee is undefined and conflicts with planned work",
+      "description": "Line 31 promises the same outputs for the same inputs, enough for \"regions [to] agree on simulation results.\" The doc never says whether this means bitwise-identical on one machine or equal within a tolerance. The difference matters:\n- Floating-point sums depend on order. A spatial hash returns neighbors in a different order than brute force, so `np.mean` and `np.sum` give results that differ in the last bit. Slice 105's acceptance test (\"behavioral output is identical before and after the swap\") will then fail, or force sorting neighbor indices.\n- GPU reductions using atomics (line 99) aren't bitwise reproducible.\n- The undecided float32/float64 choice (line 95) changes results too.\n- Future randomness (target selection, spawn jitter) needs a seeded RNG that is passed in explicitly. The doc doesn't mention one.\n\n**Fix:** define the determinism level, the rules for canonical neighbor order, and the RNG ownership contract.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The environment interface is assumed but never defined, and swarm behavior breaks \"read-only\"",
+      "description": "Line 47 and Envisioned step 1 (line 64) say the engine receives environmental context through a read-only query interface. The interface doesn't exist anywhere: it's not in the tick signature (`tick.py:13-20`) and no slice defines it. It has the same per-agent vs batched problem as the neighbor query, so it needs to be specified as batched sampling, e.g. `sample_field(name, positions) -> array`.\n\nSwarm agents (line 77) respond to \"reinforced paths,\" and paths reinforced *through use* means agents write to the environment. That contradicts \"read-only\" (line 47). Either stigmergy deposits are returned from the tick as an output buffer the world server applies, or the principle needs changing. Right now swarm is a named design-goal archetype (line 27) with no feasible path in this architecture.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No numeric-failure policy, and the defaults trigger one",
+      "description": "Cross-cutting: the doc has no error-handling strategy for the hot loop. Inverse-square separation with coincident agents divides by zero. `AgentState.create` zero-initializes every position (`state.py:49`), so a freshly created population is entirely coincident and produces NaN or inf on its first tick. A NaN then spreads through neighbors' cohesion and alignment means and poisons the simulation silently. That goes against the project rule to fail explicitly (CLAUDE.md).\n\nThe architecture should specify:\n- distance epsilon or softening for singular forces\n- a post-integration finiteness check, and whether it raises or quarantines agents\n- the validity requirements on input state (no coincident spawns).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Index stability across agent removal is unaddressed",
+      "description": "These all identify agents by array position:\n- the subset interface (`active_indices`)\n- neighbor results\n- profile indices\n- any future target reference\n\nRemoval compacts the arrays (`np.delete`, `state.py:95-98`), which silently re-points every index the caller holds (variable-rate schedules, predator targets). Line 43 also says profiles can be \"swapped at runtime,\" but profiles are referenced by list position, so removing or reordering profiles corrupts every agent's `profile_indices`.\n\nThe doc should state the contract:\n- the engine sees only dense indices, valid for one tick\n- the world server owns the stable-ID-to-index mapping and remaps caller-held indices after compaction\n- profiles are append-only, or live in a keyed registry.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregation via \"the same neighbor query interface\" won't work without redesign; GPU and aggregation scope is overweight",
+      "description": "Line 97 says the world server would present aggregates \"through the same neighbor query interface.\" But neighbor queries return indices into the agent state arrays, and the doc says aggregates are managed outside the engine (line 97), so they have no index. An aggregate also isn't a point with a velocity: it has dispersion and count, and cohesion, alignment and separation would need to weight it by count and treat it as a distributed mass. So this extension point needs a second neighbor channel or ghost rows in the arrays. It's a redesign, not \"the same interface.\"\n\nOn proportionality: lines 97\u201399 and the Aggregation slice (line 115) spend design effort on the 1M+ GPU and aggregate tiers. The engine actually delivers a 10K\u201350K CPU core (300-arch line 96), and the slice plan has already moved aggregation to Future Work (108).\n\n**Cut:** shrink lines 97\u201399 to one constraint, \"batched array-in/array-out, no per-agent Python,\" which the FAIL finding above makes concrete. Remove the Aggregation item from Anticipated Slices so it matches the slice plan.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wrong cross-references, and Anticipated Slices doesn't match the slice plan",
+      "description": "- Line 21 says the world server is \"300-arch.\" Line 122 links `200-arch.world-server-foundation.md`, which doesn't exist; the real file is `300-arch.worldserver-foundation.md`. The slice plan (`100-slices.behavior-engine.md:43`) has the same broken link.\n- \"Spatial query abstraction\" (line 107) is listed as a separate slice after flocking. The slice plan puts the interface in slice 100 and makes 105 an optimization.\n- Swarm is a design-goal archetype (line 27, line 77) but has no Anticipated Slice. The slice plan defers it.\n- Migration has no slice at all here, even though it's the project's namesake and the overview lists it among the behaviors produced (line 19). The slice plan has it as Future 107.\n- Aggregation (line 115) is anticipated here but Future Work in the slice plan.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Decisions already made are still written as open questions",
+      "description": "- Line 85: SoA \"needs validation.\"\n- Line 93: integrator \"may be\" Verlet or semi-implicit Euler, with no tick rate given.\n- Line 95: internal precision undecided.\n\nThe slice plan says slice 100 (complete) chose SoA, semi-implicit Euler and float64, and 300-arch fixes 20\u201360 Hz. The architecture document is the source of truth for downstream slices, so record these as decisions with their reasons.\n\nAlso record the precision boundary: float64 internally, cast to float32 at serialization. That cast is a copy, which contradicts line 95's \"zero-copy serialization path.\"",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dimensionality (2D vs 3D) isn't decided",
+      "description": "Cross-cutting: the doc never says whether the simulation is 2D or 3D. The examples need 3D (starling murmurations and jellyfish, line 23), and the renderer prototype is Three.js (line 56). But prototype 1 is 2D. The code has a `DIMS` constant (`src/migratory/__init__.py:4`), yet forces hardcode `(n, 2)` (`flocking.py:23`) and the `BulkForce` docstring says \"N\u00d72\" (`forces.py:44`).\n\nThe choice affects:\n- spatial hash cell counts (cubic growth in 3D)\n- terrain-elevation queries (line 47): 2D agents sampling a height field are different from free 3D flight\n- per-client network bandwidth figures (300-arch line 110 assumes 12 bytes, i.e. 3\u00d7float32).\n\nIt's a load-bearing decision and belongs in the architecture.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The neighbor-query interface rules out the vectorized hot loop the doc requires",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The engine is called stateless, a returner of state, and a registrar of agents all at once",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-81",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Agent state has no room for per-agent behavioral data that four archetypes need",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:39-43",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The model for interactions between profiles is left as an open \"dimension\"",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Subset ticking at reduced rates ignores timestep scaling",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The determinism guarantee is undefined and conflicts with planned work",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The environment interface is assumed but never defined, and swarm behavior breaks \"read-only\"",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No numeric-failure policy, and the defaults trigger one",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Index stability across agent removal is unaddressed",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Aggregation via \"the same neighbor query interface\" won't work without redesign; GPU and aggregation scope is overweight",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Wrong cross-references, and Anticipated Slices doesn't match the slice plan",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Decisions already made are still written as open questions",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-95",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Dimensionality (2D vs 3D) isn't decided",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-22T22:03:00.024959",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "chars": 14571,
+      "sha256": "92b6d907f78dbb6c1fd76ea48e61e9fc7a9e18e4448fa3bfbcb6ba69fef15df9",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "pyproject.toml",
+    "CLAUDE.md",
+    "src/migratory/engine/tick.py",
+    "src/migratory/spatial/interface.py",
+    "src/migratory/engine/state.py",
+    "src/migratory/engine/profile.py",
+    "src/migratory/engine/forces.py",
+    "src/migratory/engine/flocking.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory/__init__.py"
+  ],
+  "searches": [
+    "list_files project-documents/user/**/*.md in .",
+    "list_files {CLAUDE.md,.claude/**,pyproject.toml,package.json} in .",
+    "list_files src/**/*.py in .",
+    "grep (?i)float32|float64|tick rate|stigmerg|deterministic|determinism|GPU|archetype in /Users/manta/.config/squadron/reading-20261122/wt/migratory-100-arch/project-documents/user/project-guides/000-concept.migratory.md"
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 17,
+  "prompt_tokens": 142957,
+  "cached_tokens": 115049,
+  "cache_write_tokens": 27896,
+  "completion_tokens": 10012,
+  "reasoning_tokens": null,
+  "duration_seconds": 100.43540845764801,
+  "cost_usd": 0.44712090000000004,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,131 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2.2 fixture assertion fails against the file it names",
+   "description": "Task 2.2 uses `384-tasks.post-findings-to-the-pr.md` \"until then\" and asserts both groups are non-empty. That file has 166 `[x]` markers and zero `[ ]` markers, because 384 is merged. The \"unchecked\" half of the assertion fails on the first run. The fallback fixture cannot satisfy the task's own success line. This slice's task file is entirely unchecked until work starts, so it fails the same assertion in the other direction. Use a file with both states, such as a committed fixture copy or an in-progress task file. Or assert that `checked + unchecked` equals the checkbox count without requiring both groups to be non-empty.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The model never receives the slice design's content, so \"why\" and the title cannot be built",
+   "description": "D4 says \"why\" is written from the slice design, and Task 10 gives the model no tools. Task 9's `PrFacts` carries only the slice design **path**, and Task 7 only resolves the design file path. Nothing reads the design body. A tool-less model given a path can write nothing true about the design. Two things break:\n- The slice-branch \"why\" prose is unsupported by the facts.\n- The deterministic title (Task 10a, D4a) needs the design's H1, but no field carries it.\n\n`resolve_title` has no specified inputs, and nothing in `PrFacts` can supply the H1. Add the design text and H1 to the gathered inputs and to `PrFacts`. State what goes into the prompt, including how large it may get.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "`ls-remote` failures are never classified as `CodeHostError`, so Task 14's matrix cannot pass",
+   "description": "Task 6 reads the remote sha through `host.runner.run(...)`. That raises raw `ProcessTimedOutError` or `ProcessNotFoundError`, and a non-zero exit is returned as a plain `ProcessResult`. Only `GitHubCli._run_gh` (`github_cli.py:461-493`) turns these into `CodeHostError` subclasses. Task 14 requires every one of the five sites to use `except CodeHostError \u2192 render_code_host_error \u2192 Exit(1)`, and a \"classified transport failure\" at the `ls-remote` site. Task 6 never says to wrap these failures, and `refs.py` has no such mapping to reuse.\n\nWithout a wrapper, a timeout escapes as a traceback. A failing `ls-remote` (auth, network) yields empty stdout, which reads as \"branch missing\", and the operator gets the wrong fix. Task 6 must name the exception mapping: timeout to `HostCommandTimeoutError`, non-zero exit or missing git to a classified error, and no output to \"missing\". Task 6.2 should test each case.",
+   "location": "src/squadron/core/process_runner.py:61-75"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`PrInputs` and the `gather_inputs` entry point are defined by no task",
+   "description": "Task 7 writes \"the commit and slice halves of `gather_inputs`\" and Task 8 adds `find_latest_in_range_review(...)` with elided arguments. Nothing defines the `PrInputs` dataclass, the combining function, or the return type of the review scan. Task 9 consumes `PrInputs` and needs the review path, verdict and reviewed sha. Task 8 reads `reviewedSha` but never the `verdict` key, which `persistence.py:327` writes. Add a step that defines `PrInputs`, the review record type, and `gather_inputs`.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:157"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 8 contradicts what `resolve_reviews_dir` does",
+   "description": "Task 8.1 says to enumerate \"both the project's and \u2026 the configured external directory\", reusing `resolve_reviews_dir`. That function returns exactly one directory by a first-match rule: flag, then the project dir only if it exists, then config, then the per-user default. It also requires `flag`, `cwd`, `host`, `owner` and `repository`, which the task does not say where to get. Reusing it gives one directory, not both. A repository that has `project-documents/` but saved a PR review elsewhere loses that review silently. Decide which directories are scanned and how, and say where `host/owner/repository` come from (the locator).",
+   "location": "src/squadron/review/reviews_dir.py:56-93"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Empty range is impossible\" is false, and the title fallback depends on it",
+   "description": "Task 7.1 says an empty `base..head` range \"is impossible here\". It is possible when:\n- the head is already merged into the base;\n- head equals base, for example running on `squadron-pr` itself;\n- the base is chosen as a ref the head has not advanced past.\n\nTask 3.2 even tests that an empty range returns `[]`. In that state the \"what changed\" section has no commits, the Task 10a fallback (\"first commit's subject, always present\") has nothing to use, and `open_pull_request` gets a 422. No task refuses it before the model call. Add a refusal for an empty range. Also, `git log` is newest-first (Task 3.1), so \"first commit's subject\" is the newest commit. Say which one is intended.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Detached-HEAD error type cannot be the one the task points to, and nothing catches it",
+   "description": "Task 3.1 says `current_branch` raises on a detached HEAD, \"matching `github_cli._branch_for`\". That raises `TargetUnresolvableError` (`github_cli.py:188`), which lives in `codehost`. `review/git_utils.py` must not import `codehost` (`tests/codehost/test_import_boundaries.py:74-87`). The task does not name an exception type. Task 13 has no handler for it, so the command's detached-HEAD refusal has no defined exit path. Name a local exception type and have Task 13 catch it and exit 1. The same applies to the `run_git`-returned-`None` and non-zero-exit cases that Task 3.1 says must be told apart.",
+   "location": "src/squadron/review/git_utils.py:27-66"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Missing helpers: local head sha and range membership",
+   "description": "Task 6's `check_head_pushed` takes `local_sha`, and Task 8 needs `git rev-list <base>..<head>`. Task 3 adds neither. The only existing sha helper is the private `_resolve_rev` (`git_utils.py:339`). Task 13 does not say how `local_sha` is obtained or how `current_branch` is called; its order list omits both. Either extend Task 3 or state that Tasks 6 and 8 reuse `commits_in_range` and a named rev-parse helper.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The prompt and per-section composition are not assigned to any task",
+   "description": "The slice scope lists \"body composition \u2014 the section contract, the prompt\". D4 says squadron \"requests prose per section\". Task 10 builds a prompt-in/text-out call and Task 11 assembles sections, but neither says who builds the prompt. They do not say whether it is one call or one per section, or how the response maps to sections. They also do not say how the title's separate call (Task 10a) is sequenced against the body call, or what happens if a provider exception hits the title call. D4a says model failures degrade only for a *bad response*, and D8 says provider exceptions exit non-zero. Specify the prompt content, the call shape, and the title-call failure behavior.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:259"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The presence check cannot strip \"the deterministic block\" from a plain string",
+   "description": "Task 12 runs on the assembled body and defines \"filled\" as non-empty after removing \"the squadron-written deterministic block\". A finished markdown string does not say where that block starts or ends. The check needs either the facts or section structure (a section object, or markers). Otherwise the commit list alone makes \"what changed\" look filled even when the model wrote no prose. State the interface: for example, take the structured sections, or re-derive the deterministic block from `PrFacts`.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:279-281"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 7's slice resolution ignores how `SliceInfo` and `cf` actually behave",
+   "description": "`resolve_slice_info` raises `ValueError` for an unknown index (`persistence.py:96-97`), and the `cf` client raises its own errors. Task 7.1 says to degrade with a WARNING but names no exception types, while Task 10 insists every narrower handler names its type. `SliceInfo[\"task_files\"]` holds bare filenames to be joined with `TASKS_DIR` (`persistence.py:32-35`). Task 7.1 says \"read the first task file\" without the join or the base directory. If a slice has several task files, reading only the first drops items. State the join, the cwd it is relative to, and the exceptions caught. Say whether all task files are read.",
+   "location": "src/squadron/review/persistence.py:32-35"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 5 contradicts itself on `cf` failures, and the fallback re-creates the hazard it forbids",
+   "description": "Task 5.1 says \"Do not degrade an unreachable `cf` to a default base\", then says that when `cf` is unavailable the key is treated as unset and the chain goes to the host default. Those are the same behavior. An intermittent `cf` failure on a repository that has an integration branch silently retargets the PR at `main`. That is the fall-through D1 exists to prevent. The task also does not say which of `ContextForgeNotAvailable` and `ContextForgeError` count as \"unset\". Decide it, and add a test per exception type.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 14 mixes unrelated work and the matrix can only be built after Task 6 is fixed",
+   "description": "Task 14 combines the five-site failure matrix, the timeout-constant assertion, and 422 handling. The 422 and no-retry assertions belong with the `create` command (Task 13). The `ls-remote` site cannot be built as described until Task 6 has the classification fixed above. Task 14.1 also asserts \"the four `gh` calls carry `HOST_COMMAND_TIMEOUT_SECONDS`\", and Task 5/13 test cases mention none of this. Move the 422 case into 13.2 and have Task 6.2 own the `ls-remote` failure cases.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:319-324"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Live-verification steps leave state that no step cleans up",
+   "description": "The walkthrough step 3 creates a local `385-scratch` branch and pushes it. Step 5 opens a real PR. Task 16.2 restores only `git.integration_branch`. Nothing deletes the scratch branch (local or remote), and the \"live creation\" PR is opened before the code review and merge in 16.4, with no instruction to close or reuse it. If the `cf config set` in step 2 is interrupted, the config stays at `dev/does-not-exist`, which would refuse every later `sq pr create`. Add cleanup and failure-recovery steps.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:354-359"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Import-boundary test addition is under-specified",
+   "description": "Task 15.1 adds a case that `review/` does not import `pr/`. The existing check uses `imported.startswith(forbidden)` on a one-element tuple (`_FORBIDDEN_FROM_REVIEW`). Adding `\"squadron.pr\"` as a prefix would also match unrelated modules such as `squadron.pricing`. The task should say to match `squadron.pr` exactly or with a trailing dot, and to keep the `pr_comment.py` exception intact.",
+   "location": "tests/codehost/test_import_boundaries.py:26-27"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "`resolve_locator` drops the parsed target that `show`'s helper still needs",
+   "description": "Task 4 extracts `resolve_locator(target, repo_cwd) -> (host, locator)`. `resolve_and_fetch_pull_request` then still needs the parsed target (`host.resolve_pull_request(locator, parsed, ...)`), which the helper's signature does not return. The caller would have to call `parse_target` a second time, or the signature must include it. The existing tests patch `squadron.cli.commands.pr.build_github_host` and `list_remotes` (`tests/cli/test_pr_show.py:114,376,399`). Those still work if the helper stays in the same module, and the task should say so. Specify the return shape.",
+   "location": "src/squadron/cli/commands/pr.py:53-58"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Proportionality: several tasks are thinner than their own overhead",
+   "description": "- Task 9 (`assemble_facts`) is a copy-fields function with a four-case test. Merge it into Tasks 7 and 8, which must define `PrInputs` anyway.\n- Task 4.2 mostly restates \"existing tests pass\", which is not a test to write.\n- Tasks 1 and 2 are each effort 1\u20132 and could share one task and one commit point.\n- Task 10a's eight-case test duplicates the title table. A shorter list that keeps the model-never-called and fallback cases is enough.\n\nThe file runs to 16 tasks and about 30 subtasks for one command. Combining these brings it into proportion.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:197-207"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Existing-code claims that checked out",
+   "description": "These claims are accurate:\n- `_find_slice_branch` exists in `git_utils.py:173`, and no `{index}-slice.{name}` parser exists.\n- `summary_oneshot`'s module docstring opens \"One-shot summary execution for non-SDK provider profiles\".\n- `GIT_QUERY_TIMEOUT_SECONDS` and `HOST_COMMAND_TIMEOUT_SECONDS` are both 30 and live where the plan says.\n- `run_git` distinguishes `None` from a non-zero exit.\n- `reviewedSha` is written as a full sha, so range-membership comparison by string works.\n- 384's task file and its Task 7 matrix exist.\n\nCross-reference of success criteria: every functional and technical criterion maps to a task. The gaps above are in the specification of those tasks, not missing task headings. No load-test or CI-wiring task is required, because the slice restates no NFR.",
+   "location": "src/squadron/pipeline/summary_oneshot.py:1"
+  }
+ ]
+}

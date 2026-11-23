@@ -1,0 +1,636 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "GPU path emits f32 positions and velocities into an f64 wire format",
+      "description": "Design line 150 says `export_positions()`/`export_velocities()` return f64 and that \"the TickResult therefore carries f64.\" The code does the opposite. `GpuAgentState.export_positions()` and `export_velocities()` cast to float32 (`src/migratory/bench/backends/quadrants_fused_state.py:242,253`). `TickResult.from_quadrants_fields` passes that dtype through unchanged (`src/migratory/engine/tick_result.py:145-154`). `serialize_state_update` calls `positions.tobytes()` with no cast and documents the frame as f64, 32 bytes per agent (`protocol.py:180-187`). With f32 the frame is 16 bytes per agent, so every state update and snapshot (`clients.py:192`, `logging_sim.py:142-149`) is misaligned for any client that parses the documented layout. This breaks A2 and A3 (design line 328, \"downstream requires zero changes\"). The driver must cast to float64 at the TickResult boundary, and line 150 must say so. The design also relies on `upload_positions()` converting f64 to f32 implicitly. The existing setup code pre-casts explicitly (`quadrants_fused_state.py:206-220`), so that conversion should be explicit too.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory_server/protocol.py:180-187"
+    },
+    {
+      "severity": "FAIL",
+      "title": "GPU ticks never write back to EntityManager state, so snapshots and spawn sync use stale data",
+      "description": "On the CPU path, `tick()` integrates in place into `entity_manager.state` (`src/migratory/engine/tick.py:117-124`). The GPU branch (design lines 171-199) never writes results back, so `entity_manager.state` keeps its spawn-time values for the life of the process. Two consequences:\n- `make_snapshot_builder` builds every new client's snapshot from `em.state` (`clients.py:344-362`). Late joiners receive spawn-time positions while live ticks carry current ones.\n- `sync_from_entity_manager()` (design lines 89-90, 178-179) re-uploads those stale positions for every agent on any count change, which reverts the whole flock.\n\nThe design must either copy GPU results into `entity_manager.state` each tick (an extra device-to-host copy it does not account for) or route the snapshot and sync paths through the driver. It must state which.",
+      "file_ref": null,
+      "category": "state-consistency",
+      "raw_category": null,
+      "location": "src/migratory_server/clients.py:361"
+    },
+    {
+      "severity": "FAIL",
+      "title": "GPU path silently drops forces and bounds behaviour the fused kernel does not implement",
+      "description": "The GPU branch replaces `tick()`, so `self._forces` (built by `build_forces`, `src/migratory_server/force_builder.py:41-80`) is ignored. The fused kernel computes cohesion, alignment, separation, leadership, momentum, and propulsion only (`src/migratory/bench/backends/quadrants_fused_kernels.py:186-236`). It does not compute `FlightForce`/`PursuitForce` for predator/prey interactions (`force_builder.py:64-67`) or `WorldBoundsRepulsor` for SOFT (`force_builder.py:69-78`). `apply_bounds_policy` is a no-op for SOFT (`src/migratory_server/bounds_enforcement.py:41-42`), so SOFT bounds stop being enforced on the GPU path. `config/test.yaml:12` and `config/test-soft-bounds.yaml:14` use `policy: soft`. Because `quadrants` is the default (design lines 33, 61), those configs change behaviour silently. The design needs a supported-feature check that fails at startup (or falls back to CPU with a warning) for unsupported forces or policies, and it must state what GPU parity covers.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:177-180"
+    },
+    {
+      "severity": "FAIL",
+      "title": "REFLECT bounces never reach the GPU, so agents stick to walls",
+      "description": "Line 209 applies \"the same sync-back pattern\" to REFLECT. The upload path (lines 213, 227) carries positions only. `_apply_reflect` also flips outward velocities in place (`src/migratory_server/bounds_enforcement.py:63-91`). Those flips are never uploaded, so the GPU keeps the outward velocity, integrates the agent back past the wall, and the clamp repeats every tick. A4 requires valid REFLECT behaviour after 100 ticks (line 330), but the test plan covers only WRAP (line 315). Sync velocities as well, or move bounds into the GPU path, and add a REFLECT test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:209"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Deferred sync-back uploads stale positions after a count change, and retains a TickResult past its lifetime",
+      "description": "`SimulationManager.step()` calls `sync_from_entity_manager()` (lines 178-179), then `gpu_driver.step()`, which uploads `_pending_positions` first (line 213). Under the default `wrap` policy the pending array is set on every tick, so on the first tick after a count change an array with the previous count is uploaded after the sync for the new count. Either the shape check fails or stale positions overwrite freshly synced ones. Test 6 (line 314) exercises exactly this path. The driver also stores `result.positions` across ticks, which `TickResult` forbids (`src/migratory/engine/tick_result.py:50-53`: arrays are valid only until the next tick).\n\nA simpler design avoids the whole protocol. The driver applies bounds to its own export and uploads immediately, which removes `notify_positions_modified`, `_positions_dirty`, and the cross-tick reference. This conflicts with line 125 (\"step() does not apply bounds\"), so the design must choose one.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Fields are sized to the setup count, but spawns can grow to entity_capacity",
+      "description": "`setup_from_server` takes `n = entity_manager.count` (line 143). `GpuAgentState.setup` allocates every per-agent and spatial field with `qd.root.dense(qd.i, self.n)` (`src/migratory/bench/backends/quadrants_fused_state.py:179-203`). Quadrants fields cannot be resized. `EntityManager` accepts spawns up to `entity_capacity` (`src/migratory_server/entities.py:79-80, 115-119`), so any growth past the setup count has no field to upload into, and line 31's \"from_numpy on any tick where agent count changes\" cannot work. `TickResult` already permits `count <= positions.shape[0]` for preallocated buffers (`tick_result.py:96-99`). Allocate to `entity_capacity` and carry the active count separately.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:143"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Empty profiles or populations crash GPU setup, and the existing server fixture hits this",
+      "description": "`GpuAgentState.setup` computes `max_query_radius = max(p.query_radius for p in profiles)` (line 140). The design says the profile table is \"unchanged\" and that `setup_from_server` extracts the same fields (design lines 142-148). `profiles` and `populations` are optional in config (`src/migratory_server/config.py:1219-1220, 1243-1244`), so `profiles=[]` raises `ValueError`, and `n=0` produces zero-size dense fields. The driver setup runs in `Server.run()` before the `_shutdown_event` check (`src/migratory_server/server.py:603-604`), so `tests/test_server.py:50-63` (`profiles=[]`, `populations=[]`) and `test_init_hooks_run_in_order` (`tests/test_server.py:117`) crash on startup under the new default. `_derive_cell_size` already handles empty profiles (`server.py:204-206`). The design needs an explicit empty-config path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/migratory/bench/backends/quadrants_fused_state.py:140"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Making `quadrants` the default changes every config without a `compute` block, and the existing suite is not accounted for",
+      "description": "The plan mandates `quadrants` as the default, so the design should keep it. But the change means every `SimulationConfig` without `compute` now initializes Quadrants on `Server.run()`. That covers the `server_config` fixture (`tests/test_server.py:50-63`), the test run against `config/default.yaml` (`tests/test_main.py:70`), and every other `Server.run()` in `tests/test_server.py`. Open Notes (line 382) say a second `qd.init()` in one process is undefined behaviour, and the suite calls `Server.run()` many times in one process. The design does not mention this. Set `compute.backend: cpu` explicitly in the existing fixtures and in `test_main`, and state that GPU tests run in isolation.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:33"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`_select_arch` never detects Metal or CUDA, so the no-GPU fallback and its warning do not exist",
+      "description": "Lines 104-107 map Darwin to `metal` and Linux to `cuda` by platform name alone. The WARNING branch runs only on other platforms. On a Linux host with no NVIDIA GPU the driver returns `qd.cuda` and logs nothing. Line 33 promises \"falls back to CPU with a logged warning if neither is detected,\" and A7 (line 336) requires a WARNING naming the fallback. Open Notes (line 382) say `qd.init` raises when the CUDA driver is absent, which contradicts A7's \"starts successfully\" and the \"No crash\" claim at line 117. The existing code already distinguishes requested from actual arch with `_resolved_arch()` (`src/migratory/bench/backends/quadrants_backend.py:66-74, 112-118`). The design's `arch` property (lines 224, 252) reports only the requested arch, so a silent fallback would log `cuda`. Detect the device, log the actual arch, and use `_arch_name()` for the string.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Moving GpuAgentState keeps production importing bench, and the move creates a circular import",
+      "description": "Design line 383 says the move \"eliminates the production\u2192bench import dependency.\" The moved file keeps `from migratory.bench.backends.numpy_backend import _build_initial_state` and `from migratory.bench.workload import Workload` (lines 25-26), and `setup(workload)` stays on the class (design line 152). Importing `migratory.bench.backends.numpy_backend` first runs `migratory/bench/backends/__init__.py`, which imports `quadrants_fused_backend` at module level (lines 61-65). That imports `quadrants_fused_kernels`, which per design line 296 will import from `migratory.gpu.agent_state`. If the server imports `gpu_driver` first, that re-enters the partially initialized `agent_state` module before `GpuAgentState` is defined, and the import fails. I derived this from the import chain without running it. The fix is to move `_build_initial_state` and the workload-free builder into `migratory.gpu` (or the engine) and keep `setup(workload)` as a bench-side adapter.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "src/migratory/bench/backends/quadrants_fused_state.py:25-26"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Moving the module breaks imports the Files Changed table omits, and A5 requires unmodified tests",
+      "description": "`quadrants_fused_kernels.py:33` imports `GpuAgentState` from the old path. The design's Files Changed table (lines 288-301) does not list it. Other importers that the table also omits:\n- `tests/bench/test_quadrants_fused.py:96,167,318` (subprocess scripts and direct use)\n- `tests/bench/test_quadrants_fused_kernels.py:78,153`\n- `scripts/148_measure_cell_occupancy.py:28`\n\nThe design keeps no re-export at the old path, so these break at import. That contradicts A5 (\"pass without modification,\" line 332). The table also contradicts itself: line 296 changes `quadrants_fused_backend.py`, while line 301 says bench backends are \"not changed.\" List every importer, or keep a compatibility re-export.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn change detection is stateful on EntityManager and misses same-count reshuffles",
+      "description": "`count_changed_since_last_tick()` needs a \"previous step\" value that `EntityManager` does not store, and the design does not say who updates it. The helper misses two cases:\n- Remove then spawn within one interval. The count is unchanged but indices have shifted, because `AgentState.remove_agent` uses order-preserving `np.delete` (`src/migratory/engine/state.py:100-106`).\n- N\u21920\u2192N. The zero-count branch (design lines 192-193) never calls the helper.\n\nNo production code calls `spawn_entity` or `remove_entity` today (`src/migratory_server/entities.py:67, 175`). Plan 146 still assigns spawn/despawn sync to this slice. Have the driver compare `entity_manager.count` with its own uploaded count, plus a mutation counter that `EntityManager` bumps on spawn and remove.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-tick host transfers are undercounted, and the \"~200 KB\" figure is wrong",
+      "description": "Open Notes (line 384) say the sync-back adds one `from_numpy()` per tick and estimate about 200 KB at N=50k, which they call negligible. The arithmetic is off: 50k agents \u00d7 2 components \u00d7 4 bytes (f32) is 400 KB. More importantly, `build_spatial_hash` already performs one device-to-host read (`cell_count.to_numpy()`) and two host-to-device uploads (`cell_start`, `write_cursor`) every tick (lines 460-466). Export adds five more device-to-host reads (px, py, vx, vy, profile_index). The data flow (lines 271-274) omits all of these. Plan 147 identified per-tick marshaling as the dominant cost, so the design should enumerate the per-tick transfers and check the budget against the Tier 2 gate.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:460-466"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behavioural differences from the CPU path are not stated, and A2 has no measurable target",
+      "description": "A2 asks for \"smooth motion\" and \"behavior unchanged\" for `cpu`. Neither is measurable. The GPU kernel differs from the CPU path in neighbour selection: first-k-found, not k-nearest (`src/migratory/bench/backends/quadrants_fused_kernels.py:155-171`, whose docstring calls this a \"parity gap\"). It also differs in spatial hashing (subdivision and edge clamping) and in its force set (see the FAIL above). The design states none of this and has no production CPU-vs-GPU parity test; the test list (lines 309-316) has none. \"Visually identical\" (line 351) is not a test. State the accepted differences, add a statistical parity check on the production driver (the pattern plan 149 uses for mean speed and nearest-neighbour distance), and give A2 a numeric target.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:326"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test-plan gaps against the success criteria",
+      "description": "No test in lines 309-316 covers:\n- A1: `cpu` forces the CPU tick, and invalid values fail at startup.\n- A3: TickResult shape and dtype match the CPU path. The f32 FAIL above would be caught here.\n- A4: REFLECT, SOFT, and OPEN after 100 ticks.\n- A7: the no-GPU fallback and its WARNING.\n\nTest 7 (line 315) asserts in-bounds positions on the following tick. That holds only if `SimulationManager` wraps again, yet line 125 says `step()` does not apply bounds. The design should say which layer each test drives.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:322-336"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test isolation contradicts the design's own Open Notes",
+      "description": "Line 307 says \"All tests are CPU-only\" and then describes GPU tests. Open Notes (line 382) require process isolation for any test that calls `setup()`, because a second `qd.init()` in one process is undefined. Tests 5-8 (lines 313-316) call `setup()` and `finalize()` without saying they run in subprocesses. The existing pattern is the subprocess helper in `tests/bench/test_quadrants_fused.py:34-72`. Name that pattern in the design. Also, tests 1-4 are config tests and should not skip when Quadrants is absent.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:307"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier 2 TPS gate is under-specified, and its default subdivision is not what the parent measured",
+      "description": "The gate says \"50k agents, \u226560 TPS\" but does not fix profiles, density, world size, or `subdivision_factor`. The repo already has a gate workload, `bench/workloads/mid-flock-50k-s3.yaml:3,29`, with S=3. Plan 149 reports \u2265100 TPS only with S=3 (`140-slices.simulation-scaling.md:50`), and plan 148 records 38 TPS at N=50k for the untiled S=1 kernel (line 48). The design defaults to S=1 (lines 62, 386). Without pinning the workload and S, the gate can pass or fail for reasons unrelated to this slice. Reference the existing workload and pin `subdivision_factor` in the test.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Teardown claim is wrong: no simulation-manager cleanup exists",
+      "description": "Design line 254 says the teardown path \"calls `simulation_manager` cleanup\" and asks to add `finalize()` there. No such call exists. The `finally` block closes the sim logger and shuts down the sim executor (`server.py:618-624`). `client_manager.close_all()` and `_shutdown()` run after the `try` (`server.py:626-627`), and only the shutdown hooks run there. An exception from `sim.step` propagates out of `TickLoop.run()` (`src/migratory_server/tick.py:71`) and skips `_shutdown()` entirely, so a hook-based `finalize()` would not run on a GPU failure. Register `finalize()` with `register_shutdown_hook` and also place it in `finally` after the executor shutdown, and state the order.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/migratory_server/server.py:618-627"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Driver error type contradicts the config convention and the CLI's handling",
+      "description": "The design expects `ValueError` for a bad `backend` or `subdivision_factor` (lines 311-312, 356). The config module raises `ConfigError` (`src/migratory_server/config.py:17-18`, validators such as `:858-863`). `__main__` catches only `ConfigError` (`__main__.py:49-51`). A `ValueError` produces a traceback instead of the clean \"Configuration error\" exit, so the error-path walkthrough (line 356) does not match the current CLI. Raise `ConfigError`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/migratory_server/__main__.py:49-51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Regression command and test path point to a directory that does not exist",
+      "description": "The regression step runs `pytest tests/server/ tests/bench/`, and the new test file is `tests/server/test_gpu_driver.py` (line 299). No `tests/server/` directory exists. The server tests are `tests/test_*.py` at the root. Pytest errors on the missing path, so the step cannot run as written, and the existing server suite is not run by it. Use `tests/test_gpu_driver.py`, and name the root-level server tests in the regression command.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:375"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough's CPU-default step contradicts the default",
+      "description": "Step 1 says \"Remove the `compute:` block entirely (or set `backend: cpu`).\" Under the design's default (lines 61, 309), removing the block selects `quadrants`, so the stated outcome (no GPU initialization, CPU tick path) is false. The step should say `backend: cpu`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:360"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes are enumerated only for qd.init",
+      "description": "Open Notes cover `qd.init()` failure at startup. The other new I/O paths have no stated handling: initial `from_numpy` uploads, per-tick exports, sync-back uploads, kernel launches and `qd.sync()`. Missing are device OOM mid-run, a hang or timeout on sync, and a `step()` call after `finalize()`. Also, `finalize()` calls `qd.reset()` while the sim executor may still run; `server.py:623-624` waits for it, but the design does not state the order. Enumerate each path with its handling.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Driver relies on hidden process-global kernel state",
+      "description": "The fused kernel reads module-level aliases (`_px`, `_cell_index`, ...) that only `_bind_state_fields()` sets. `fused_force_integrate_kernel` is launched without binding (`quadrants_fused_backend.py:109-116`) and relies on `build_spatial_hash` having bound them (`quadrants_fused_kernels.py:435`). The design's step list (lines 119-125) omits this coupling. Because the aliases are process-global, a second `GpuAgentState` silently rebinds them. Make the driver bind explicitly before each launch, and state the one-driver-per-process constraint in its interface.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:124-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Substrate and precision direction is not reconciled with the parent plan",
+      "description": "The f32 contract matches what the existing 143\u2013145 code does. But the parent says slice 145's integrated tick \"uses f64 throughout on CUDA\" and that an f64 path is the medium-term direction (`project-documents/user/architecture/140-slices.simulation-scaling.md:36`). The parent also demotes Metal to best-effort (line 32). The design nonetheless makes Metal the golden-path acceptance (A2, line 326 and the Mac walkthrough). State which direction the slice follows and why, and what it means for the A3 dtype.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Threading and kernel-launch context are unaddressed",
+      "description": "`qd.init()` runs in `Server.run()` on the main thread. Every `sim.step`, and so every kernel launch, runs on the single `sim` worker thread (`src/migratory_server/server.py:456-458, 582`). The bench harness has never launched kernels off the initializing thread. The design does not say whether that is supported, nor how runtime spawn/despawn from the event loop is ordered against the worker's `step()`. Unverified; check it on the substrate or document the constraint.",
+      "file_ref": null,
+      "category": "concurrency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:229-254"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: restated and cuttable scope",
+      "description": "The driver interface appears three times (lines 75-94, 215-225, and in the data flow, 256-284). The step sequence appears twice (119-125 and 258-284). `_select_arch()` is reproduced in full (98-115). Cuts and simplifications:\n- Delete the second interface listing (215-225) and the duplicated data flow (256-284).\n- Remove `count_changed_since_last_tick()`, `notify_positions_modified`, and `_positions_dirty` (201, 213). Handle count and bounds inside the driver with immediate uploads (see the sync finding above).\n- Share one `_select_arch` with the bench version, which raises (`src/migratory/bench/backends/quadrants_fused_backend.py:46-62`), instead of maintaining two with opposite semantics.\n- Reuse `_arch_name` and `_resolved_arch` (`quadrants_backend.py:55-74`) for the `arch` property.\n- Cache `profile_indices` at setup and stop exporting them every tick (`quadrants_fused_backend.py:134`). The state-update wire format does not carry them.\n- Factor the field population in `setup` and `setup_from_server` into one allocator.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:215-225"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parent Tier 2 NFR is restated with its target",
+      "description": "The integration test and A6 (line 334) restate the parent's Tier 2 target of 60 TPS at 50k agents (parent plan Tier 2 and the 148/149 gates). The workload parameters are underspecified (see the TPS finding), but the target itself is carried over correctly.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config surface matches the plan's shape",
+      "description": "The `simulation.compute` block with `backend` and `subdivision_factor`, and the `quadrants` default, match the plan 146 entry in the parent. The validation error type is wrong (see the `ConfigError` finding), but the surface itself is correct.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:49-54"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "GPU path emits f32 positions and velocities into an f64 wire format",
+      "location": "src/migratory_server/protocol.py:180-187",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "state-consistency",
+      "raw_category": null,
+      "summary": "GPU ticks never write back to EntityManager state, so snapshots and spawn sync use stale data",
+      "location": "src/migratory_server/clients.py:361",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "GPU path silently drops forces and bounds behaviour the fused kernel does not implement",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:177-180",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "REFLECT bounces never reach the GPU, so agents stick to walls",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Deferred sync-back uploads stale positions after a count change, and retains a TickResult past its lifetime",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fields are sized to the setup count, but spawns can grow to entity_capacity",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:143",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty profiles or populations crash GPU setup, and the existing server fixture hits this",
+      "location": "src/migratory/bench/backends/quadrants_fused_state.py:140",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "fail",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Making `quadrants` the default changes every config without a `compute` block, and the existing suite is not accounted for",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`_select_arch` never detects Metal or CUDA, so the no-GPU fallback and its warning do not exist",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "fail",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Moving GpuAgentState keeps production importing bench, and the move creates a circular import",
+      "location": "src/migratory/bench/backends/quadrants_fused_state.py:25-26",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Moving the module breaks imports the Files Changed table omits, and A5 requires unmodified tests",
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:33",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Spawn/despawn change detection is stateful on EntityManager and misses same-count reshuffles",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Per-tick host transfers are undercounted, and the \"~200 KB\" figure is wrong",
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:460-466",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Behavioural differences from the CPU path are not stated, and A2 has no measurable target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:326",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Test-plan gaps against the success criteria",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:322-336",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Test isolation contradicts the design's own Open Notes",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:307",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Tier 2 TPS gate is under-specified, and its default subdivision is not what the parent measured",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Teardown claim is wrong: no simulation-manager cleanup exists",
+      "location": "src/migratory_server/server.py:618-627",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Driver error type contradicts the config convention and the CLI's handling",
+      "location": "src/migratory_server/__main__.py:49-51",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Regression command and test path point to a directory that does not exist",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:375",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Walkthrough's CPU-default step contradicts the default",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:360",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes are enumerated only for qd.init",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Driver relies on hidden process-global kernel state",
+      "location": "src/migratory/bench/backends/quadrants_fused_kernels.py:124-147",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Substrate and precision direction is not reconciled with the parent plan",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "concern",
+      "category": "concurrency",
+      "raw_category": null,
+      "summary": "Threading and kernel-launch context are unaddressed",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:229-254",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: restated and cuttable scope",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:215-225",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Parent Tier 2 NFR is restated with its target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320",
+      "location_verified": true
+    },
+    {
+      "id": "F028",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Config surface matches the plan's shape",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:49-54",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-22T23:37:45.398457",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+      "chars": 19518,
+      "sha256": "3ef7718c7c2503cd0771d3e6df5f9894ccd5f8cf1ded84be8832cd637ee4e80e",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+      "chars": 26227,
+      "sha256": "87cf681e0ab049995470198a6eef9a02f376f4d67dacf730ea456704e462e03b",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory_server/simulation.py",
+    "src/migratory/bench/backends/quadrants_fused_state.py",
+    "src/migratory_server/config.py",
+    "src/migratory/bench/backends/quadrants_fused_backend.py",
+    "src/migratory/engine/tick_result.py",
+    "src/migratory_server/server.py",
+    "src/migratory_server/entities.py",
+    "src/migratory_server/bounds_enforcement.py",
+    "src/migratory_server/force_builder.py",
+    "src/migratory_server/tick.py",
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/state.py",
+    "src/migratory_server/clients.py",
+    "src/migratory_server/logging_sim.py",
+    "src/migratory/bench/backends/quadrants_fused_kernels.py",
+    "config/default.yaml",
+    "tests/bench/test_quadrants_fused.py",
+    "tests/test_server.py",
+    "src/migratory_server/__main__.py",
+    "src/migratory_server/protocol.py",
+    "src/migratory/bench/backends/quadrants_backend.py"
+  ],
+  "searches": [
+    "list_files src/**/*.py in .",
+    "list_files tests/**/*.py in .",
+    "list_files config/*.yaml in .",
+    "grep _select_arch|quadrants_fused_state|GpuAgentState|qd\\.init|from_quadrants_fields|tick_once|from_numpy_state|migratory\\.bench|count_changed|ComputeConfig|subdivision_factor in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice",
+    "grep _select_arch|quadrants_fused_state|GpuAgentState|qd\\.init|from_quadrants_fields|tick_once|from_numpy_state|count_changed|ComputeConfig|subdivision_factor|migratory\\.bench in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory_server",
+    "grep _select_arch|quadrants_fused_state|GpuAgentState|from_quadrants_fields|tick_once|from_numpy_state|migratory_server|migratory\\.bench\\.backends\\.quadrants_fused in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/tests",
+    "grep _select_arch|quadrants_fused_state|GpuAgentState|from_quadrants_fields|tick_once|qd\\.init in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory",
+    "grep make_snapshot_builder|em\\.state|entity_manager\\.state|\\.state\\b|spawn_entity|remove_entity|spawn_population in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src",
+    "grep ^def |^@qd\\.kernel|^@qd\\.func|qd\\.f64|qd\\.f32|_bind_state_fields|global |_px|_fx\\b|leadership|predator|flight|pursu|repuls|wall|bound in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory/bench/backends/quadrants_fused_kernels.py",
+    "grep default\\.yaml|no-populations|config/test\\.yaml|Server\\(|interactions:|\\.run\\(\\) in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice",
+    "grep SimulationConfig\\(|test_gpu_driver|tests/server|compute in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice",
+    "list_files tests/server/** in .",
+    "grep ConfigError|ValueError in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/tests/test_config.py",
+    "grep no-populations|test-soft-bounds|config/test\\.yaml|load\\(Path in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/tests",
+    "grep positions|velocities|dtype|tobytes|astype|float64|<f8|<f4 in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory_server/protocol.py",
+    "grep positions|velocities|float64|astype|tobytes in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory_server/clients.py",
+    "grep positions|velocities|float64|float32|astype in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory_server/logging_sim.py",
+    "grep serialize_state_update|serialize_snapshot in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory_server",
+    "grep quadrants|taichi|optional|\\[project\\.optional|dependency-groups|numba in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/pyproject.toml",
+    "grep def pre_tick|def post_tick|agent|positions in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory/environment/container.py",
+    "grep class WorldBoundsRepulsor|def __call__|def compute|state\\.positions|state\\.velocities in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src/migratory/engine/repulsor.py",
+    "grep qd\\.init|ti\\.init|_select_arch|arch\\s*=|qd\\.metal|qd\\.cuda|def .*arch in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src",
+    "grep 1\\.37e-6|1\\.37 ?e-6|f64 throughout|f64 on CUDA|f32 internally|L-inf in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/project-documents",
+    "grep ^\\s*policy:\\s*soft|^\\s*interactions:|^\\s*- pursuer|^\\s*populations:|^\\s*profiles: in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/config",
+    "grep \\.leadership\\s*(\\[[^\\]]*\\]\\s*=|=[^=])|\\.profile_indices\\s*(\\[[^\\]]*\\]\\s*=|=[^=])|\\.accelerations\\s*= in /Users/manta/.config/squadron/reading-20261122/wt/migratory-146-slice/src"
+  ],
+  "sections_in_document": 22,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 28,
+    "in_fences": 0,
+    "in_section": 28,
+    "surviving": 28
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 53,
+  "prompt_tokens": 4111599,
+  "cached_tokens": 3898174,
+  "cache_write_tokens": 213365,
+  "completion_tokens": 118551,
+  "reasoning_tokens": null,
+  "duration_seconds": 531.955902625341,
+  "cost_usd": 0.5934041400000001,
+  "cost_basis": "provider"
+}

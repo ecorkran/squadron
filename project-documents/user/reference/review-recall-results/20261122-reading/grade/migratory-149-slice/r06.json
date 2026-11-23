@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The component flow and `S` plumbing do not match the existing code",
+   "description": "- **No `BenchConfig`.** The only bench input is the frozen `Workload` dataclass (`src/migratory/bench/workload.py:99-112`). `from_dict` has a fixed field list (`workload.py:130-169`) and no place for `S` or `cell_size`.\n- **`build_spatial_hash` does not take `cell_size`.** Its signature is `build_spatial_hash(state)` (`quadrants_fused_kernels.py:411`). It does not compute `grid_w` or `grid_h` either. `GpuAgentState.setup` computes them (`quadrants_fused_state.py:150-153`), from `cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER`. The diagram line 91 is wrong, and \"No structural changes needed there\" (line 80) is wrong too, because `quadrants_fused_state.py` must change.\n- **No path from `Workload` to `S`.** `QuadrantsFusedTickRunner.setup(workload)` takes only the workload, and the registry constructs the runner with no arguments (`quadrants_fused_backend.py:71-91`). The design never says where `S` is stored or how it gets from `Workload` to `GpuAgentState`.\n- **Two kernel call sites are unaccounted for.** The kernel is launched positionally from `run_fused_tick` (`quadrants_fused_kernels.py:400-407`) and from `QuadrantsFusedTickRunner.tick_once` (`quadrants_fused_backend.py:116-123`). Both must pass `S`. Tests call `run_fused_tick`, so a missed call site breaks them.\n- **\"Which `query_radius`\" is unspecified.** Line 54 says `cell_size = query_radius / S`. The state uses `max_query_radius` across profiles. Per-agent radii can be smaller, but `S` cells must cover the maximum.\n\nAn implementer has to invent the config surface, so this is under-specified.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-100"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "An existing knob already provides cell scaling and is not reconciled with `S`",
+   "description": "`quadrants_fused_state.py:51-54` defines `DEFAULT_CELL_SIZE_MULTIPLIER = 1.0`. Its comment calls it the \"single source of truth shared with the fused kernel so a 3\u00d73 cell walk covers any query\".\n- Adding `S` creates two interacting knobs, `cell_size = max_query_radius * multiplier` and `cell_size = query_radius / S`.\n- If someone sets the multiplier to 0.5 with `S=1`, the 3\u00d73 scan silently under-covers the radius.\n- The design should state that `S` replaces or derives from the multiplier, for example `S = ceil(1/multiplier)`.\n- It should also update the comment, which becomes false once `S > 1`.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The composition claim is arithmetically wrong, and it affects the value of the `S` knob",
+   "description": "- **Candidate counts.** The doc says S=3 alone drops candidates \"to ~5000\" and that both together load \"~555\". But a 7\u00d77 scan of 555-agent cells loads about 27,000 candidates. Slice 148's own rediagnosis note (`148-notes.rediagnosis.md:108-111`) says ~27,000.\n- **Scanned area.** The scanned area is (7\u00b716.7)\u00b2 against (3\u00b750)\u00b2, a ratio of 0.6, so S=3 alone gives at most about 1.65\u00d7 fewer candidates.\n- **Not multiplicative.** Once the break fires, work is bounded by about `k_max / in_range_fraction`. `S` adds nothing until the cell holds few enough agents that the cap is not reached in the first cell.\n- **Unmeasured overhead.** The break only exits the innermost loop (line 29). After the cap, the remaining drow/dcol iterations still do bounds checks and two `_cell_start` global loads each. That is up to 48 iterations at S=3 against 8 at S=1.\n- **Constant bounds become dynamic.** Replacing `range(-1, 2)` with `range(-S, S+1)` turns compile-time-constant loop bounds into runtime ones. \"S=1 reproduces slice 145 exactly\" holds functionally, but not necessarily for performance or register pressure.\n- **Consequence for the default.** Early exit at S=1 may capture most of the gain, and S=3 may be neutral or negative. The design should say that S>1 is justified only if the ablation shows it. It should also guard the outer loops on `k_found < cap` rather than only breaking the inner one.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Early exit removes counter-gating, so the four-way ablation in the walkthrough cannot run",
+   "description": "- **Duplicate commands.** Step 3's four commands differ only in `--subdivision-factor`. The \"baseline, counter-gating\" and \"early exit only\" commands are identical, and so are \"S=3 counter-gating\" and \"both\".\n- **No switch.** Intervention 1 replaces counter-gating, and the design adds no kernel flag or compile-time toggle to turn the break off.\n- **Baseline is not reproducible.** The S=1 baseline will already contain the break, so it will not \"reproduce slice 145 ~38 TPS\".\n- **What to specify.** The design must either add an explicit early-exit toggle kernel parameter, or say that the A2 baseline comes from a pre-change commit and drop the \"counter-gating\" rows.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The gate workload does not match the baseline the design cites",
+   "description": "- **The workload is N=100k.** `bench/workloads/mid-flock-50k.yaml:7,11` has `n: 100000` and `world_size: [1536, 1536]`. The A2/A3 gates and the \"38 TPS at N=50k\" baseline assume N=50k. The slice plan puts N=100k at 11 TPS (`140-slices.simulation-scaling.md:48`).\n- **The occupancy figure is from a different geometry.** Slice 148's p99 \u2248 5137 and 256-cell figures come from a ~756\u00d7756 world (`148-notes.rediagnosis.md:115`).\n- **No override.** `--N` and `--config` do not exist as CLI options, so the walkthrough cannot override `n`.\n- **What to specify.** The design should name a workload that actually yields N=50k at the quoted density. It should also record the baseline from that exact workload.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:19, 121-128"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Verification commands use CLI flags and entry points that do not exist",
+   "description": "- **No `scripts/bench.py`.** Only `scripts/148_smem_vs_dram_microbench.py` exists. The real entry point is `python -m migratory.bench --workload NAME --backend NAME` (`bench/cli.py:17-55`).\n- **Missing flags.** `--config`, `--N`, `--ticks`, `--subdivision-factor` and `--parity-check numpy` are not defined. Tick counts come from the workload YAML (`measure_ticks`).\n- **Not a plan to add them.** Adding CLI flags is neither scheduled nor specified, and the design states that the flow is config-driven.\n- **No new tests.** The design specifies none, so `S` validation, the break, and S>1 parity have no automated coverage. The existing parity test (`tests/bench/test_quadrants_fused_parity.py:42-117`) runs `mid-flock` at the default only.\n- **\"CPU fallback\" does not exist.** Line 126 says A1 and A4 can run on Mac \"Metal or CPU fallback\". `_select_arch` has no CPU fallback and raises off Linux and Darwin (`quadrants_fused_backend.py:46-62`), and the module docstring says so.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:143-191"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Option A leaves the seam as dead code and splits the cap logic across two places",
+   "description": "- **The seam can no longer reject.** With `if k_found >= max_neighbors and max_neighbors > 0: break` placed before the call, `get_neighbors_first_k` can no longer return 0. It is not \"unreachable\". It is called and always returns 1.\n- **The cap is now a kernel policy.** The \"have we collected enough\" decision (`k_found >= cap`) lives in the kernel body and no longer in the seam.\n- **The A7 claim does not hold.** The design says the swap point \"remains intact\". A distance-ranked implementation cannot early-exit on `k_found >= k`, so a future slice must remove the kernel break as well as replace the seam body. State that explicitly, or put the exit decision behind the seam, for example a second `qd.func` `should_stop_scan`.\n- **Existing test.** `test_get_neighbors_first_k_is_only_inclusion_function` (`tests/bench/test_quadrants_fused_kernels.py:217-250`) guards confinement of selection logic to the seam. It matches only the substrings `k_found < k_max` and `k_found < max_neighbors`, so a `>=` break passes the test while violating its intent. The design should say how the test is updated.\n- **Stale docs.** The kernel docstring lines 164-168 (\"counter-gating is used, not break\") and line 201 (\"3\u00d73\") become stale. Neither is listed as a change.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46, 99, 112"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Warp-divergence analysis rests on a wrong premise and ignores max-over-warp behavior",
+   "description": "- **Thread index is not spatial.** The kernel maps thread `i` to agent id `i` (`quadrants_fused_kernels.py:233`). Only the candidate list is cell-sorted. \"Agents with similar spatial index\" in a warp is not true, and agents move every tick.\n- **Warp time follows its slowest lane.** One lane that never reaches the cap, such as an edge or straggler agent with fewer than 32 in-range neighbors, scans all candidates and holds the whole warp. The saving therefore depends on the fraction of warps containing such a lane, not on the mean.\n- **The saving figure is overstated.** \"~44,968 iterations avoided\" assumes every candidate is in range. The real stop point is about `32 / in_range_fraction`.\n- **Low density is admitted but not gated.** Line 27 concedes divergence is larger at low density, yet no CUDA regression gate exists there. Step 2 runs only on Mac/Metal and requires only \"comparable\". Slice 146 will run this kernel in production at roughly 3.5k agents. Add a CUDA no-regression check on `mid-flock` or `dispersed`.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27, 136-156"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Changing `S` alters which neighbors are accepted, and A4's metrics cannot detect it",
+   "description": "- **S=1 break is behavior-preserving.** At S=1 the scan order is unchanged, so the break accepts exactly the same neighbors as counter-gating. The 148 note's claim that \"set composition changes\" is not true for Intervention 1 alone.\n- **S>1 changes the accepted set.** First-k-found is order-biased. It takes the first 32 in-range candidates from the top-left of the scan. With S=3 those first cells lie at the far edge of the radius, whereas S=1 takes them from a 50-wide corner cell. This produces a directional bias that changes with `S`.\n- **A4 cannot see it.** A4 compares only mean speed and mean nearest-neighbor distance (A4, line 125). Neither is sensitive to centroid drift or direction. Add a flock-centroid drift metric, or randomise or centre-out the scan order.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:121-126, 148"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`S` validation is over-specified and its rationale is wrong",
+   "description": "- **The memory rationale is not supported.** The doc says S=8 risks \"grid_w\u00b7grid_h\u00b7cell_count auxiliary arrays past practical GPU memory\". `MAX_CELLS_SANITY_CAP = 4_000_000` already exists and raises in `GpuAgentState.setup` (`quadrants_fused_state.py:55,154-160`). At world 1536 and S=8, the grid is ~60k cells.\n- **The coverage argument is wrong.** \"Larger than the physical neighborhood for any realistic combination\" is incorrect, because the (2S+1)\u00b2 block covers about (2+1/S)\u00b7r per side for every `S`.\n- **`isinstance(S, int)` accepts `True`.** A bool passes the check.\n- **Where the check lives is not stated.** \"Config-load time\" has no home, because `Workload.from_dict` has no `S` field.\n- **Suggested cut.** Validate `S >= 1` as an int in one place, and rely on the existing cell-count cap.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The gated configuration (S=3) is not what ships through slice 146",
+   "description": "The design makes `S` a bench-config input with a default of 1, and says slice 146 is \"unblocked\". Production has no `Workload`.\n- Unless the default moves, or 146 is told how to set `S`, the live server runs at S=1. That is not the configuration that passes A3 (\u2265100 TPS).\n- Tier 2 delivery depends on 146 using the gated configuration.\n- State where production gets `S`, for example a `GpuAgentState` constant.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:67, 111, 128"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The register-spill check (A5) relies on an unverified measurement method",
+   "description": "- **The tool path is unconfirmed.** A5 cites `nvcc --ptxas-info`, and Step 4 cites \"`TI_PRINT_KERNEL_STATS=1` or equivalent\". Quadrants JIT-compiles, and neither mechanism is shown to exist.\n- **Slice 148 found the tools absent on one host.** `148-notes.envelope-measurement.md:26` says `ptxas`, `cuobjdump` and `nvcc` were not installed there.\n- **Reuse the proven method.** Slice 148 recorded local memory = 0 for the baseline (`148-notes.rediagnosis.md:25`). The design should reuse that measurement method and name it.\n- **Dynamic loop bounds add risk.** The dynamic `S` loop bounds make spill more plausible, which is another reason to specify the method.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124, 180-182"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The NFR is restated correctly",
+   "description": "The 60 TPS at N=50k Tier 2 target is restated, with a stricter \u2265100 TPS gate. This is consistent with the slice plan. The only issue is the workload mismatch recorded above.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116"
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T11 cannot be built as written: import cycle, id scheme and in-place update are unspecified",
+   "description": "T3 puts `GraduatedConfig` and `EvidenceSnapshot` in `calibration_models.py`. T11 then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`. `calibration_models` imports `GroupKey` from `report_models`, which imports `models`, so this is a circular import. Pydantic also needs the type at class-build time, so `TYPE_CHECKING` won't fix it. Either `GraduatedConfig` and `EvidenceSnapshot` must live in `models.py` or the envelope field must change. The plan needs to pick one.\n\nT11 has three further gaps:\n- `write_graduation(store, graduated)` is listed as a `graduation.py` function, but the same bullet says to extend `MetrologyStore` \"mirroring `write_sample`\". It has to be one or the other.\n- `MetrologyStore._record_path` names files by id. `generate_sample_id` only produces `sample-\u2026` ids. T11 says \"returns a generated record id\" and gives no id scheme.\n- T15 requires re-graduating the same identity to update in place with one record, not two. A generated id creates a second file. `find_graduation` returns a bare `GraduatedConfig` with no path or id, so there is nothing to overwrite. The id has to be deterministic, for example a hash of the full `JudgeConfigId` plus level, and the plan must say so.\n\n`list_samples` has its skip logic inline at `store.py:174-179`, with no shared helper. T11's \"extract a shared helper if one isn't exposed\" means refactoring tested code. It should say so and name the existing tests that cover that code.",
+   "location": "src/squadron/metrology/models.py:100-111"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T13 depends on a \"result-discovery surface\" that does not exist, and its fallback is vacuous",
+   "description": "T13 says to reuse 320's existing result-discovery surface. `capture.py` has only `resolve_target` and `_candidates_by_type`, which resolve one target by index or type. Nothing enumerates every judge review under `project-documents/user/reviews`. The fallback is to \"scope to the store-recorded samples only\", and that cannot produce unsampled offers. Store samples are exactly the already-sampled results.\n\nThe core of the slice is therefore unplanned. A real task needs:\n- a review-dir walk;\n- a `derive_judge_config_id` and `derive_artifact_level` call per file;\n- a sampled test, which is under-specified because `SampleVerdict.result_ref` is `(project_id, relative path, content_hash)` and review files are overwritten on re-run, so \"not sampled\" must say whether it matches on path, on hash, or on both, and which project;\n- a rule for the case where a file is unreadable.\n\nThe \"ask the Project Manager\" step blocks a junior. Settle it in the plan instead.\n\nT14's pruned-file case is also incoherent with this design. Discovery scans files that exist, so nothing references a deleted file. The \"skip and count\" row from the slice's failure table has no defined trigger.",
+   "location": "src/squadron/metrology/capture.py:68-161"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Lapsed-graduation detection is defined by \"no matching result\" and conflates lapse with exhaustion",
+   "description": "`derive_judge_config_id` computes the hash from the template currently registered, not the template used when the review was judged. After a prompt edit, every old review file re-derives to the new hash, so none match the old graduation. This accidentally gives the lapse. A graduation with no remaining reviews also looks \"lapsed\" under T13's rule, and so does one whose pruned files left no matches.\n\nLapse should be defined exactly: `_template_content_hash(graduated.template_name)` differs from `graduated.judge_config.template_content_hash`, or the template is unregistered. T13 and T14 should say so. T13 also says \"return enough information (or have the CLI re-derive\u2026)\", which leaves the return contract open. Pick a typed return, for example `OfferSelection` with per-config status.",
+   "location": "src/squadron/metrology/identity.py:326-340"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T7 precedence list contradicts its own requirement",
+   "description": "The numbered precedence puts `n < floor` first and `not versioned` second, both returning `INSUFFICIENT_EVIDENCE`. `TIGHTEN` is fourth. Followed literally, a low-n, low-match-rate cell returns `INSUFFICIENT_EVIDENCE`, which is what the task's own success line forbids. Two prose caveats try to patch the list. A junior following the numbers gets it wrong.\n\nReplace it with an unambiguous order:\n1. `match_rate <= tighten_rate` gives `TIGHTEN`.\n2. `n < floor` gives `INSUFFICIENT_EVIDENCE`.\n3. Unversioned gives `INSUFFICIENT_EVIDENCE`.\n4. `match_rate >= graduate_rate` gives `GRADUATE`.\n5. Otherwise `HOLD`.\n\nThe slice design only says an unversioned cell never produces `GRADUATE`. It does not say an unversioned weak judge is suppressed from `TIGHTEN`, so the plan needs a decision on that. Also add validation or a test for `tighten_rate >= graduate_rate`, where the bands overlap.",
+   "location": "tasks T7 (lines 115-121 of the task file)"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The new float config keys are unsupported by the config manager, and no defaults are given",
+   "description": "`_coerce_value` supports only `int` and `str`; anything else raises `ValueError(\"Unsupported config type\")`. T5 registers three `type_=float` keys. `sq config set metrology.graduate_match_rate 0.9` would fail. `report.py` error messages tell operators to fix keys with `sq config set \u2026`, so the same advice is broken here. No task touches `manager.py`, and T5 and T6 only check `sq config list` and TOML overrides. Add `float` coercion to `_coerce_value` and a test for it.\n\nT5 also gives no default values, yet T6 asserts \"correct defaults\". The slice doesn't state them either. A junior has to invent them. Specify them, for example graduate 0.9, tighten 0.5 and residual rate 0.1.\n\nNothing in the plan validates the values. `get_config` returns whatever TOML holds, so `1` comes back as an `int`. T15 should specify reading with a `_min_evidence_n`-style check that rejects non-numeric values and values outside `[0, 1]` with `MetrologyTargetError`.",
+   "location": "src/squadron/config/manager.py:54-61"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`select_residual_offers` selection semantics break the non-empty guarantee",
+   "description": "\"Select a `rate` fraction\" has no rounding rule. With the default rate of 0.1 and 3 unsampled results, `floor(0.3)` gives zero offers. That contradicts the \"non-empty\" guarantee that T13 calls an architecture commitment. T14's test uses `rate=1.0` and `rate=0.5` over 4 only, so it would miss this. Specify `ceil`, with a minimum of 1 whenever unsampled results exist and `rate > 0`. Specify what `rate == 0` returns. Specify a deterministic order for choosing which results to offer.",
+   "location": "tasks T13 (lines 200-206 of the task file)"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`graduate` and `offers` scoping is ambiguous across projects and across several hashes for one template and model",
+   "description": "The store is user-level and shared across projects. `graduate --template T --model M --level L` has no `--project`, so its re-derived recommendation blends evidence from every project. `GraduatedConfig` carries no `project_id`. `offers` scans the current `--cwd` repo's reviews but accepts `--project`, and the plan never says what that filter does.\n\nFor one template and model, the report can hold several cells at the same level with different `template_content_hash` values. These come from prompt edits and from the T1 re-key. T15 says only \"filtered to this template/model/level\". It must say that `graduate` selects the cell whose hash equals the current `_template_content_hash(T)`. It must also say what happens when that cell is absent, for example refuse with a message. Today `graduate` could graduate a stale-hash cell.",
+   "location": "tasks T15 (lines 229-231 of the task file)"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The malformed-judge-block failure mode is claimed covered but isn't",
+   "description": "The task file's Failure Modes line (287) says the malformed judge block is \"inherited from `resolve_thresholds`, exercised in T8\". `resolve_thresholds` does not fall back. It calls `float(...)`, so a non-numeric `pass_floor` raises `ValueError`, and `None` raises `TypeError`. The slice requires a WARNING and a flagged target. T7 promises only that `read_current_thresholds` never raises for an unregistered template. T8 has no malformed-block test. As written, `recommend` crashes on a malformed template. Add a catch in `read_current_thresholds` that yields `current=None` plus a WARNING, and add a test for it.",
+   "location": "src/squadron/pipeline/actions/judge.py:49-57"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The \"historical records re-key\" claim is wrong, and walkthrough step 5 is not verifiable as written",
+   "description": "The plan says the hash change re-keys historical records and that 321's `unversioned` reporting makes it visible. Stored samples keep the `JudgeConfigId` they got at capture, and `agreement_report` groups on the stored `sample.judge_config`. Nothing re-keys stored data. After T1, old samples (old hash) and new samples (new hash) for the same unchanged template form two cells with non-`None` hashes. They are not counted as `unversioned`, so nothing explains the split. Any graduation recorded on an old-hash cell would also read as lapsed.\n\nStep 5 has the same problem. Editing the template cannot change an existing cell or its n. The \"same cell, same n\" check is trivially true, and \"re-key on `system_prompt` edit\" can't be observed on existing samples. The step must capture a new sample after each edit and check which cell it lands in. Also correct the Context Summary and failure-mode wording.",
+   "location": "tasks lines 18, 265 (Context Summary, T17 step 5); src/squadron/metrology/report.py:199-204"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Commit markers sit after untested implementation tasks",
+   "description": "Every task carries a commit marker. Each implementation task commits on its own, before the tests in the following task. Markers should sit at working, tested points, so commit after each impl+test pair. The T1 commit message `fix(metrology): narrow template content hash` also lands a behaviour change with no regression test.",
+   "location": "tasks T1, T3, T5, T7, T9, T11, T13, T15 (Commit lines 39, 69, 97, 125, 153, 181, 208, 236)"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for the slice",
+   "description": "There are 17 tasks and 8 impl/test pairs for roughly three modules. Cut or merge:\n- T5 and T6 are about 10 lines of keys plus a config test, so fold them into one task. They would then also carry the `manager.py` float fix.\n- T4 checks that Pydantic models round-trip, which tests Pydantic. Keep only the `ThresholdTarget.current=None` and `judge_config` hash-field checks inside T3.\n- T8 and T10 could share one test file. T9 could merge into T7 or T8.\n- The no-mutation check appears in T10 (bytes), T16 (SHA-1) and T17 step 4. Keep one, at the CLI level.\n- T7's step \"Re-read the design's Direction Bands table\u2026\" is process, not work.\n- T17's \"paste output into the slice design\" and \"update the 320 plan\" belong in the slice workflow, not a coding task.",
+   "location": "tasks T3-T6, T8, T10, T16, T17"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "T2 targets the wrong test file and under-specifies the fixtures",
+   "description": "`test_identity.py` exists but covers only project-id derivation. Tests of `derive_judge_config_id` live in `tests/metrology/test_result_ref.py:105-121`. \"Or add if 320 didn't create a dedicated file \u2014 check first\" can be resolved now. The existing `write_review_file` default (reviewType `judge.slice-vs-arch`) resolves to no template, which is why `test_result_ref.py` asserts a `None` hash. T2's end-to-end case needs either a registered template or a monkeypatched `squadron.review.templates.get_template`. T2 should say which, since it needs a template that actually has a `judge:` block. The `None`-for-unknown-template check already exists at `test_result_ref.py:111-113`. Don't duplicate it.",
+   "location": "tests/metrology/test_identity.py:1-22"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Existing code claims verified",
+   "description": "The line ranges and descriptions the task file cites for `identity.py:298-323` and `judge.py:41-57` are correct. `_DEFAULT_PASS_FLOOR` and `_DEFAULT_CONCERNS_FLOOR` match. `JudgeThresholds` is a `@dataclass`, as T3 says. Adding `graduated_config` to `MetrologyRecord` breaks no existing test: `test_models.py` uses only round-trip checks, and `list_samples` already skips records whose `sample` is `None`.",
+   "location": "src/squadron/metrology/identity.py:298-323"
+  }
+ ]
+}

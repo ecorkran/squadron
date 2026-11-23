@@ -1,0 +1,18 @@
+{
+ "case": "context-forge-268-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass after 3.1 and 3.2 (stop rendering `Comprehension:` and the Adoption Facts section) and commits there. Tests that assert the rendered output exist at `f903c18b` outside the two files 3.1-3.2 edit: `core/tests/pipeline-integration.test.ts:184` (`toContain('Comprehension: ...')`) and `core/tests/adoption/adoptionBuild.integration.test.ts` (asserts the `### Adoption Facts` heading); they are changed or deleted only in 3.3 and 4.1. The full-suite gate at 3.2a cannot pass. **VALID**: the task cannot be completed as written. Needs: code (grep of tests). **Raised by the original review (F001)**."
+  },
+  {
+   "id": "F2",
+   "text": "The note under heading 3 says \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" After 3.4 rebuilds core's `dist`, `cli/src/commands/build.ts` (line 84) still passes a second argument to the one-argument `createContextPipeline`, so `cli` fails typecheck until 3.5, as the note's own second sentence implies. **VALID** (minor): self-contradiction and contradicts code. Needs: code. **Raised by the original review (F002)**."
+  },
+  {
+   "id": "F3",
+   "text": "Design Success Criteria: \"No exported symbol remains that only the deleted code used\", with exceptions only for `history`, `comprehensionAnalysis` and `adoptionOutcome`. The design's Interfaces Required names `sourceVolume` as consumed by \"docs map (`discoverDocs`)\", but at `f903c18b` `discoverDocs.ts:9` imports only the `EXCLUDED_DIRS` constant; `measureSourceVolume` and `SourceVolume` are used only by `adoptionResolver.ts`, `adoptionFacts.ts` and tests, and Task 6.2's audit accepts everything exported from the `sourceVolume` module. After the cut, `measureSourceVolume` is an orphan export the criterion forbids and the audit keeps. **VALID** (minor): contradicts code and the design's own criterion. Needs: code. Confidence is lower than the two above because the intent to keep it for 271's report is plausible (Task 4.1 still calls it in the rewritten test)."
+  }
+ ]
+}

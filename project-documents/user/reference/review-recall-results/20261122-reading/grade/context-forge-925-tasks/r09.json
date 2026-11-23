@@ -1,0 +1,117 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 11 makes `detect()` throw, which breaks existing mocked detector tests and widens failures to every `detect()` caller",
+   "description": "Task 11 has `detect()` throw when `checkSyncStatus()` returns `'error'`.\n- The existing submodule tests (`GuideDetector.test.ts:68-90`, `92-114`, `205-226`) mock `gitExec` to throw for anything except `describe`. `checkSyncStatus()` would then return `'error'`, and `detect()` would throw in tests that currently pass.\n- Task 4 only renames `manual` \u2192 `tarball`. Task 12 only adds tests. No task updates these mocks.\n- `checkSyncStatus()` (`GuideDetector.ts:159`) discards the underlying git error. The thrown error would lose the \"not a repo / git missing\" detail D1/D7 wants surfaced.\n- `detect()` is also called by `GuideManager.install/update/uninstall/syncWorktrees/status` (`GuideManager.ts:29,39,60,91,147`), `setup-ide.ts:106`, and the `cf version --json` path. Any git hiccup now fails `cf guides uninstall` and `cf guides update`. This is not the read-only status the design intends for `cf guides info`.\n- `GuideInfo.checkout` is a required field. The typed `GuideInfo` literals in `GuideManager.test.ts:72,83,292,591` need the field. Task 10 only says typecheck passes \"once Task 11 populates the field\".\n\nFix: do the throw only in `ensureCheckout()`, or have `detect()` record `'error'` and let callers decide. Add an explicit step to update the existing mocked detector tests and `GuideInfo` fixtures.",
+   "location": "packages/core/tests/guides/GuideDetector.test.ts:68-114"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Tasks 22/23: the MCP `notices[]` shape can't be implemented against the current tool results",
+   "description": "`context_build` returns `textResult(contextString)` (`contextTools.ts:165`), and `prompt_get` returns `textResult(header + content)` (`:299`). Both are `{content:[{type:'text',text}]}`, with no object to hang a `notices` array on.\n- Only `prompt_list` (`jsonResult`) has a JSON payload.\n- Task 23 asserts \"no `notices` key (or empty array \u2014 pick one)\" on `context_build`, which has no keys.\n- `generateContext()` returns a `string`, and `resolvePromptFileForTools()` returns a path `string`. Neither can carry notices without a signature change that no task mentions.\n- Task 22 places the call \"before `createContextPipeline` (~line 57)\". That is inside `generateContext()`, which `template_preview` also calls. `template_preview` and `prompt_list`/`prompt_get` are annotated `readOnlyHint: true`, and `template_preview`'s description says \"without \u2026 triggering any side effects\". They would now perform a network fetch, and `template_preview` would have no channel for the notice.\n\nFix: specify the concrete shape, for example an extra `{type:'text'}` content block for text tools and a `notices` field for JSON tools. Decide whether `template_preview` is wired or explicitly excluded (this affects the D3 \"cover every hit\" rule). Reconcile the `readOnlyHint` annotations.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:165"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Tasks 20/21/23/26/27 break existing CLI and MCP tests that mock core and `guides.js`, and none of them schedule the mock updates",
+   "description": "Several existing suites mock their dependencies wholesale:\n- `build.test.ts:9-20` mocks `@context-forge/core/node` with only `FileProjectStore`, `createContextPipeline` and `ConfigManager`. `prompt.test.ts:10` and `setup-ide.test.ts:28` mock the same module.\n- `init.test.ts:42` mocks `../../src/commands/guides.js` with only `guidesInstallAction` and `registerGuidesCommand`. It mocks `@context-forge/core/node` with only `FileProjectStore`.\n- `contextTools.test.ts:20` and `guideTools.test.ts:18` also mock core.\n\nConsequences:\n- `ensureGuideReady()` imports `GuideManager` from core, so every existing build/prompt/setup-ide test breaks once Task 20 lands.\n- `init.ts` importing `strategyHelpText` from `guides.js`, or `normalizeGuideMethod` from core, hits an undefined mock export. That breaks all existing `init.test.ts` tests at `registerInitCommand` time.\n- Task 21 wants a real-git `cloned()` fixture \"in `build.test.ts`\" with a \"registered project\". That file mocks the store, core and pipeline, so a real-git fixture cannot work there.\n- Task 23 uses the `cloned()` fixture for `guide_status`. `guideTools.test.ts` mocks `GuideManager.status`, so \"does not initialize\" is untestable there.\n- The Task 9 fixture lives under `packages/core/tests/guides/helpers/`. CLI and MCP tests cannot import it across package boundaries without rootDir/tsconfig changes.\n\nFix: add explicit mock-update steps. Mock `guideReady.js` in the existing command tests. Test `ensureGuideReady` in its own test file with a mocked `GuideManager`. Keep real-git end-to-end coverage in core, or in a clearly separate integration test with its own fixture access.",
+   "location": "packages/cli/tests/commands/init.test.ts:42-45"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 13/14 rest on a wrong claim about `NETWORK_ERROR_PATTERNS`",
+   "description": "Task 13 says \"the `/timed out/i` pattern already matches\". The slice D10 says the same. The patterns are `/could not resolve host/i`, `/could not connect to/i`, `/connection timed out/i`, `/network is unreachable/i`, `/ssl certificate problem/i`, `/failed to connect/i`, `/enotfound/i`, `/econnrefused/i`, `/etimedout/i`. A message like \"git \u2026 timed out after 60 seconds\" matches none of them.\n- Following Task 13 literally, the remediation text is not appended, and Task 14's assertion for `GUIDE_OFFLINE_REMEDIATION` fails.\n- Node's `execFile` timeout error is \"Command failed: \u2026\" with `killed: true` and `signal: 'SIGTERM'`, and the callback receives it without any \"timed out\" text.\n\nFix: say that the timeout branch detects `error.killed`, builds the message itself, and either includes \"connection timed out\" or appends the remediation explicitly. Also note that SIGTERM to `git submodule update` may not stop its child `git-remote-https`.",
+   "location": "packages/core/src/guides/gitExec.ts:20-30"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 9 misdescribes `SubmoduleStrategy.test.ts` and omits the local-protocol restriction on submodule fixtures",
+   "description": "The task file and slice both say existing guide tests create temp repos, and Task 9 points at `SubmoduleStrategy.test.ts` for a \"real-git temp-repo pattern\".\n- That file mocks `fs` and `gitExec` entirely (lines 5-14), and so does `GuideDetector.test.ts`. No guide test uses real git. The \"extend it rather than duplicating\" step has nothing to extend.\n- Modern git (2.38.1+) rejects `git submodule add/update` from a local-path URL unless `protocol.file.allow=always` is set. Nothing under `packages/` mentions `protocol.file.allow`.\n- The fixture's `initialized()` and `cloned()` steps, and `SubmoduleStrategy.init()` itself running through `gitExec`, will fail with \"transport 'file' not allowed\". `gitExec` spreads `process.env`, so the helper must set `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0` (or equivalent).\n\nFix: correct the claim and add the protocol-allow requirement and env mechanism to Task 9. Task 9's size-3 estimate is reasonable once this is stated.",
+   "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:5-14"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 4's commit lands with CLI and MCP broken",
+   "description": "After Tasks 3-4 the `GuideMethod` rename is committed, but the boundary packages are not updated until Task 7.\n- The MCP zod enum (`guideTools.ts:101`) still emits `'manual'`, which no longer type-checks against `GuideMethod`.\n- The CLI cast `opts.strategy as GuideMethod` (`guides.ts:125`) lets `--strategy manual` through. `getStrategy('manual')` in `GuideManager.ts:214-223` then returns `undefined`, and `install()` throws a TypeError.\n- Task 4's criterion is only the core test suite. `pnpm -r build` would fail at this commit.\n\nFix: move the Task 4 commit marker to after Task 8, or fold Task 7 into the first working point. Task 32's walkthrough also has to use whichever commit is final.",
+   "location": "packages/mcp-server/src/tools/guideTools.ts:101"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 3's success grep misses the double-quoted `\"manual\"` strings and a site the design doesn't list",
+   "description": "The criterion `grep -rn \"'manual'\"` uses single quotes. The user-facing error text uses double quotes:\n- `CloneStrategy.ts:34`: `use the \"manual\" strategy`\n- `SubmoduleStrategy.ts:39`: `use the \"manual\" strategy`\n- `SubmoduleStrategy.ts:45`: `Use --strategy clone or --strategy manual`\n\nThese point users at the deprecated name and pass the grep. `SubmoduleStrategy.ts:45` is not in the design's \"Rename sweep\" list. Comments at `TarballStrategy.ts:1` and `GuideManager.ts:135` also say manual. Fix: grep for `manual` case-insensitively and enumerate these locations.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:45"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 5: optional `ConfigManager`, undecided return shape, and an uncovered MCP config-alias path",
+   "description": "- `GuideManager`'s `configManager` is optional (`GuideManager.ts:15,19`). Task 5 says \"no fallback branch is needed\" and returns `normalizeGuideMethod(configValue)` from `ConfigManager.get()`. With no `ConfigManager` there is no value, so the default must come from `CONFIG_KEYS['guide.git_strategy'].default`. The task never says to read it there, and a junior would reintroduce a literal.\n- The return shape for surfacing a deprecated alias is left as \"choose one\", yet Tasks 6(b) and 7 depend on it. `install()` returns `InstallResult` and is JSON-serialized by the MCP tool. Whether the alias flag rides on the result is unspecified.\n- D5 requires an MCP notice for the config-path alias too. Task 7 adds an MCP notice only for the `strategy` parameter, so a shared config with `manual` installed through `guide_install` has no notice.\n- The CLI config-path warning has no test. Task 8 covers only `--strategy manual`. The slice criterion \"shared config `manual` installs as tarball with the same warning\" is tested only at core level.",
+   "location": "packages/core/src/guides/GuideManager.ts:185-197"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 26: `--strategy bogus` can't \"fail before any install\" as the task is structured",
+   "description": "Task 27 expects `cf init --strategy bogus` to fail with the valid-values message before any install. In `init.ts`, the project is registered at line 104 (`store.create`), and the install runs inside a `try/catch` at lines 117-127. That catch prints `Guides install failed: \u2026` and continues to IDE setup, exiting 0. Calling `normalizeGuideMethod` inside the try would be swallowed. Validating after line 104 would leave a registered project behind.\n\nFix: say to validate the option at the top of the action, before any store writes and outside the catch. Also state what `--lite --strategy x` does. Alias normalization and warning logic is also spelled twice (Task 7 and Task 26). Specify one shared helper rather than duplicating it.",
+   "location": "packages/cli/src/commands/init.ts:104-127"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 20 places the `prompt get` wiring after the first guide read, and `setup-ide` has no `operationPath`",
+   "description": "Task 20 says to wire `prompt.ts` at \"~lines 60 and 116\".\n- In `prompt get`, line 114 calls `resolvePhaseInput(phase, opPath)`. For `P1`-style input this reads the prompt file via `getPhaseShorthands` (`phaseShorthand.ts:22-23`), so an `ensureGuideReady` placed before line 116 runs after the first read. The shorthand path would hit ENOENT on an empty tree. The call must go before line 114.\n- `phaseShorthand.ts:22` is a guide read the task's own grep would surface, but it is not listed. The cached `cachedShorthands` could also hold results from an empty tree.\n- `setupIdeAction(projectPath, target, opts)` (`setup-ide.ts:93`) takes no `operationPath`, and `init.ts:151` calls it with just `cwd`. Task 19's `ensureGuideReady(projectPath, operationPath)` has no value to pass there. Either the signature changes (which affects `init.test.ts` mocks) or `projectPath` is used. The task doesn't say.\n- Task 20 asks to \"list covered call sites in the commit body\", but Task 20 has no commit marker. The commit is at Task 21.",
+   "location": "packages/cli/src/commands/prompt.ts:114-116"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "`ensureCheckout()` via `detect()` adds an unbounded `git ls-remote` to every read command",
+   "description": "`detect()` always calls `fetchLatestVersion()` (`git ls-remote --tags`, no timeout) when the guide exists (`GuideDetector.ts:89`). Task 17 uses `detector.detect()` as the primary read.\n- Every `cf build`, `cf prompt` and MCP `context_build`/`prompt_*` now makes a network call it didn't make before. Behind the blackholed-proxy case that D10/F004 identifies, each read command hangs for the OS TCP timeout. D10 bounds only the init fetch.\n- `detectVersion()` on an uninitialized gitlink runs `git describe` in the empty guide dir, which resolves against the host repo. The version reported for `not_initialized` is the host repo's tag or null.\n\nFix: have `ensureCheckout()` use a lightweight path (method plus `checkSyncStatus`) that skips `fetchLatestVersion`. If `detect()` stays, state the cost and cover it.",
+   "location": "packages/core/src/guides/GuideDetector.ts:164-175"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 15: `init()` signature contradicts its own use, and existing `sync()` tests pin call arguments",
+   "description": "Task 15 defines `init(operationPath)` and says it runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. It then says `sync()` must call it \"without the timeout: pass the timeout as an `init()` option\". Whether the default is bounded or unbounded is never stated, and `ensureCheckout()` (Task 17) needs the bounded form.\n- The existing `sync()` test asserts `gitExec` was called with exactly `['submodule','update','--init',GUIDE_RELATIVE_PATH], worktreePath` (`SubmoduleStrategy.test.ts:220-223`). A third argument, even `undefined`, risks failing that assertion.\n- `sync()` also gains an extra `rev-parse` call.\n\nFix: give one signature (for example `init(path, opts?: { timeoutMs?: number })`, with `ensureCheckout` passing the constant). State that the existing sync assertions are expected to hold. `sync()` can also skip the `rev-parse`.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 32: the walkthrough clone isn't a registered project, so the steps don't exercise the clone",
+   "description": "Walkthrough step 1 clones `/tmp/g925` to `/tmp/g925-clone` and runs `cf guides info` and `cf build` there. Project resolution is by cwd against registered `projectPath` (`packages/cli/src/utils/project.ts:42-68,144-149`). The clone isn't registered, so commands resolve to a different project or none. Task 32 runs the steps verbatim.\n\nFix: add a `cf init --lite` (or project registration) in the clone, or use `--project` with a path-registered entry, so the auto-init is tested. Also say the walkthrough registers throwaway projects in the real user store, and make the cleanup (step 5) run even if an earlier step fails.",
+   "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:206-218"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Commit markers use the wrong form and are dense",
+   "description": "Markers are embedded as `Commit: \u2026` inside the Success-criteria checkbox bullets, not as plain `**Commit**:` lines. They appear after 13 of 32 tasks (4, 6, 8, 12, 14, 16, 18, 21, 23, 24, 27, 29, 31). Most sit at tested points, apart from Task 4 (see above). Task 14's tiny `gitExec` commit and Task 16's refactor commit could be one commit with Tasks 13-18.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Proportionality: some tasks can merge",
+   "description": "- Tasks 28-29 (a one-line constant plus printing it and its test) edit the same `showStatus()` and `guides.test.ts` as Task 24. Fold them into Task 24.\n- Task 2 is separate from Task 1 only by tests. Task 10 is too granular on its own (types plus one retype).\n- The README task's success check `grep \"overwritten on\" README.md` depends on the D9 sentence being present, which is fine.\n\nPart 4 tests (Task 27) also duplicate the help check across `help.test.ts` and `guides.test.ts` when one assertion suffices. No load-test or CI task is needed, because the slice restates no NFR.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:376-390"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 32 and existing-code claims otherwise hold",
+   "description": "Verified accurate: the `GuideManager.ts` catches (lines 177, 192), the `'submodule'` literal at line 196, `GuideDetector.checkSyncStatus` parsing `+`/`-`, `GuideMethod` at `types.ts:4`, `ConfigKeys.ts:34`, the `guideTools.ts:47,93,101` locations, `guides.ts:119,125`, `build.ts:78`, `contextTools.ts:57,98`, and `setup-ide.ts:106`. After a killed or failed auto-init, git's clone cleanup leaves the gitlink uninitialized, so the next read retries. `cf guides info` remains the read-only path. Note that `resolveSource()` losing its catch means a malformed config now also fails `cf guides info`, `cf build` and `guide_status`. That is consistent with D7 but worth a line in the CHANGELOG.",
+   "location": "packages/core/src/guides/GuideManager.ts:177-196"
+  }
+ ]
+}

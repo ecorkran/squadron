@@ -1,0 +1,145 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 14 gives MemoryError two outcomes: unparsed (Task 14) and tool_failed (Tasks 10\u201311)",
+   "description": "Task 14 line 160 sets the TypeScript token errors to `TypeScriptParseError` and `MemoryError`. That copies length's parse-error tuple (`src/squadron/metrology/snapshot/typescript_length.py:151`). Task 10 line 121 puts anything in `token_errors` into `unparsed_files`. Task 10 line 123 and Task 11 line 139 require a MemoryError during the pass to become `tool_failed` with a WARNING, and design:109 says the same. An implementer following Task 14 produces `unparsed` and fails Task 11's test. Remove MemoryError from Task 14's token errors and let the pass's own handler deal with it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 2's \"passes unchanged\" success check fails on an existing assertion",
+   "description": "`test_adapter_declares_its_metrics_and_pb2_conventions` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 line 44 replaces `PythonAdapter.metrics` (`src/squadron/metrology/snapshot/python_adapter.py:105`) with four metrics, and line 43 makes the enum eight, so this assertion fails. Task 2 line 45 says the suite passes unchanged, and the commit at line 46 would be red. Name this assertion as an edit. Task 25 restores the equality, so the break is intermediate, but Task 2 is a commit point.",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 7 breaks construction sites it doesn't name, so its commit isn't green",
+   "description": "Task 7 line 91 adds `complexity: int` to the renamed dataclass with no default. Positional calls at `test_lengths.py:104-106` and `test_render.py:35-36` pass four arguments and raise TypeError. Line 96 says \"edited only for the rename\", but `test_render.py` isn't a length test and the new argument isn't a rename. Name both files and say what complexity value they pass. Otherwise the commit at line 97 is red.",
+   "location": "tests/metrology/snapshot/test_lengths.py:104"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The read-and-decode helper can't serve duplication as `_measure_source` behaves today",
+   "description": "Task 7 line 94 extracts the read-and-decode step for Task 10 to reuse, and says length behavior is unchanged. The existing decode branch (`lengths.py:173-178`) counts the file with replacement characters and returns no error. Its OSError and decode warnings say \"for length\" (`lengths.py:168`, `:176`, `:186`). Task 10 line 121 needs an error signal and a WARNING that doesn't name length. Task 7 must define what the helper returns (text or failure) and keep the length branch's replacement count on the length side.",
+   "location": "src/squadron/metrology/snapshot/lengths.py:156"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 9's function-set check can't be read from the complexity measurement",
+   "description": "Line 110 asks that complexity and function length share the same \"(path, qualified name, start line) set\". Task 8 line 101 gives complexity no rows (no `per_file`, no `over_limit`), and design:52 excludes per-function complexity rows. Function-length rows exist only above a limit (`lengths.py:126-139`). The set has to be compared on the `MeasuredFunction` lists, which the task doesn't say. Without that, SC2 (design:264) has no executable check.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:110"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "RecursionError isn't a TypeScript parse error, so a recursive walk would crash the snapshot",
+   "description": "design:110 says RecursionError \"is already one of the adapter's parse errors.\" That holds for Python (`python_adapter.py:81`), not TypeScript, whose tuple is `(TypeScriptParseError, MemoryError)`. The existing TypeScript walk is an explicit stack (`typescript_length.py:125-138`), but Task 5 (line 74) and Task 14 (line 159) don't require the new walks to be iterative. Require iterative traversal in both tasks, or add RecursionError to the TypeScript tuple and say so.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:151"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 13 says function length is unaffected for two files that length also rejects",
+   "description": "Line 154 says the unterminated-string file and the bad-indentation file are in duplication's `unparsed_files) \"while their function length is unaffected.\" Both fail `ast.parse` in `_extract_functions` (`python_adapter.py:84-85`), and `SyntaxError` is in `_PARSE_ERRORS` (`:81`). Both files are also in function length's `unparsed_files`, as in 400. Write the expectation as \"function length still lists them unparsed, values unchanged.\" design:124 and the failure row at design:108 only hold in the trivial sense that `ast` fails first.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No test checks SC10's \"other metrics unchanged\" at the adapter level",
+   "description": "SC10 (design:278) requires that a language past the ceiling gets `duplicated_lines` as `tool_failed` and that \"its other metrics are unchanged.\" Task 11 tests only `measure_duplication`, and Task 26 doesn't cover it. Add an adapter-level test that lowers the ceiling and compares the other measurements with an unlowered run. Also state that `measure_duplication` must read `DUPLICATION_MAX_TOKENS` at call time, not as a default argument, or Task 11's monkeypatch has no effect.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 18 tells the fixture author to replace the whole `<source>` path, which breaks the path mapping",
+   "description": "Line 187 says \"the absolute `<source>` path is replaced with the existing FIXTURE_ROOT_TOKEN.\" `read_fixture` is a plain prefix `str.replace` (`tests/metrology/snapshot/builders.py:92-95`), and the fixture README calls the edit a \"path-prefix substitution\" (`tests/metrology/fixtures/snapshot/README.md:11-14`). If the whole `<source>` becomes `__REPO_ROOT__`, the join with a `filename` like `metrology/x.py` gives `repo/metrology/x.py`, not `repo/src/squadron/metrology/x.py`, and SC6's totals fail. Say that only the repo-root prefix is replaced, so `/src/squadron` stays. Line 188 (Istanbul) references the same rule and needs the same wording.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 19 leaves the path mapping unspecified where the existing helper doesn't do what the task assumes",
+   "description": "Line 196 says the joined path goes through `tool_support.repo_relative` and entries that \"resolve outside the repo are dropped.\" `repo_relative` calls `relative_to` on the raw string (`tool_support.py:57-65`) and doesn't resolve `..`. So `/repo/src/squadron/../x.py` comes back as `src/squadron/../x.py` and matches no file. Normalize the joined path first and say so. Line 197 also doesn't say that a `<class>` with no `<line>` children still gets a per-file entry with empty sets. Without that, a zero-statement file falls into `tool_ignored_files`, which contradicts line 234's \"zeros included.\"",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:57"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"Marks every line under both windows\" doesn't say which lines, and Task 13's expectation depends on it",
+   "description": "Tokens carry only a start line (lines 119, 121). So a window's lines are either its tokens' start lines, which misses comment-only lines and the interior of multi-line strings, or the span from its first to its last token line, which includes blank lines unless they're filtered. design:169 says `per_file` counts non-blank lines. Task 13 line 153 expects \"the function's lines\" in both files, and the two versions differ in their comments. State which rule applies, including the blank-line filter, and test it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "coverage.py collects four tasks' code with no split rule, and likely exceeds the ~300-line limit",
+   "description": "Tasks 16 (key and parser), 19 (Cobertura reader), 21 (`read_coverage` with freshness) and 23 (`coverage_measurements` with its counting text) all write to `snapshot/coverage.py`. Task 30 line 287 requires about 300 lines or less. Tasks 12 and 14 (lines 149, 163) have split rules, and this one doesn't. My estimate is at or above 300 lines once docstrings and the counting strings are counted. Add a split now, for example the Cobertura reader in its own module, and update design:81.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:175"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Walkthrough leaves snapshot records in the real store that nothing removes, and step 10 depends on data no step creates",
+   "description": "The store defines no delete or remove method. `write_snapshot` replaces a record only for the same (project, commit) (`store.py:115-118`, `:422-426`). Steps 1\u20139 write 401 records to the developer's real store, including the scratch vitest project from step 9. Nothing removes them when line 282 deletes the scratch project. Run the walkthrough with an isolated store via `metrology.store_dir` (`src/squadron/config/keys.py:196`), or name the cleanup. Step 10 (line 280) needs a 400-written record. Task 29 says to record its absence and continue, which conflicts with line 282's \"all steps match.\" Create one by snapshotting an older commit from a `git worktree` of the target branch, and read any existing 400 record before step 1, because a 401 snapshot at the same commit overwrites it.",
+   "location": "src/squadron/metrology/store.py:422"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Python token errors don't match length's parse errors",
+   "description": "Length's `_PARSE_ERRORS` includes `ValueError` as well as `SyntaxError` and `RecursionError`. Task 12 line 146 lists only `TokenError` and `SyntaxError`. Task 14 line 160 states the parity rule for TypeScript (a file unparsed for length is unparsed for duplication), and Task 12 doesn't state it for Python. Say the same for Python or explain the difference. I haven't confirmed whether `tokenize` rejects a NUL byte.",
+   "location": "src/squadron/metrology/snapshot/python_adapter.py:81"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Two failure-mode rows don't require the WARNING assertion",
+   "description": "Technical Requirements require each failure-mode test to assert the signal and the outcome. Task 9 line 111 says RecursionError is \"handled the same way,\" which doesn't require the per-file WARNING from design:110. Task 20 line 206 requires a failure for an unreadable report, but not its WARNING. Task 24 line 243 covers failures in general, so the gap is narrow. Name the WARNING assertion in both places.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Commit markers are written as \"- Commit:\" bullets, not `**Commit**:`",
+   "description": "The markers are plain bullets without bold. Their placement is right: they sit at tested points, after Tasks 2, 4, 6, 7, 9, 11, and so on, and never after every task. If the tooling matches the literal `**Commit**:` form, none will register. Change the form to match.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "\"Each task cites its decision\" is not true",
+   "description": "Eleven tasks cite a decision in their headings (3, 5, 7, 8, 10, 12, 14, 16, 19, 21, 23). Nineteen don't, including Tasks 4, 9, 11, 13, 15, 17, 20, 22, 24, 25 and 26, which implement D2\u2013D6 behavior. Cite the decisions or soften the sentence.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:29"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "Task 1 is one git command and could be folded into Task 2",
+   "description": "Task 1 is a branch creation and a single check. It's too granular for a task of its own. Fold it into the Context Summary or the first commit's setup.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Every project without coverage logs a WARNING per language, and the cited builder doesn't log",
+   "description": "Task 21 line 218 says each absence logs at WARNING. `tool_support.absent` doesn't log (lines 26\u201330). Only `tool_missing` and `tool_failed` do. So `read_coverage` has to log absences itself. The default unset state, which is the walkthrough's step 1 on squadron, then produces two WARNINGs per snapshot. That's the design's rule (design:225), but the task should say where the call lives and whether `coverage_not_configured` is logged.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:26"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Task 16's key-occurrence criterion is ambiguous",
+   "description": "\"Appears once in source, in coverage.py, apart from CONFIG_KEYS\" is hard to check. The existing `CONFIG_KEYS` entries use string literals (`src/squadron/config/keys.py:196-204`). Say the `keys.py` entry uses the literal and `coverage.py` holds the constant. `keys.py` should not import from `snapshot/`, since that would make config depend on metrology.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:177"
+  }
+ ]
+}

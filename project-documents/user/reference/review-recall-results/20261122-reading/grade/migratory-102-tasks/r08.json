@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`build_profiles()` in production code is never updated, so the Section 2 test gate fails",
+   "description": "Task 2.1 makes `leadership_weight` and `momentum_weight` required. Task 2.2 lists only test files (lines 64-70). `src/migratory_server/simulation.py:18` constructs `BehavioralProfile(...)` with six keyword arguments and no herding fields.\n\n- After 2.1 that call raises `TypeError`. `tests/test_simulation.py:29` and `:39` call `build_profiles(...)` directly and will fail.\n- `src/migratory_server/server.py:71` also calls `build_profiles`, so the server tests (`test_server*.py`, `test_main.py`) are at risk too.\n- The \"Verify: all existing tests still pass\" step in 2.2 (line 71) therefore cannot pass.\n- The 2.3 commit (line 73) would land on a broken suite.\n\nThe plan also doesn't decide where the values come from. `ProfileConfig` (`src/migratory_server/config.py:51-60`) has no herding fields. Either `build_profiles` passes `0.0` explicitly, or `ProfileConfig` gains optional fields defaulting to `0.0` with matching validation in `_validate_profile`. The task needs a step that makes this choice and updates `tests/test_simulation.py::TestBuildProfiles`.",
+   "location": "src/migratory_server/simulation.py:18-25"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`EntityManager.spawn_population` merges arrays by hand and will not merge `leadership`",
+   "description": "`spawn_population` concatenates `positions`, `velocities`, `accelerations` and `profile_indices` itself. It does not call `add_agent`. After task 1.1, `batch.leadership` exists but is dropped, so `self._state.leadership` stays at its old length while `count` grows. After `spawn_population(n=50)` on a fresh manager, `state.leadership.shape == (0,)`.\n\n- The 1.2 check (line 45) only reviews tests that \"use `AgentState.create()`\". It doesn't cover this path.\n- No existing test in `tests/test_entities.py` asserts on `leadership`, so nothing fails.\n- Any later `LeadershipForce` run on an `EntityManager` state will `IndexError` on `state.leadership[neighbors]`.\n- Task 1.1 needs a step to add the `leadership` concatenation, and 1.2 needs a test in `test_entities.py` that `leadership.shape == (count,)` after `spawn_population` and after `spawn_entity`.",
+   "location": "src/migratory_server/entities.py:135-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The 2.2 file list is incomplete and misdescribes the existing tests",
+   "description": "The named list (lines 64-69) omits `tests/test_entities.py:27` and `tests/test_simulation.py:65`. Both use `BehavioralProfile(**defaults)` helpers. The catch-all grep step on line 70 would find them, but it should be explicit.\n\n- `tests/test_profile.py` already has `test_missing_new_field_raises_type_error` (line 47). It omits `max_speed`'s peers, not the herding fields, so \"add test for missing new field\" (line 64) will collide in name and intent. The task should require a test that constructs a profile with the six flocking fields but without `leadership_weight` and `momentum_weight`.\n- `test_construction_with_all_fields` (line 22) and its \"six fields\" docstring (line 9) should also assert the two new fields.",
+   "location": "tests/test_profile.py:8-49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Wrong claim about the existing test count",
+   "description": "The frontmatter and 6.1 say \"80 tests passing\". `tests/` contains about 201 `def test_` functions across 14 files, which includes the server, config and entity tests. The 80 figure looks like a slice-101-era count. Replace the count with \"the existing suite passes\" so the junior doesn't treat a different total as a failure. \"No warnings about missing fields or deprecated patterns\" (line 174) isn't a checkable criterion either.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7,173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 4.1 does not say how `neighbor_lists` is indexed, and it invites a Python loop",
+   "description": "In the existing forces, `neighbor_lists` is indexed by position in `eval_indices` (`list_idx`), not by agent index. Tasks 3.1 and 4.1 say only \"for each active agent\" and \"same signature\". A junior who writes `neighbor_lists[agent_idx]` will pass full-population tests but break the `active_indices` isolation tests (3.2 and 4.2) or raise `IndexError`.\n\n- Add \"follow the `enumerate(eval_indices)` / `neighbor_lists[list_idx]` pattern in `flocking.py`\".\n- Line 118 is ambiguous: `sum(velocity[i] * leadership[i]) / sum(leadership)` reads as a loop. The slice requires \"no nested Python loops\" (slice line 395). Specify `(vel[neighbors] * lead[:, None]).sum(axis=0) / lead.sum()`.\n- Nothing in the plan tests the vectorization requirement. A one-line note in 4.1 is enough.",
+   "location": "src/migratory/engine/flocking.py:30-31,114-115"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Convergence and differentiation tests are weakly specified and overlap",
+   "description": "- 5.2 and 5.3 both build the same 50-agent, 300-tick herding run, so 5.3 should reuse 5.2's helper or the two should be merged.\n- \"Mean heading\" in 5.2 (line 152) is undefined. Is it the mean of unit vectors or of raw velocities? Specify one.\n- 5.3's assertion (line 161) is a disjunction (\"variance lower OR eastward component higher\"). A disjunction passes on noise and doesn't establish the slice's \"statistically different\" criterion.\n  - Pick one primary metric.\n  - Use `np.random.default_rng(42)` for the shared setup.\n  - Say what to do if the demo weights from the slice don't produce the effect in 300 ticks, such as raising the leader count or the weights. Otherwise the junior will loosen the assertion.\n- The control run needs a stated expectation: the flocking-only run should show no eastward bias (slice verification step 4).",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commits are written as checkbox tasks, and the closing commit is redundant",
+   "description": "The commit markers are numbered checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3). They should be plain `**Commit**:` lines.\n\n- The 2.3 marker sits at a state that isn't green until the `build_profiles` finding is fixed.\n- 6.3 commits \"any remaining changes\" after 5.4 has already committed everything, so it is a no-op unless a doc or CHANGELOG update is added.\n- The plan is also heavier than the slice needs. 6.2 (lines 176-178) duplicates the protocol checks already in 3.1/3.2/4.1/4.2, and 6.1 is just the final run of the suite. Fold 6.1 and 6.2 into one verification step.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48,73,103,134,164,180"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`MomentumForce` as specified reduces to `velocity * momentum_weight`",
+   "description": "`heading * speed * weight` equals `velocity * weight`. The force is therefore a negative-drag speed amplifier and doesn't oppose turning. The epsilon guard changes nothing numerically, since the force is zero when speed is zero.\n\n- The task follows the slice faithfully, so this is not a plan defect.\n- The 5.2/5.3 outcomes may come partly from speed saturating at `max_speed` rather than from heading persistence. Per `integrate`, `v += f*dt` is clamped to `max_speed`.\n- Keep this in mind if the differentiation test needs tuning.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:84-88"
+  }
+ ]
+}

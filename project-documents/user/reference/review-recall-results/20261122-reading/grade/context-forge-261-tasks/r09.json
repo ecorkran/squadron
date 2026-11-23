@@ -1,0 +1,152 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 9 guide check never awaits the prompt lookup",
+   "description": "Step 4 asks for \"a non-null `new SystemPromptParser(path).getPromptForInstruction(...)`\". `getPromptForInstruction` is `async` (`packages/core/src/services/SystemPromptParser.ts:186`), so an unawaited call returns a Promise, which is never null. The prompt-missing branch of D9 would never fire. The step should say `await`. The same line also writes `ContextProfileParser.parseProfiles(content)` as if it were static; it is an instance method (`packages/core/src/services/ContextProfileParser.ts:131`).",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:187"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Step 5 persists the state before the steps that can throw",
+   "description": "Step 5 writes `in_progress`. Step 6 then calls `presentPaths` and `recognizeCi`, which rethrow non-ENOENT errors. `pathPresent` also throws ENOENT on a broken symlink (`packages/core/src/detection/pathPresent.ts:29`). An error after step 5 becomes the error stub (`packages/core/src/services/ContextIntegrator.ts:113-118`) with the state already saved. The next build then selects brownfield silently, so the state-set notice (slice lines 231 and 397) never appears. A broken `README.md` or `CLAUDE.md` symlink reproduces this. Gather everything that can throw first, and write last. Add a 9T case: a broken rule-file symlink makes the build reject and leaves the state `''`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:188-189"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Shared `adoption.state` reads fall back to the user-level file",
+   "description": "`get` consults the user config for every key, shared keys included (lines 159\u2013169). An explicit `cf config set --global adoption.state in_progress` (`packages/cli/src/commands/config.ts:141`) then forces brownfield in every repository that has no project-level value, and nothing is written to the repo. Task 2 (line 66) reads through `get` without mentioning this. `get` also returns a `ConfigResult` object (`ConfigManager.ts:121`), so `.value` is needed. Read only the project file (`getRawProjectFileValues(key).shared`, `ConfigManager.ts:244`), and add a 2T case where a user-level value must be ignored.",
+   "location": "packages/core/src/config/ConfigManager.ts:159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "History timeout reason adds network advice and the absolute path to the prompt",
+   "description": "A timeout becomes `git ... failed in <cwd>: timed out after 5s`. `withNetworkErrorHint` then appends the VPN/proxy and `guide.source` text, because the message matches `/timed out after \\d+s/i` (`gitExec.ts:26, 49-52`). Task 5 (line 118) uses the error message as `reason`, so Adoption Facts would tell the user to check a VPN for a local `git rev-list`, and the absolute checkout path would appear in the prompt. Task 5T (line 128) only asserts \"contains timed out\", so it passes. Map the timeout to `git timed out after 5s`, the wording D5 uses, and assert that the reason contains no \"VPN\" or \"guide.source\" text.",
+   "location": "packages/core/src/guides/gitExec.ts:96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5T's file-level `vi.mock` replaces gitExec for the real-repo cases too",
+   "description": "`vi.mock` is hoisted and applies to the whole test file. A plain-factory mock of `guides/gitExec.js` in `history.test.ts` would also reject the real-repo cases on lines 124\u2013127. Put the timeout case in its own file, or mock with `importOriginal` and `mockRejectedValueOnce`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 11's required `adoptionStateWrites` cannot follow optional parameters",
+   "description": "`generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)` already has optional parameters. Appending a required `adoptionStateWrites` (line 220) is TS1016 and fails `pnpm -r typecheck`. Specify its position, for example second, and update both callers (lines 200 and 264).",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 12 expectations rely on prompt sections the fixture doesn't have",
+   "description": "The headings (lines 5\u201329) are Context Initialization, Tool Usage, implementation, design, review and Task Breakdown. The file has no `context_profiles` fence and no Phase 0 concept or Phase 2 section. Task 9T (line 194) says to add \"a `brownfield-adoption` profile line\" to a block that doesn't exist. Task 12 expects \"concept prompt\" (lines 232\u2013238) and \"the Phase 2 prompt\" (line 241), with nothing to match. Specify the fixture additions: a ```` ```yaml ```` fence with `context_profiles:` (the parser keys on that line, `ContextProfileParser.ts:10`), a concept section, a Phase 2 section, and a sentinel string per section for the tests to assert on.",
+   "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:5"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The sub-second performance target has no check",
+   "description": "The slice restates a performance NFR at D2 (slice line 167): detection adds under one second to a Phase 0 build. Nothing in the breakdown measures time. Task 3T asserts counts only, yet line 38 says the cap tests \"verify\" the target. Line 38 also exempts the breakdown from a load tier, on the basis of a file location (see the citation NOTE below). The walk's non-blocking requirement (slice line 164) is the concurrency concern that tier names. Add a timing test with a generous bound on a large generated tree and gate it in CI (`.github/workflows/ci.yml` has one ubuntu job). Alternatively, state in the slice that the target is informational and record wall-clock times in Task 15.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 15's `format` step names a script that doesn't exist",
+   "description": "The root scripts are `build`, `test`, `lint` (`eslint .`) and `typecheck` (lines 8\u201311). There is no `format` script and no prettier config. Task 15 (line 260) can't run \"format\" as written. Name the real command, or add the script.",
+   "location": "package.json:8"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 1 proves nothing unless the instruction is Phase 0",
+   "description": "`cfl build` uses the registered instruction. The resolver returns before any I/O for other phases (D4). If this project isn't registered at Phase 0, the before and after outputs are identical by construction and the planning check never runs. Pass `--phase 0` in both runs (`packages/cli/src/commands/build.ts:63-73` supports it). The step also covers only this repo, while the slice requires \"every existing planned project\" (slice line 344).",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "No test for `context_build` returning AdoptionError as an error",
+   "description": "Slice line 333 requires `context_build` to return the error. Task 11 asserts only the arguments passed to the pipeline. The handler does return `errorResult` on any throw (`packages/mcp-server/src/tools/contextTools.ts:210-212`), but no test pins that. The `cf build` exit code is covered only by the manual walkthrough in Task 15 (line 263). Add a contextTools test in which the mocked pipeline throws `AdoptionError`, and assert `isError` and the message.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes instead of `**Commit**:` markers",
+   "description": "All ten commit steps (lines 78, 105, 131, 148, 178, 202, 225, 251, 257, 269) are checkbox items. The marker convention is plain `**Commit**:` lines, never checkboxes, and a checkbox can be ticked without committing. The placement at tested points is otherwise sound.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 15 combines automated gates, live runs and fixes in one task",
+   "description": "Task 15 has nine steps across five activities. Two of them, the live `claude -p` run and the MCP client run, may be BLOCKED. Split it into an automated-gate task (typecheck, build, test, lint, file sizes) and a walkthrough task that records outcomes and BLOCKED lines. The gate can then close while a live step is blocked.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The load-tier citation names a file that isn't there",
+   "description": "`rules/python.md` is not at the repo root. The rule is at `project-documents/ai-project-guide/project-guides/rules/python.md:57`. `typescript.md`, `general.md` and `testing.md` don't mention the load tier. Correct the path. The exemption itself is covered by the NFR finding above.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The skipIf precedent is not in the 260 detection tests",
+   "description": "`packages/core/tests/detection/` contains no `skipIf` and no `chmod` test. The guard is at `packages/core/tests/introspection/setupCiOffer.test.ts:70`: `it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)`. Name that file and copy the guard, including its root check.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:39"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "`packages/electron/out/` doesn't exist",
+   "description": "`packages/electron/` is not in the repo. The \"do not touch\" instruction is harmless, but the design's Special Considerations (slice line 399) describe a stale package that no longer exists. Drop the reference.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:221"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The 20,001-file test may exceed Vitest's default timeout",
+   "description": "No package config sets `testTimeout`, so the default 5 s limit applies to creating 20,001 files and walking them. The test can pass locally and flake on slower disks. Set a per-test timeout for this case, or make the entry cap injectable for tests. Unverified: I did not run it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:101"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "`vi.spyOn` on the sourceVolume module may not intercept the resolver's call",
+   "description": "Task 9T asks to \"spy on measureSourceVolume\" to show the walk never runs. Spying on an ES module export does not reliably intercept calls made from another module. Specify `vi.mock('../../src/detection/sourceVolume.js', ...)` with `importOriginal`. Unverified: I did not run it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:195"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "The \"profile but no prompt\" case has no fixture",
+   "description": "Line 198 needs a guide that has the profile and no prompt section. The only fixture described (line 194) has both. Specify a second fixture, or a copy with the section removed.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:198"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "`measureSourceVolume` is exported in Task 5, not where it is created",
+   "description": "`measureSourceVolume` and `SourceVolume` are created in Task 3 (line 83) but exported from the barrel in Task 5. This is harmless. Move the export to Task 3.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "Task 12 leaves the test file open",
+   "description": "\"`CoreServiceFactory.test.ts` (or `pipeline-integration.test.ts`)\" leaves the choice to the implementer. Pick one.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230"
+  }
+ ]
+}

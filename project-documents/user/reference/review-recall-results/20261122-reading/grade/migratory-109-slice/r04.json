@@ -1,0 +1,145 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Zero-neighbor cohesion template produces nonzero force",
+   "description": "With `counts[i] == 0`, the masked sum is zero, so `center_of_mass = 0 / max(0,1) = 0` and `cohesion = (0 - self_pos) * w = -self_pos * w`. That is nonzero. The \"Handling Zero-Neighbor Agents\" section (line 172) says the result is zero, and the snippet doesn't do that. The current code skips these agents (`src/migratory/engine/flocking.py:34-35`). At the default `cohesion_weight` of 0.01, a lone agent at (500, 500) would receive (-5, -5) every tick before clamping. Existing tests pin the correct behavior: `tests/test_flocking.py:88-97` expects `[0, 0]` for an isolated agent at (100, 100), and the template gives (-1, -1). `tests/test_flocking.py:268-279` fails the same way for Alignment, which the design says is \"structurally identical\" (line 246). The snippet also uses undefined names (`counts`, `self_positions`, `weights`), and it never states that row `i` corresponds to `active_indices[i]` or how the (n_active, 2) result is scattered into the (n, 2) output.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:114-118"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Per-agent Python comprehension inside each force violates the defining constraint",
+   "description": "Line 133 builds weights with `[profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]]`, once per force call. That is a Python-level iteration over agents inside `BulkForce.__call__`. The design calls this \"the defining constraint\" (line 198), and the architecture forbids \"Python-level per-agent branching ... callbacks into Python during the hot loop\" (`project-documents/user/architecture/100-arch.behavior-engine.md:102`). The plan requires \"O(1) Python overhead\" (`project-documents/user/architecture/100-slices.behavior-engine.md:37`). Line 136 dismisses this as negligible at n=100, which doesn't address the constraint. The design's own verification grep (line 223, `for.*eval_indices`) matches this line, so step 4 fails on the design's own code. A per-profile table built once per tick (indexed by `profile_indices[active]`) meets the constraint. `separation_radius` needs the same treatment and the design doesn't mention it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "LeadershipForce has no zero-sum guard, so the design produces NaN in the default production state",
+   "description": "The current code skips agents whose neighbor leadership sum is below 1e-10 (`src/migratory/engine/herding.py:79-81`), and `tests/test_herding.py:202-215` pins zero force for that case. The design never mentions the guard. Its edge-case list (line 193) omits zero leadership, and it gives no LeadershipForce formula. A direct vectorization computes `leadership / leadership_sum`, which is 0/0 = NaN for every zero-sum row. Nothing in `src/migratory_server` writes `state.leadership`; `AgentState.create` zero-fills it (`src/migratory/engine/state.py:71`). So any profile with `leadership_weight > 0` (wired at `src/migratory_server/force_builder.py:28`) hits this branch for every agent. The NaN flows into `total_forces` and `integrate` (`src/migratory/engine/integration.py:42-44`), and those agents are NaN from the first tick. The existing test would fail in CI, but the design doesn't specify the guard. Require a `leadership_sum >= 1e-10` row mask applied with `np.where`, and add the all-zero-leadership population to the edge cases.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:193"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Padded storage is O(n \u00d7 max_neighbors), so the architecture's 10K tier fails; the CSR rejection is based on a false premise",
+   "description": "Memory is set by the maximum neighbor count across all rows (line 82), not the average, and the design's own scenario is k approaching n as flocks cluster (line 17). At 10,000 agents with one dense cluster, `indices` is 10\u2074 \u00d7 10\u2074 \u00d7 8 B = 800 MB. The gathered `state.positions[indices]` temporary in each force (line 111) is about 1.6 GB, allocated per force per tick. The architecture requires \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md:36`), calls 10K the single-CPU tier (line 100), and forbids dynamic allocation in the force path (line 102). The design's \"trivial\" claim (line 146) holds only at n=100, and it says memory matters only at 100K+ (line 148). The CSR rejection (line 144) claims NumPy can't do CSR gather without scipy. A flat gather `positions[flat_idx]` followed by `np.add.reduceat` (or `np.bincount` with weights per coordinate) gives segmented sums in pure NumPy, with an explicit fix for empty rows. Line 145 rejects COO because `np.add.at` is slow, but `bincount` is the standard alternative. The design should adopt a flat segmented layout or chunk the neighbor set, and restate the scale target (see the NFR finding below).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-tick Python iteration remains, so \"constant Python overhead\" is overstated",
+   "description": "Line 19 claims \"constant Python overhead,\" and line 23 says vectorization \"eliminates the Python loop overhead entirely.\" The design keeps the query loop (`src/migratory/engine/tick.py:47-52`, line 45). The builder is described as \"a single pass to pad, mask, and self-exclude\" (line 101) with no implementation. A row-by-row copy makes n_active Python iterations. The `max_speeds` comprehension over all n agents (`src/migratory/engine/tick.py:59-63`) is not in the data flow or the tick.py change list (line 37). The per-force weight comprehensions add more (see the FAIL above). Per-tick Python iteration stays O(n). The real gain is removing per-agent NumPy calls inside the forces. Either specify a fully vectorized builder (concatenate query results, `np.repeat` for row ids, one self-filter, `cumsum` for slots) and a per-tick profile table, or restate the claim.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:101"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Overrun root cause and baseline are unmeasured, and the verification run measures more than `tick()`",
+   "description": "Line 23 attributes overruns to force loops, and line 215 cites a pre-slice baseline of \"~58-60 ms.\" Neither is measured in the document. The 101 design deferred vectorization because \"the gain is speculative until the profile of a real workload is established\" (`project-documents/user/slices/101-slice.flocking-behavior.md:209-211`). 109 needs that profile and doesn't provide it. Step 2 runs `--config default`, which has `sim_logging.enabled: true` (`config/default.yaml:16-19`). `TickLoop` times the whole `tick_body` (`src/migratory_server/server.py:163-171`, `src/migratory_server/tick.py:63-65`). That includes sim-log serialization and executor submission (`src/migratory_server/logging_sim.py:118-169`) and broadcast serialization (`src/migratory_server/clients.py:71-84`). The measured overrun does not isolate force computation. Line 23 also says every tick overruns, while line 215 says overruns begin after clustering. Measure `sim.step` (or `tick()`) alone with logging off, record the baseline, and compare against the same measurement after the change.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Step 2 resolves `--config default` to a user-level config when one exists",
+   "description": "`resolve_config_path` checks `$XDG_CONFIG_HOME/migratory/` (or `~/.config/migratory/`) and `~/.migratory/` before the repo's `config/` directory (`src/migratory_server/config.py:628-645`). On an existing installation with a personal `default.yaml`, step 2 runs a different workload than the \"default config (100 agents, query_radius 50.0)\" the document describes. Use the explicit path `config/default.yaml`, which is used directly (`config.py:630-631`), and state the working directory.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:213"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The step-4 grep is wrong and covers the wrong files",
+   "description": "(a) Line 133's comprehension (`for pi in state.profile_indices[eval_indices]`) matches `for.*eval_indices`, so the design fails its own check. (b) The grep covers only `flocking.py` and `herding.py`. It skips `engine/neighbors.py` (the builder pass, line 101) and `engine/tick.py` (the `max_speeds` comprehension, `tick.py:59-63`). (c) A grep for loop syntax does not test behavior. Replace it with a check on Python iteration over the agent axis in the force modules and the builder, and rely on the equivalence tests for correctness.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:220-225"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Tests and docs that depend on the old contract are not enumerated",
+   "description": "Line 38 says \"update all callers and tests,\" and line 199 says \"all existing tests pass (updated...),\" without naming them. About 26 direct force calls in `tests/test_flocking.py` and `tests/test_herding.py` pass lists of arrays and will fail under `NeighborData`. The self-exclusion tests (`tests/test_flocking.py:99-112, 202-210, 281-291`; `tests/test_herding.py:217-233`) assert force-level self-exclusion. Line 194 moves that behavior into the builder, so these belong in a builder test, not updated in place. The zero-neighbor tests (`tests/test_flocking.py:88-97, 268-279`; `tests/test_herding.py:192-200`) need the corrected semantics. The docstrings that show the old signature (`src/migratory/engine/forces.py:42-49`, the example in `src/migratory/engine/repulsor.py:16-23`) are not in the update list. `tests/test_forces.py` and `tests/test_repulsor.py` pass `[]` and still run, but they pin a type the protocol no longer has. Add an explicit test inventory.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:38"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Transition order leaves the tree broken between steps",
+   "description": "Line 254 says steps 7-8 (tick emits `NeighborData`; protocol and forces accept it) \"can be done early,\" with forces converted one at a time. Until every force is converted, the unconverted ones (`flocking.py:31`, `neighbor_lists[list_idx]`) receive a `NeighborData` and fail. The document gives no compatibility adapter and no green-per-step gate. It also says the loop-based reference \"lives only in the test module\" (line 258), but the order rewrites the source first, so the reference must be copied before step 2. Either add a transitional adapter, or make steps 2-8 one change. Add a step that captures the reference implementations first.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:254"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Empty active subset crashes the builder",
+   "description": "`max_neighbors` is the maximum over active agents (line 82). With an empty `active_indices`, `max()` raises, while the current loops and `integrate` handle an empty subset. The edge-case list (line 193) covers single-agent and subset but not empty subset. This matters for the architecture's variable-rate ticking, where a tick may evaluate no agents in a rate class (`100-arch.behavior-engine.md:52, 100`). Specify `counts.max(initial=0)` (or equivalent) and add an empty-subset test. The server currently passes `None` (`src/migratory_server/simulation.py:104-110`), so this is latent.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:82"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Scale NFR is not restated in this slice",
+   "description": "The architecture states the NFRs for this path: tens of thousands of agents on a single CPU (`100-arch.behavior-engine.md:36`), the 10K single-CPU tier (line 100), and full ticks within budget (line 96). The slice touches the hot path but restates only the 100-agent, 50 ms case (lines 211-215). Without a target at the 10K-tens-of-thousands scale, the memory failure above and the no-allocation rule (line 102) can't be tested. Restate the NFR with agent count, tick budget, and peak per-tick memory, and add a test that measures them.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Contract conflict with slice 103 is not addressed",
+   "description": "The 109 frontmatter lists 103 as an interface (line 7), and the Provides section says future forces \"consume this instead of raw lists\" (line 178). The 103 design is written against the current contract: \"No changes to tick()... Forces receive the same (state, neighbor_lists, ...) arguments\" (`project-documents/user/slices/103-slice.predator-prey-dynamics.md:396-400`). Its sketches loop over `neighbor_lists[list_idx]` (lines 451-452, 514-515), and it mandates \"one Python loop over active agents\" (lines 644-645). The plan orders 103 before 109 (`project-documents/user/architecture/100-slices.behavior-engine.md:28, 37`). If 103 lands first, 109 must rewrite its forces, or 109 must go first. The design says neither. Add an ordering decision and an update obligation for 103.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Reverses slice 101's recorded decisions without saying so",
+   "description": "Slice 101 chose per-force self-exclusion (`project-documents/user/slices/101-slice.flocking-behavior.md:191-194`) and rejected padded neighbor matrices as premature (lines 209-211). Slice 109 reverses both: self-exclusion moves to the builder (line 88) and padded arrays become the representation. The justification is the hot-path rule in `project-documents/user/slices/100-slice.agent-state-and-tick-function.md:247`, which 101 and 102 do not meet. The design should cite the superseded decisions and the evidence that justifies reversing them.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-88"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "`NeighborData` hard-codes agent-index neighbors, which blocks aggregate neighbors",
+   "description": "`indices` indexes `state.positions` (line 111), so every neighbor must be an agent row. The architecture says aggregate neighbors \"have a fundamentally different shape... or aggregate support will require a breaking change\" (`100-arch.behavior-engine.md:100`). Slice 108 is planned (`100-slices.behavior-engine.md:52`). This slice defines the neighbor structure, so it is where that decision is made. Either add a neighbor-kind discriminator now, or record in the design that 108 will be a breaking change.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:68-77"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Batch query and distances are deferred to slice 105, but 105's plan entry does not include them",
+   "description": "Line 45 says the batch query is \"105's scope.\" The 105 entry covers only \"replace the brute-force neighbor query with a spatial hash grid behind the existing query interface\" (`project-documents/user/architecture/100-slices.behavior-engine.md:34`), and line 184 depends on 105 adding a batch query. The architecture requires the minimal contract to return \"indices and squared distances,\" and says the batch variant \"will be defined during slice design\" (`100-arch.behavior-engine.md:48`). The current interface returns indices only (`src/migratory/spatial/interface.py:29-36`), and SeparationForce recomputes distances. Either assign the batch variant and distance return to 105's entry, or define them here.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:45"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Missing guards: MomentumForce epsilon, Separation coincident agents, and the equivalence tolerance",
+   "description": "- MomentumForce returns zero for `speed < 1e-10` (`herding.py:37-38`). `velocity * momentum_weight` does not, so a speed of 5e-11 with weight 1 gives a 5e-11 difference, which exceeds `atol=1e-12` (line 258).\n- SeparationForce divides by `dist\u00b2`, so coincident agents give NaN today (`flocking.py:84-89`). The padded version also computes distances for padding rows (gathered from index -1). It must use `np.where`, not multiplication by the mask, or `0 * NaN` propagates. Line 123 says only \"an additional distance mask.\"\n- \"Numerically identical\" (line 190) conflicts with `atol=1e-12` (line 258) and with the N-tick trajectory check (line 260). Summation order changes rounding, and separation's 1/d term amplifies it over ticks. State the tolerance per test.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:123-125"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Overweight design: redundant mask, duplicated tests, and restated sections",
+   "description": "- `mask` (line 76) is derivable from `counts`. Line 80 uses `-1` as a second sentinel for the same fact. Keep `indices` and `counts`.\n- The GPU argument (lines 27, 178-180) has no consumer in this slice. Cut it to one sentence.\n- The old-vs-new full-tick comparison (line 260) and the dedicated fixture (lines 217-218) duplicate the per-force equivalence test (line 258). A full-trajectory check over N ticks is chaotic with separation's 1/d term. Keep one per-force equivalence test and one smoke test.\n- Data Flow (lines 92-101) restates `tick.py`. The Mitigation order (lines 233-235) repeats Implementation Notes (lines 242-254). The CSR/COO discussion and \"future work\" (lines 144-148) go beyond this slice.\n- A flat segmented neighbor layout (see the memory FAIL) removes the padded array and the mask. It is lighter and meets the requirement.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74-80"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Internal inconsistencies",
+   "description": "- Line 17 says the loops are replaced \"in every BulkForce implementation,\" but line 44 says `WorldBoundsRepulsor`, `ConstantDrift`, and `VelocityDrag` are already vectorized. The plan says the same (`project-documents/user/architecture/100-slices.behavior-engine.md:37`). Scope it to the five forces.\n- Line 98 gives `integrate(positions, velocities, total_forces, dt, max_speeds)`. The real signature also takes `active_indices` (`src/migratory/engine/integration.py:7-13`; `src/migratory/engine/tick.py:66-73`).\n- Line 80 says padding is \"never dereferenced thanks to mask,\" but the gather at line 111 indexes -1 (the last agent) before the mask is applied at line 114.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:17"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Project setup is not documented",
+   "description": "`python -m pytest tests/` and `python -m migratory_server` need the package installed (src layout in `pyproject.toml`; the pytest config has no `pythonpath`). The design lists no install step. This is project-wide, so a pointer to the project's setup section is enough.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:205-215"
+  }
+ ]
+}

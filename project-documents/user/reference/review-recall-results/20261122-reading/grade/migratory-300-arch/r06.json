@@ -1,0 +1,138 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Engine interface contract contradicts the behavior-engine architecture",
+   "description": "The tick contract here conflicts with 100-arch on three points, and this document has to pick one.\n- **Lifecycle ownership:** L70 says the engine \"does not manage the entity lifecycle itself.\" 100-arch L81 gives the engine a \"register/remove agents\" method.\n- **Environment direction:** L63 has the server *push* \"environment context\" into the engine. 100-arch L47 has the engine *pull* environment through a read-only query interface.\n- **Array ownership:** 100-arch L68 says the engine returns an updated state array. L64 here says the server \"applies\" the result as canonical state. It is unclear whether the engine returns new arrays or writes into the server's arrays.\n\nThe active-agent subset parameter that 100-arch L64 requires is absent here, so variable-rate ticking cannot be expressed through this interface as written. This document's dateUpdated (20260318) also predates the sibling's latest revision (20260320), which added the subset-evaluable principle. The bootstrap, entity-management, and behavior-integration slices (L116\u2013120) cannot be cut until one contract is written down and referenced from both documents.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:63-70"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Aggregation and variable-rate ticking are called the key decision, then not designed",
+   "description": "L112 says \"the key architectural decision now is ensuring \u2026 the entity management layer support aggregation and variable-rate ticking from the start.\" The Envisioned State does not do that.\n- **Entity model (L70):** entities are IDs, array slots, and removal. There is no entity kind, rate tier, aggregate record, or aggregate-to-member mapping.\n- **Disaggregation (L104):** individuals are \"spawned from the statistical model,\" but nothing says who samples, which RNG stream is used (see finding 8), or where the IDs come from when 500K entities are created at once.\n- **Tick loop (L63):** no active subset.\n- **Slices (L116\u2013128):** no tier or aggregation slice.\n\n100-arch L97 assigns aggregate management to the world server, and its aggregation slice (100-arch L115) depends on it. Neither document defines the aggregate representation. Either design the minimum now (a tier field, subset-passing in the tick, an aggregate record type) or state that it is deferred and drop the \"key decision now\" framing. As written, the document asserts a requirement its own design does not meet.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:110-112"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Entity identity, slot reuse, removal, and capacity exhaustion are unspecified",
+   "description": "L70 says the server removes entities \"when appropriate,\" which is undefined. Removing from contiguous typed arrays either compacts them (indices shift) or leaves holes (a free list). Each option changes what an index means. Clients and logs need stable IDs, but the subset index arrays (100-arch L64) and neighbor indices are array positions. The document never says whether IDs map to slots through a table, when that table is updated, or what a spawn does when pre-allocated capacity (L84) is full. That last case is the default failure of a fixed-capacity pool, and CLAUDE.md requires explicit failure rather than silent fallback. The document does not address it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70,84"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tick pacing, overrun behavior, and the time base are undefined",
+   "description": "Step 6 (L66) is a relative sleep (\"sleep for the remainder of the tick budget\"). Scheduling overhead accumulates each cycle, so the achieved tick rate falls below the configured rate even when every tick fits its budget. The document should use absolute deadlines (`next_deadline += budget`).\n\nThe load-bearing choice is never made: does simulation time track wall-clock time, or advance one tick per compute cycle? Under overrun, a per-cycle clock silently slows the world, and a wall-clock clock drops or bunches ticks. L72 says seasons advance \"based on a configurable time scale,\" with no unit. If that means ticks, \"time scale\" is a tick count. If it means seconds, the schedule changes under overrun. L88's \"continue at best effort\" is not a policy until these are settled.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:59-66"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Event-log writes and client distribution run synchronously on the loop thread",
+   "description": "L78 says to \"run the tick synchronously, then yield to the async event loop.\" Step 5 (L65) does client distribution and the event-log write inside the tick.\n- **Log writes:** full snapshots every N ticks (L74) at 500K entities are about 24MB, using L92's own figures. A synchronous write that size takes on the order of tens of milliseconds on a typical disk, which is a large share of a 50ms budget at 20 tps.\n- **Serialization:** per-client culling and encoding (L108) also run inside the tick, outside the budget.\n- **Backpressure:** asyncio's `transport.write()` never blocks, so it buffers without limit unless the caller awaits `drain()` or checks buffer size. The document does not say whether distribution is awaited or fire-and-forget.\n\nLog writes should go to a background writer fed by a bounded queue. The distribution step should enqueue a frame reference and let per-client senders handle the socket.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:65,78"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slow-client policy, delta encoding, and per-client culling depend on each other and on unspecified state",
+   "description": "Three mechanisms interact, and none is designed.\n- **Deltas (L68, L82)** are only valid against a frame the client actually has. If the server drops a frame, the next delta is unreadable unless the server tracks the last acknowledged tick per client and falls back to a snapshot. The protocol has no ack message.\n- **Frame dropping (L82)** plus deltas therefore requires per-client sequence state. The usual answer is a single-slot \"latest frame\" queue per client with a full snapshot on resync. That should be stated.\n- **Culling (L108)** makes the visible set differ per client and per tick. Deltas must then express entities entering and leaving view, and the server must hold per-client view state.\n- **Unbounded buffering:** L82 lists \"buffering\" as a strategy, but asyncio buffers without a default limit. A single stalled client can grow server memory without bound. The document sets no per-client cap.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:68,82,108"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Wire protocol cannot evolve: no message type, no version, no handshake, no view subscription",
+   "description": "L80 describes a frame of \"tick number, entity count, array layout descriptor\" wrapping raw buffers. The design needs at least four message kinds: full snapshot, delta, aggregate descriptor (L108), and eventually client commands (L68). It also needs control and error messages. No discriminator is defined, so adding any of these changes every frame. There is no protocol version either.\n\nThere is also no handshake. A new client needs world bounds, the profile-to-appearance mapping, array precision, and byte order before it can decode anything. Per-client culling (L108) needs each client to report its view or interest region to the server. That is a client\u2192server message, which contradicts the \"push-only\" framing at L68. The custom \"array layout descriptor\" also reimplements NumPy's `.npy` header, which is already self-describing (dtype, shape, byte order). Byte order should be explicit (little-endian), because the client's Float32Array uses platform endianness.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:68,80"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Determinism and replay claims are not backed by the design",
+   "description": "L74 says \"given a log and the same configuration, the simulation can be reconstructed tick-by-tick.\" L90 recommends logging only the initial state plus non-deterministic inputs. The inputs to that claim are not closed.\n- **Timestamps:** step 1 records a timestamp (L61). Wall-clock values must stay out of simulation state, or replay cannot be compared byte-for-byte.\n- **Lifecycle events:** these are \"queued during the tick\" (L64) with no stated source. If environment or aggregation logic generates them, that logic is part of the replay input set.\n- **RNG:** terrain generation (L57) and disaggregation (L104) draw random numbers. NumPy's RNG policy (NEP 19) does not guarantee `Generator` output streams across releases, so \"from seed\" only reproduces if NumPy is pinned or the project owns the RNG.\n- **Floating point:** vectorized reductions can differ with CPU features, memory alignment, and thread count. The document does not say whether replay is bit-exact or tolerance-bounded.\n- **Code version:** neither the log header nor \"configuration\" carries the code version. A change to any force term silently invalidates existing logs.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:61,64,74,90"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No checkpoint or restore path for a \"persistent\" world",
+   "description": "L45 promises to \"persist state on shutdown.\" The concept calls the world \"persistent, ongoing\" and says it \"could be long-running\" (concept L36). But the startup sequence (L57) always creates populations \"from configured profiles,\" so a restart discards the world. Replay (L74) is the only reconstruction path, and it re-runs from tick 0. For a long-running world, recovery time is unbounded. Shutdown-only persistence also loses everything on a crash.\n\nThe document needs to specify what is persisted (full state, deltas, or nothing), the format, the cadence (periodic checkpoints versus shutdown only), and how restart resumes (checkpoint plus replay tail). The 320 initiative is for replay and analysis, not recovery, so it does not cover this.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:45,57"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The failure model is missing, though the principles promise one",
+   "description": "L45 says \"error states are first-class concerns with defined behavior,\" but no error state is enumerated and no behavior is defined. Missing cases:\n- **Exception mid-tick:** if the engine or NumPy fails after partial in-place mutation, \"tick as transaction\" (L39) is broken. The tick needs copy-on-write outputs, with a commit that only swaps references.\n- **NaN or inf:** unbounded forces (100-arch L93 notes integration instability) propagate silently through float arrays. The document needs validation and a defined response: halt, quarantine the entity, or fail the tick.\n- **Log write failure** (disk full) in step 5.\n- **Client socket and handshake errors.**\n- **Shutdown during a tick:** signal handling, drain order, and what gets persisted.\n\nCLAUDE.md requires explicit failures. This document names none.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:39,45,61-66"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Performance claims are unvalidated, and some are arithmetically unsupported",
+   "description": "- **Memory (L92):** \"Memory is never the constraint\" holds for the state arrays (500K \u2248 24MB, which implies float64 position and velocity). It does not hold for the working set of a NumPy pairwise force computation. At 50K agents with about 100 neighbors, that is 5M pairs per tick. One N\u00d7K\u00d73 float64 temporary is about 120MB, or about 1.2GB at 500K and about 29GB at 12M. Each pass over a 120MB temporary moves about 240MB, on the order of 10\u201350ms per pass on one core (my estimate, not benchmarked). A few passes exhaust the 50ms budget.\n- **The 10K\u201350K claim (L94)** is \"comfortable on a single CPU.\" That fails at the top of the range, and 10K is near budget with naive pairwise arrays. Chunking, float32, or preallocated `out=` buffers are needed. The 100-arch \"no dynamic allocation in the hot loop\" goal (100-arch L99) requires the same.\n- **Cores (L95):** \"2\u20134 cores saturated\" conflicts with L78. NumPy's elementwise loops are single-threaded. Releasing the GIL lets other Python threads run, but offloading the whole tick to one thread (L78) yields one core. Multi-core use needs intra-tick partitioning across threads or processes, which this document does not design.\n- **Precision:** memory figures imply float64 (48 bytes per entity), while egress (L108) assumes float32 positions. The document should state which precision the state uses.\n- **Unsourced claims:** \"the physics is similar\" (L97) and \"proven technology\" (L98) have no support. Short-range boid neighbor queries with irregular neighbor counts do not share structure with long-range N-body gravity or with fixed-field GPU particle systems.\n\nA benchmark of ms/tick at 10K and 50K on target hardware should gate acceptance of the tick-loop slice.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-95"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Overweight scope: scaling analysis belongs to deferred initiative 620",
+   "description": "The \"Entity scaling and multi-resolution simulation\" bullet is about 20 lines covering 4M+ multi-GPU partitioning and group-encounter strategies. The plan assigns multi-resolution, GPU, and multi-process work to 620 (plan L64\u201365) and says it is \"deliberately deferred \u2026 need not be designed proactively\" (plan L97\u201399). The section then says the architecture \"should not prescribe a solution\" (L110), so it contains analysis but no decisions.\n\nThe decisions this initiative actually needs are small: an entity tier field, subset-passing in the tick (see finding 1), a per-client culling hook, and a protocol type tag. Cut lines 92\u2013112 to a short constraints paragraph that names those hooks and links to 620 for the rest. The environment and seasonal slices (L122, L128) also belong to 500, and the logging slice (L126) to 320. See finding 13.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Initiative boundaries with 320 and 500 overlap",
+   "description": "The plan defines 320 (Logging & Replay, format \"TBD\") and 500 (Environment Layer) as separate initiatives that depend on 300.\n- **Logging:** this document includes \"logging infrastructure\" in scope (L21), decides the granularity and replay model (L74, L90), and lists a Logging and Replay slice (L126). Plan L75\u201377 says 320 cannot be designed until 300's state format and tick cycle exist. This document is making 320's format decision.\n- **Environment:** this document hosts the environment and defines its query interface (L72). It lists \"terrain generation, resource placement, and the read-only query interface\" (L122) and \"seasonal and temporal systems\" (L128) as its own slices. 500's scope is the same (plan L51\u201352).\n- **The plan itself is inconsistent:** plan L42\u201343 gives 300 \"terrain and environmental data management,\" which overlaps with 500's entry.\n\nDecide who owns the environment query interface (its consumer is the engine, 100-arch L47), the terrain data model, and the log format. Then move those slices out or record the ownership here.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:21,72,74,90,122,126,128"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The spatial index has several consumers and no owner",
+   "description": "One spatial structure serves four consumers:\n- the engine's neighbor queries (100-arch L45, L87)\n- per-client culling (L108)\n- aggregation and disaggregation triggers, \"when an observer approaches or another group intersects\" (L104)\n- environment queries (L72)\n\nThe document does not say who owns the index, when it is rebuilt (after commit, or inside the engine tick), or whether the server and engine share one instance. If the engine owns it, culling goes through engine internals, which leaks implementation into distribution. If the server owns it, the engine's query interface lives in server code, which makes the engine depend upward on the server. Culling also needs observer positions, which the server holds and the engine does not. Define the index as a server-owned service that the engine consumes through its interface, and state the rebuild point in the tick.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70,104,108"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Several stated properties have no mechanism behind them",
+   "description": "- **Region-aware entity management (L35)** is listed as a decision the design preserves. Nothing in the Envisioned State has a region concept. Entities have no region key, state is one global set of arrays, and nothing partitions.\n- **\"Between ticks, the world is consistent and queryable\" (L39):** the protocol is push-only (L68) and defines no query messages.\n- **\"Pure tick functions\" (L35):** only the engine's tick is pure. The server tick includes environment mutation, client I/O, and log writes (L61\u201366). The document should say so.\n- **Metrics (L88) and \"observable by default\" (L31):** no metrics, no tick-duration distribution, no per-client lag or buffer metric, and no endpoint or log channel.\n\nEach is a promise without a mechanism. Add the mechanism, even as a one-line interface, or remove the claim.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:35,39,88"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The server is a god component with too many responsibilities",
+   "description": "\"Orchestrator, not monolith\" (L41) limits what the server delegates to the engine. It does not limit what the server does itself. As specified, the server owns: process lifecycle and startup ordering, config loading and validation, the tick scheduler and pacing, the entity store (IDs, slots, lifecycle queue), environment hosting and update, client sessions, wire framing, culling, delta encoding, the slow-client policy, event logging, metrics, shutdown drain and persistence, and the degradation policy.\n\nThese are at least five concerns with different change rates. Entity-store and tick-loop changes will be coupled, which is exactly what the tier and aggregation work requires. Name internal seams in the document: a TickScheduler (pacing and overrun), an EntityStore (IDs, slots, lifecycle queue), an EnvironmentHost, a Distribution component (sessions, culling, framing, backpressure) that consumes committed snapshots, and a Recorder (logging, behind a hook).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:21,41,61-66"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Internet-facing WebSocket with no admission or input policy",
+   "description": "The concept says observers may be \"shared via Containment Failure social media channels\" (concept L61), so the server will be reachable by unknown clients. The document sets no connection cap, no per-client bandwidth or buffer limit (finding 6), no maximum inbound frame size, and no origin check. It also gives no rule for inbound frames. The protocol is push-only in v1 but \"should not preclude\" commands (L68), and the server still has to define how it treats unexpected client frames. \"Network binding\" appears in config (L86), but the default bind address is not stated. Default to localhost, and list the v1 admission constraints explicitly.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:68,82,86"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Several technology choices are left open that the bootstrap slice needs",
+   "description": "- **WebSocket library:** L53 says the WebSocket story is \"well-served by asyncio.\" asyncio is a runtime, not a WebSocket server, and no library is named. The choice determines backpressure, ping/pong, maximum frame size, and whether per-client send queues are needed.\n- **Config format:** L86 says \"YAML or similar.\" The concept specifies JSON for profiles (concept L88). That is two formats, and no config library or validation approach is named. L86 requires validation before startup but gives no schema mechanism.\n- **Log format:** deferred to 320 (plan L46\u201349) while L90 depends on it.\n- **Metrics system:** L88 requires metrics, and none is chosen.\n\nThese are decisions the bootstrap slice (L116) will make implicitly. Make them explicitly, or name the slice that decides each one.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:53,86,90"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Broken cross-document references and a stale revision date",
+   "description": "- **Frontmatter:** `dependsOn` (L9) lists `001-concept.migratory`. The concept on disk is `project-documents/user/project-guides/000-concept.migratory.md`. The 001 file is the initiative plan.\n- **Related Work:** the link at L132 has the same wrong filename. The `../project-guides/` directory part is correct, so only the filename is wrong.\n- **Sibling link:** 100-arch L122 links to `200-arch.world-server-foundation.md`. That matches neither this file's name nor its index (300-arch.worldserver-foundation.md). Fix both sides in the same change.\n- **Revision date:** dateUpdated (L11, 20260318) predates the sibling's 20260320 revision.\n\nSince `dependsOn` is machine-readable frontmatter, it should resolve.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  }
+ ]
+}

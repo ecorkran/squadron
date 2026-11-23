@@ -1,0 +1,75 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`build_profiles` in the server constructs `BehavioralProfile` with six fields and is never updated",
+   "description": "Task 2.1 adds two required fields to `BehavioralProfile`, and no task touches `src/migratory_server/simulation.py`. `build_profiles()` calls `BehavioralProfile(...)` with only the six existing fields. After 2.1 it raises `TypeError` for every configured profile.\n- `tests/test_simulation.py::TestBuildProfiles` (lines 27-46) fails. So does everything that goes through `SimulationManager`, `server.py:71` and `test_server*.py`.\n- Task 2.2 only updates test call sites. The \"search `tests/`\" catch-all does not reach `src/`, and the 2.2 verify step (`pytest tests/`) would fail with no step to fix it.\n- The 2.3 commit would therefore land a broken tree.\n- Both `test_simulation.py:57-65` and `test_entities.py:19-27` build profiles from a six-key `defaults` dict. They are not named in 2.2, though the catch-all does cover them.\n- `ProfileConfig` (`src/migratory_server/config.py:51-60`) has no herding fields. The plan has to decide what `build_profiles` passes. The minimum is to add `leadership_weight` and `momentum_weight` to `ProfileConfig` with a `0.0` default, pass them through, and add a test. The alternative is to hard-code `0.0` and say so.\n- Add a task that updates `build_profiles`, with a test, inside Section 2 before the 2.3 commit.",
+   "location": "src/migratory_server/simulation.py:18-25"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "`EntityManager.spawn_population` merges `AgentState` arrays by hand and will leave `leadership` the wrong length",
+   "description": "`spawn_population` concatenates `positions`, `velocities`, `accelerations` and `profile_indices` explicitly. The new `leadership` array is not merged, so `state.leadership` stays at its old length while the other arrays grow.\n- `AgentState.create(0, ...)` in `__init__` leaves `leadership` with shape `(0,)`, and spawning n entities leaves it at 0.\n- The first `LeadershipForce` call in the server then hits `IndexError` on `state.leadership[neighbors]`. It could also read the wrong rows after a `remove_agent`.\n- `spawn_entity` (line 73) goes through `add_agent`, so task 1.1 covers that path. `spawn_population` is not covered.\n- Task 1.1 is \"done\" and its tests pass while the server state is silently inconsistent.\n- Add a task to concatenate `batch.leadership` in `spawn_population`. Add a `test_entities.py` assertion that `leadership.shape == (count,)` after `spawn_population`, `spawn_entity` and `remove_entity`. Place it in Section 1, before the 1.3 commit.\n- Task 1.2 (line 45) only checks `conftest.py`, `test_forces.py` and `test_tick.py`. It should also cover `test_entities.py`.",
+   "location": "src/migratory_server/entities.py:135-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"80 existing tests\" figure is wrong for `pytest tests/`",
+   "description": "Lines 7 and 173 say 80 existing tests. `tests/` has about 201 `def test_` functions across 14 files.\n- The 80 matches only the engine test files: state 16, forces 11, tick 8, spatial 8, profile 8, flocking 23 and integration 6.\n- Task 6.1 runs `pytest tests/` and expects \"existing 80 + new\". The server, config, entities, simulation and main tests are included in that run and are not counted.\n- Reword the claim as \"all existing tests plus new herding tests pass\". This matters because the server tests are the ones that break (the two FAIL findings).",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7,173"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 3.1 and 4.1 don't say how `neighbor_lists` is indexed",
+   "description": "The existing forces index `neighbor_lists[list_idx]` by position in the active list. They do not index by agent id. Tasks 3.1 and 4.1 say only \"for each active agent\" and then `neighbors[neighbors != agent_idx]`, without saying where `neighbors` comes from.\n- A junior implementer can easily index by `agent_idx`. That passes the `active_indices=None` tests and fails with a wrong result or `IndexError` once `active_indices` is a subset.\n- The 4.2 and 3.2 \"active_indices isolation\" tests need `neighbor_lists` aligned to the active subset. The tasks do not say so.\n- Add a step to enumerate `eval_indices` (as in `flocking.py:25-31`) and index `neighbor_lists[list_idx]`. Specify the 4.2 isolation test's `neighbor_lists` shape.",
+   "location": "src/migratory/engine/flocking.py:30-31"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks, and 2.3 sits at a broken point",
+   "description": "`**Commit**:` markers must be plain lines, never checkboxes. Tasks 1.3, 2.3, 3.3, 4.3, 5.4 and 6.3 are numbered checkbox tasks with sub-checkboxes.\n- The 2.3 commit would capture a state where `build_profiles` fails (see the first FAIL finding), so it is not a tested working point.\n- 1.3 and 2.3 could be merged into one marker after Section 2 passes. Together they are a single \"extend the data model\" step.\n- 6.3 `docs:` commit with \"add any remaining changes\" has nothing to commit if every earlier commit happened. Drop it, or make it a plain marker only if there are real changes.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48,73,103,134,164,180"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tasks 5.2 and 5.3 have weak or undefined assertions",
+   "description": "- 5.2 says \"mean heading has positive x-component\" but doesn't define whether that is the mean of unit headings or the mean velocity. It doesn't say to compute it from `state.velocities` after skipping near-zero speeds.\n- 5.3 accepts either \"variance lower OR eastward component higher\". That is an OR of two metrics, so it can pass on noise. \"Heading variance\" is not defined, for example circular variance or the variance of unit vectors.\n- The slice walkthrough (lines 468-476) expects both lower variance and eastward bias, and no directional preference for flocking. Assert the stronger conditions, or pick a single defined metric.\n- No fallback is given if the assertion fails with the demo profile. `MomentumForce` (`velocity * weight`) reinforces each agent's own random heading and works against convergence. Say to tune the test setup (leader count or ticks) rather than the forces.\n- The 5.2 and 5.3 setups are nearly identical. Use one shared helper, as `_run_flock` does in `test_flocking.py:324`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 5.1 overlaps 5.2 and has no real assertion",
+   "description": "5.1 runs five forces for 10 steps and \"confirms forces interact correctly\" with no stated assertion. 5.2 already runs the same five-force `tick()` for 300 ticks and asserts on the result. Fold the \"runs without error\" check into 5.2, as `TestFlockingIntegration` does for flocking, or give 5.1 a concrete assertion such as finite values and agents moving. Section 6 is also redundant: 6.1 repeats every earlier verify step, and 6.2 repeats the protocol checks already in 3.1, 3.2, 4.1 and 4.2. Merge them into one verification step.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No task enforces or tests the \"no nested Python loops\" requirement",
+   "description": "The slice's Technical Requirements say both forces are \"vectorized within each agent's neighborhood \u2014 no nested Python loops\". Tasks 3.1 and 4.1 describe a per-agent loop. That matches `flocking.py` and is acceptable for the outer loop. But 4.1 does not say to compute the weighted average with array operations, for example `(velocities[nbrs] * lead[:, None]).sum(0) / lead.sum()`. The pseudocode `sum(velocity[i] * leadership[i])` invites a Python inner loop. Add one line to 4.1 requiring the weighted average to use array operations on the neighbor slice.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:394-396"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`AgentState.__init__` signature change has no callers listed and no docstring update",
+   "description": "Task 1.1 says to update `__init__` to \"accept and store `leadership`\". It does not say whether the parameter is required or optional, or where it goes in the argument order. The only direct caller is `create()` (confirmed: no `AgentState(` calls in `src/` or `tests/`), so required is safe. The class docstring (lines 15-20) lists the arrays and should add `leadership`. Specify \"required, last positional\" to avoid ambiguity.",
+   "location": "src/migratory/engine/state.py:22-32"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Coverage of slice success criteria",
+   "description": "Each functional success criterion maps to a task:\n- Protocol conformance: 3.1 and 4.1.\n- No-neighbor and zero-leadership cases: 4.2.\n- Stationary agent: 3.2.\n- `active_indices` isolation: 3.2 and 4.2.\n- Directional bias with leaders: 5.2.\n- Profile differentiation: 5.3.\n- Self-exclusion: 4.2.\n- Backward-incompatible test updates: 2.2.\n\nNo load-test NFR is restated in the slice, so no `tests/load/` or CI task is needed. Test count is proportionate: one task file, six sections, about 20 tests. Task 1.2's claim that `conftest.py`, `test_forces.py` and `test_tick.py` use `AgentState.create()` is accurate.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:381-405"
+  }
+ ]
+}

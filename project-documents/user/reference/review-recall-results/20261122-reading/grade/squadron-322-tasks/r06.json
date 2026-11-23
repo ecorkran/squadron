@@ -1,0 +1,124 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13 relies on a result-discovery surface that does not exist, and its fallback makes the non-empty guarantee impossible",
+   "description": "T13 (task lines 200-201) says to \"reuse 320's existing result-discovery surface\", or else to \"scope this task to the store-recorded samples only \u2026 (ask the Project Manager\u2026)\". 320 has no such surface:\n- `capture.py` only exposes `resolve_target`, which resolves a single target given as a path or a bare index.\n- `_REVIEWS_SUBDIR` is a private constant.\n\nThe fallback can't work either. The store holds only samples, so by definition it never holds an *unsampled* result. Following the fallback produces a function that always returns `[]`. That breaks:\n- the design's testable guarantee (slice line 207, SC line 269);\n- T13's own success line (206);\n- T14's non-empty test (215).\n\nWhat the task needs to state instead:\n- Add a scan of `project-documents/user/reviews/*` under `cwd` that reads frontmatter.\n- Derive each file's `JudgeConfigId` with `derive_judge_config_id`.\n- Exclude files whose `derive_result_ref(...).content_hash` already appears in a stored `SampleVerdict.result_ref`.\n\nT13 also never says where the \"pruned review file\" case comes from, although T14 (line 218) tests it. `GraduatedConfig` references no review files, so \"gone since graduation\" can only mean a file that disappears between discovery and read. The implementation task needs to define that.",
+   "location": "src/squadron/metrology/capture.py:35-130"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The `sq metrology` process never loads the template registry, so every hash is `None` and GRADUATE is unreachable",
+   "description": "Both `_template_content_hash` (`identity.py:309-313`) and the planned `read_current_thresholds` (T7, line 122) call `get_template`. That looks names up in the in-memory `_TEMPLATES` dict (`src/squadron/review/templates/__init__.py:155-165`), which is only filled by `load_all_templates()`.\n\n`load_all_templates()` is only called from:\n- `cli/commands/review.py`;\n- `pipeline/actions/review.py`;\n- `pipeline/classification.py` and `pipeline/loader.py`.\n\nIt is never called from `cli/commands/metrology.py` or `cli/app.py`. The existing test `tests/metrology/test_result_ref.py:103-113` confirms this: it asserts `template_content_hash is None` for `judge.slice-vs-arch`, which is a real built-in template (`data/templates/judge-slice-vs-arch.yaml:1`).\n\nConsequences with the plan as written:\n- **Capture:** every CLI-captured sample is unversioned.\n- **`recommend`:** every cell is `INSUFFICIENT_EVIDENCE` (T7 band 2) and `current` is always `None`.\n- **`graduate`:** always refuses.\n- **Walkthrough:** steps 3, 6 and 7 in T17 can't pass.\n\nNo task adds registry loading. Adding it would also break `test_result_ref.py:113`, and the plan has to update that test.",
+   "location": "src/squadron/metrology/identity.py:298-313"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "T11 tells `models.py` to import `GraduatedConfig` from `calibration_models.py`, which is a circular import",
+   "description": "T3 (line 58, line 64) places `GraduatedConfig` in `calibration_models.py`. That module must import `JudgeConfigId` from `models.py` and `GroupKey`/`ExclusionSummary` from `report_models.py`, and `report_models.py` itself imports `models.py`.\n\nT11 (line 175) then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`. That means `models.py` \u2192 `calibration_models.py` \u2192 `models.py`, and importing `squadron.metrology.models` fails with ImportError. Every metrology module and test would break.\n\nThe task has to choose a layout that has no import cycle. Options:\n- define `GraduatedConfig` and `EvidenceSnapshot` in `models.py`;\n- or keep the envelope payload untyped and validate it in `graduation.py`.",
+   "location": "src/squadron/metrology/models.py:100-111"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T7's precedence list contradicts its own instruction about the TIGHTEN band, and leaves unversioned + low match rate undefined",
+   "description": "T7's numbered list (lines 116-120) checks `n < floor \u2192 INSUFFICIENT_EVIDENCE` first. Bullet 4 and line 121 then require a below-floor, low-match cell to reach `TIGHTEN`. Implemented literally in the listed order, `TIGHTEN` can never fire below the floor. That is exactly the regression T8 (line 134) tests for.\n\nThe list should be reordered:\n1. `match_rate <= tighten_rate` \u2192 `TIGHTEN`\n2. `n < floor` or unversioned \u2192 `INSUFFICIENT_EVIDENCE`\n3. `match_rate >= graduate_rate` \u2192 `GRADUATE`\n4. otherwise \u2192 `HOLD`\n\nThe task also never says whether an unversioned, low-match cell gives `TIGHTEN` or `INSUFFICIENT_EVIDENCE`. Under the design's asymmetry it should be `TIGHTEN`. T8 doesn't test this case.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Malformed `judge:` block: the Coverage Check claims it is handled, but `resolve_thresholds` raises",
+   "description": "The design's failure-mode row (slice line 242) requires that a non-numeric floor be \"flagged, not silently defaulted\", with a WARNING. The Coverage Check (line 287) says this is \"inherited from `resolve_thresholds`, exercised in T8\". Both parts are wrong:\n- `resolve_thresholds` calls `float(pass_floor)` with no guard. A non-numeric value raises `ValueError`, which would crash `recommend_thresholds` and the CLI. Nothing catches it.\n- T8 has no malformed-block test.\n- `ThresholdTarget` (T3) has no field for flagging the target.\n\nT7 should catch `ValueError`/`TypeError` in `read_current_thresholds`, log a WARNING naming the template, and mark the target. T8 should test it.",
+   "location": "src/squadron/pipeline/actions/judge.py:49-57"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T17 walkthrough step 5 can't show the self-defeating-loop fix",
+   "description": "`agreement_report` groups on each sample's *stored* `judge_config` (`report.py:204`, `report.py:226`). It never recomputes the hash. So re-running `report agreement` after a template edit always shows the same cell and the same n:\n- the first half of step 5 (line 265) passes with or without T1;\n- the second half (\"edit `system_prompt` \u2192 new `JudgeConfigId`, evidence separates\") will **not** happen just by re-running the report.\n\nThe step has to capture a new sample after each edit. Then:\n- after a threshold-only edit, the new sample joins the existing cell (n+1);\n- after a prompt edit, it opens a new cell.\n\nThe same misreading is behind the claim in Context line 18 and T1 that historical records are re-keyed. Stored records keep their old hash. What actually happens is that new captures split away from them.",
+   "location": "src/squadron/metrology/report.py:199-236"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation is missing from T9's note content and from every test",
+   "description": "SC line 270 requires that \"the runtime-drawn-model limitation is stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\". Design line 201 says what the note must say for 180-pool steps.\n\n- T9 (line 147) only requires the template+model pairing text.\n- T10 (line 161) and T16 (line 243) only check that the note is non-empty.\n- T16's `--json` check only parses the output back into the model; it doesn't assert the note is there.\n\nT9 should require the runtime-pool sentence. T10 or T16 should assert that sentence appears in both the table output and the `--json` output.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`graduate` doesn't say which cell to use when several cells share template/model/level",
+   "description": "Agreement cells are keyed on the full `(name, model, hash)` (`report.py:199-204`). After T1, older samples carry the pre-narrowing or `None` hash and newer ones carry the narrowed hash. So `--template T --model M --level L` can match several cells.\n\nT15 (line 230) only says \"filtered to this template/model/level\". It should require the cell whose hash equals `_template_content_hash(T)` right now. It should also say what happens when no cell matches, and when several do. T16 should test this.\n\nT15 also doesn't say that `--template` takes the registry name, which is dotted (`judge.tasks-vs-slice`, `data/templates/judge-tasks-vs-slice.yaml:1`), not the hyphenated filename used in design walkthrough step 6.",
+   "location": "src/squadron/metrology/report.py:199-204"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The \"update in place\" re-graduate can't be built from T11's API",
+   "description": "- `find_graduation` (T11, line 177) returns `GraduatedConfig | None`, with no record id.\n- Records are files named by id (`store.py:100-101`).\n- T11 says `write_graduation` returns a \"generated\" id.\n\nSo T15 (line 230) has no way to overwrite the existing file. A junior implementer would write a second record, or delete and rewrite. If that is killed partway, the store is left with two records, or none. No command removes duplicates, and `find_graduation` would then return whichever one comes first.\n\nFix: give the record a deterministic id built from `(JudgeConfigId, artifact_level)`, so `_write_atomic` overwrites it atomically. A rerun then always converges.\n\nT11 also gives two locations for `write_graduation`: as a `graduation.py` function, and as a `MetrologyStore` method. It should pick one.",
+   "location": "src/squadron/metrology/store.py:100-142"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Offer-rate rounding is unspecified and can break the non-empty guarantee",
+   "description": "T13 (line 202) says \"select a `rate` fraction\", and T14 (line 219) expects 2 of 4 at 0.5. With floor rounding, `rate=0.1` over 3 unsampled results gives 0 offers. That contradicts the design guarantee (slice line 207) that any graduated config with unsampled results gets a non-empty offer set.\n\nThe task needs to state:\n- the rounding rule (ceil, or at least 1 when there are matches and `rate > 0`);\n- whether selection is deterministic, so tests are stable.",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "T5 gives no defaults for the three new keys",
+   "description": "T5 (lines 91-93) and T6 (line 104) say \"correct types and defaults\", but neither the task nor the design gives the default values for `graduate_match_rate`, `tighten_match_rate` or `residual_sample_rate`. A junior implementer has to invent the calibration policy. T5 should state the values (for example, 0.9, 0.6 and 0.1) and the valid ranges.",
+   "location": "src/squadron/config/keys.py:144-160"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "CLI output requirements from the failure-mode table are missing from T15/T16",
+   "description": "The design requires these signals; T15 and T16 don't mention them:\n- **Empty store:** `recommend` prints a \"no evidence\" line and still states `floor_applied`, exiting 0 (slice line 238). T15 and T16 have no empty-store case.\n- **Exhausted config:** `offers` prints a \"no offers due\" line (slice lines 229, 245). T15 (line 231) only covers the lapse line.\n- **Unversioned cells:** `recommend` flags them as unversioned (slice line 240).\n\nAlso, `offers --project` is in the contract (T15, line 231), but `GraduatedConfig` has no project field. The task should say what `--project` filters on.",
+   "location": "src/squadron/cli/commands/metrology.py:276-313"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "A commit after every task, with implementation committed before its tests; the plan is heavier than a 3/5 slice needs",
+   "description": "All 17 tasks end with a `**Commit:**` line. Each odd-numbered implementation task (T1, T3, T5, \u2026) commits before its tests exist. The rubric asks for commit markers at working, tested points, not after every task.\n\nSuggested changes:\n- Merge each implementation/test pair into one commit point (about 8 commits).\n- Fold T5 and T6 into one small task.\n- Merge `test_calibration.py` with `test_calibration_recommend.py`, and `test_graduation_registry.py` with `test_graduation_offers.py`. Six new test files for this slice is more than the success criteria need.",
+   "location": "unverified"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "T2 targets the wrong test file, and its \"missing template\" test already exists",
+   "description": "`tests/metrology/test_identity.py` covers project identity only. The judge-config tests are in `test_result_ref.py` (`TestJudgeConfigId`), and its lines 104-113 already assert `None` for a template that doesn't resolve.\n\nThe T2 hash tests need fixtures that call `register_template`/`clear_registry` (or patch `get_template`), because the registry is empty during tests.",
+   "location": "tests/metrology/test_result_ref.py:103-113"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The Context Summary's order line uses the wrong task numbers",
+   "description": "Line 25 puts \"graduation + offers (T9-T12)\" and \"CLI shells + config keys (T13-T16)\". The real tasks are:\n- graduation: T11-T14;\n- config keys: T5/T6;\n- CLI: T15/T16.",
+   "location": "unverified"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The `recommend_thresholds` signature differs from the design",
+   "description": "The design (slice line 83) takes `current: ThresholdSnapshot`, a type it never defines. T9 drops it and takes `graduate_rate`/`tighten_rate`, reading thresholds per cell instead. This is a reasonable improvement, but it isn't recorded as a deliberate deviation.",
+   "location": "unverified"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Draining residual offers is still subject to `metrology.sample_budget`",
+   "description": "`record_sample` refuses to write once a project reaches `sample_budget` (default 20). The non-empty offer guarantee holds, but once the budget is used up the offers can't be drained, so a graduated judge's agreement data stops growing. No task records this interaction.",
+   "location": "src/squadron/metrology/capture.py:214-224"
+  }
+ ]
+}

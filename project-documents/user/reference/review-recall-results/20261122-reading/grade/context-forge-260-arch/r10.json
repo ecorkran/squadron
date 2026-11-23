@@ -1,0 +1,82 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "An interrupted adoption reads as \"already planned\" and cannot resume",
+   "description": "Line 76 claims \"An adopted project lands here, so no completion state is needed.\" That holds only for a finished adoption. Step 5 (line 91) writes concept, then architecture, then the existing-state slice plan, and \"already planned\" fires on any one architecture doc (`packages/core/src/detection/planningArtifacts.ts:13,32`).\n\nIf the session stops after the architecture is written:\n- **Detection** reports \"already planned\".\n- **`sq onboard`** step 2 (line 88) says adoption doesn't apply.\n- **`cf next`** navigates it \"like any planned project\" (line 104), which means ordinary slice planning with no retroactive entries.\n\nThat is the failure the Motivation describes (line 35). The original contract had \"a re-run resumes from whatever artifacts exist\" (line 136); the amendment drops it with no replacement.\n\nThis is fixable inside the files-only decision: define adoption-incomplete from files (for example, a derived architecture with no plan carrying a retroactive entry) and expose it as a fact or fourth outcome. It needs deciding before slice 271 hands the three-outcome contract to squadron.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:76"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`/cf:onboard` on a brownfield repo still runs the greenfield concept conversation",
+   "description": "Line 69 says the entry points contain \"the concept conversation for greenfield\" and \"have no brownfield path\". The shipped recipe has no branch: Step 3 hands off to `cf build` unconditionally (`packages/cli/commands/cf/onboard.md:43-51`). Once `cf build` is pure (line 27), a brownfield repo gets `cf init`'s one line (line 81) and then the Phase 0 \"describe what you want to build\" prompt. That is the behaviour line 18 exists to remove.\n\nThe document never says the recipe must stop when the report says brownfield. It also leaves two things open:\n- Whether `sq onboard` handles greenfield or defers to `/cf:onboard` (line 88 says only \"adoption doesn't apply\").\n- What \"stays the entry point for now\" (line 25) becomes later.\n\nLine 69 also contradicts line 137 (\"the prompt must open the conversation itself, since onboard no longer does\").",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:69"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The override is now one-way, but threshold safety still leans on it",
+   "description": "Line 133 says \"the override is the safety valve\" for threshold misfires. The amendment keeps only the opt-out (lines 28, 79), which forces greenfield.\n\n- **A false greenfield has no remedy.** Examples are a language outside `SOURCE_EXTENSIONS`, or code under `build/`, `out/` or `vendor/` (`packages/core/src/detection/sourceVolume.ts:19-29`). Under line 88 it now blocks adoption outright, where line 133 still prices it as \"wastes a conversation\".\n- **The walk's failure path names a deleted override.** The 20,000-entry bail-out throws with a remedy pointing at `adoption.state in_progress` (`sourceVolume.ts:37-39`), and the report has no \"undetermined\" outcome.\n- **The opt-out is hidden in the outcome.** It is reported as plain greenfield (line 75), so `sq onboard` cannot distinguish \"empty repo\" from \"opted out while adoption was parked\" or tell the user how to undo it.\n\nThe document should state whether the outcome is advisory to `sq onboard` (a force flag on squadron's side, nothing stored) and put the reason in the report.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Derived architecture and the review gate: the known #132 blocker is not addressed",
+   "description": "Line 98 makes the derived architecture \"an ordinary architecture document\". The retroactive rule (line 100) covers slice plan entries only, and the code skip explicitly excludes `preSlicePlan` (`packages/core/src/introspection/reviewGate.ts:376`).\n\nThe 265 verification runs recorded that with `workflow.review_enabled` on, `cf next` stops at \"Review required before creating the slice plan\" with `suggestedCommand: null`, on both runs (`project-documents/user/analysis/260-analysis.adoption-verification-runs.md`, #132). Lines 40 and 104 still assert that `cf next` points at the first new slice.\n\nThe flow writes the architecture and the plan in one step (line 91) with no review between. The document must choose: an arch review step inside the `sq onboard` flow, or an explicit gate rule for derived architectures. The amended design also names no consumer for the \"derived\" marker.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:98"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "cf rediscovers a path its caller already holds, by squadron's filename convention",
+   "description": "Squadron writes the comprehension doc in step 3 (line 89). In step 4 it asks cf for the prompt, and cf scans for `{n}-analysis.codebase-comprehension.md`, taking the highest index (`packages/core/src/detection/comprehensionAnalysis.ts:57-65`). Three problems follow:\n\n- **Coupling.** This is the one remaining piece of squadron knowledge in cf, which undercuts line 50. Taking the path as an argument to prompt delivery removes it.\n- **Wrong or missing doc.** Highest index is not the doc just written; a failed write silently selects a stale one. The runs already found squadron and cf disagreeing on the project root in a monorepo subfolder (squadron#264), so cf may find nothing.\n- **Not-found is undefined.** Line 90 assumes the doc exists. The only stated fallback is the superseded \"prompt works from the repo alone\" (line 136), which is the CF-only path lines 31 and 129 drop. With squadron as the only path, a missing doc should be an error.\n\nLine 119 also adds \"squadron 361's provenance block\" to the lookup; line 50 does not, and its role is never stated.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:119"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The prompt-delivery primitive is a second prompt-assembly path",
+   "description": "Line 136 defers \"how the profile's variables are delivered\" to slice 271. cf already has that mechanism: `cf build --it <instruction>` and `context_build` select a profile by explicit instruction (`packages/cli/src/commands/build.ts:34-36,76-77`). An explicit instruction involves no detection, no state write and no automatic swap, so it does not conflict with line 27.\n\nCut the separate command and MCP tool. Define prompt delivery as an explicit-instruction build with the comprehension path as input. If the PM decision is meant to forbid that as well, say so and give the reason, because the alternative reimplements variable resolution and profile filtering.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The guide dependency names the wrong minimum and gates on the wrong thing",
+   "description": "Line 159 still requires v0.22.2 for \"cf releases that select the brownfield profile\", which no longer happens. The guide prompts shipped so far tell the agent to run `cf build`, branch on raw probe JSON, and stop when the Adoption Facts section is missing (slice plan notes, `260-slices.brownfield-adoption.md:121`).\n\nAfter the rework, delivering such a prompt gives the agent instructions it cannot follow. The fail-fast rule moved to the primitive (line 137) checks only for a missing profile, not an incompatible one. The real minimum is the unreleased guide version that slice 272 coordinates. It is absent from Dependencies, and the primitive needs a version gate.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:159"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The document is not \"rewritten to match\" the amendment",
+   "description": "Line 24 says the sections below are rewritten. Several are not:\n\n- **Current State (lines 57-63)** describes the pre-initiative baseline. It lists three hand-written recipes, though `onboard.md` is now generated. It says \"the capability probe does not exist yet\", though the runs used `sq probe --json` on squadron 0.23.7. It never describes the shipped state the rework has to remove: `adoption.state`, the build resolver, `adoptionNavigation.ts`, the probe code.\n- **Anticipated Slices (lines 145-153)** is the original plan (\"persisted adoption state\", \"reading the probe\", \"adoption steps while in progress\"), under the forward-looking heading and the lead-in \"In expected order\".\n- **Split table.** Line 120 says \"on both paths\", though only one path remains. Line 123 lists \"CI mapping\", which appears nowhere else.\n- **Related Work.** Line 168 says \"the normal path\". Line 169 links a review file that does not exist in the repository, so \"all findings are addressed\" cannot be checked.\n- **Superseded contracts.** Lines 135-136 carry them inline at several times the length of the live text.\n- **Frontmatter.** `relatedSlices: []` is empty although slices 260-274 exist.\n\nMove the history to the slice plan or an appendix, and rewrite Current State as the shipped 0.19.x behaviour.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"Exactly one writer per run\" for the concept has no mechanism",
+   "description": "The row names two possible writers (squadron 363 or the adoption prompt). Step 5 (line 91) assumes the prompt's agent drafts. The amendment removes the probe branching that used to choose. The document does not say who decides, or whether the prompt still detects 363's provenance block and confirms instead of drafting.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The source-volume floor is an optimization leaking into the cross-repo contract",
+   "description": "The early stop suits `cf next`'s hot path. In the report it yields \"2078+ lines\" for a 15,908-line crate (verification runs). That is no use to squadron when sizing the paid graph build it must ask the PM about (line 89). The one-shot report could count fully within the entry bound.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "\"Set only by the adoption flow\" is asserted, not enforced",
+   "description": "The marker is text in a markdown plan. The guards are the no-design/no-task-file rule and index order. With no stored adoption state, nothing freezes the retroactive set after adoption. Work done without a design or task file can be marked retroactive at a low index and skip the code-review gate. Either accept this in writing or bound the set (for example, against the derived architecture's date).",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:100"
+  }
+ ]
+}

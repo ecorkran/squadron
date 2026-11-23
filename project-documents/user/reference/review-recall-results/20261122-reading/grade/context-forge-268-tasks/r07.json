@@ -1,0 +1,82 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "3.2a cannot pass: core tests still assert the rendered Adoption Facts and Comprehension line",
+   "description": "3.1 stops rendering `Comprehension:` and 3.2 stops rendering section 3.4. The integrator still fills both fields until 3.3. 3.2a then requires `pnpm --filter @context-forge/core test` to pass (task line 100), but these tests still expect the rendered text:\n- `pipeline-integration.test.ts:159-160` expects the probe JSON and WARNING line. They live inside the facts section, so 3.2 removes them.\n- `pipeline-integration.test.ts:171-172` expects `- Squadron: unavailable\u2026`, which is also facts text.\n- `pipeline-integration.test.ts:184` expects `Comprehension: ${COMPREHENSION}`, which 3.1 removes.\n- `adoptionBuild.integration.test.ts:99-103`: `expectBrownfield` asserts `toContain('### Adoption Facts')`. Cases 3, 4, 5b, 6, 8, 9b, 9c, 11 and 13 use it.\n\n`mcp-server/tests/integration/adoptionParity.test.ts:116` also asserts `PROBE_JSON` and `Comprehension:`. It fails as soon as core `dist` is rebuilt, so 3.2a commits a suite that is red. The targeted checks in 3.1 and 3.2 (`test SectionBuilder`, `test ContextTemplateEngine`) don't run any of these files, so the failure first shows at 3.2a. Fix: either delete these cases inside 3.1/3.2, or drop the 3.2a commit and let 3.1\u20133.2 commit together with 3.3\u20133.6 at 3.7.",
+   "location": "packages/core/tests/pipeline-integration.test.ts:154-189"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "3.7 cannot pass: `adoptionBuild.integration.test.ts` survives the seam removal until 4.1",
+   "description": "After 3.3, `createContextPipeline` no longer wires the resolver. This test still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`. JS ignores the extra argument, and core typecheck covers `src/**` only (`packages/core/tsconfig.json:20`), so nothing flags the call. It then expects behavior that is gone:\n- the brownfield prompt plus facts (cases 3, 4, 5b, 6, 8, 9b, 9c, 11, 13)\n- `in_progress` written by the build (cases 3, 9c)\n- an `AdoptionError` (case 12)\n\n3.7 runs `pnpm -r test` and requires it to pass (task lines 132-133). The plan deletes this file only in 4.1 (line 144). The 3.3 test step lists `pipeline-integration` but not this file. Fix: delete `adoptionBuild.integration.test.ts` in 3.3, next to the other tests of removed behavior.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:63-74"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain lines",
+   "description": "2.3 (`- [ ] **2.3 Commit**`) and 3.2a are checkbox tasks. 3.7, 4.1\u20134.4 and 5.1 end with `- [ ] Commit: \u2026` checkbox sub-items (lines 101, 134, 148, 155, 163, 169, 186). Commit markers should be plain `**Commit**:` lines, never checkboxes. Where they sit is mostly right (after verified steps), apart from the two broken points in the FAIL findings above.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `sq` marker assertion in 5.1 can pass even if the fake `sq` never works",
+   "description": "After 4.4, nothing on the build path spawns `sq`. So \"the marker does not exist\" holds whether or not the fake script is executable, on `PATH`, or writes to the right path. The mutation check on line 185 only proves the snapshot assertion can fail. Add a self-check in `beforeAll`: run `sq` once via `spawnSync`, assert the marker appears, then delete it. Without that, the \"spawns no `sq`\" criterion (slice line 188) is never really tested.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:177"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "4.3 is unclear about the `adoptionState.test.ts` round-trip case and drops read coverage",
+   "description": "\"Delete the write cases and keep the read cases\" doesn't fit `it.each(ADOPTION_STATES)('round-trips %j')`. It uses `writeAdoptionState` to seed the file, then asserts on `readAdoptionState`. Deleting it leaves the read of every valid non-empty value untested. Navigation (kept until 270) depends on that read. Keeping it breaks once the writer is gone. The task should say: rewrite this case to seed `.context-forge.toml` with `writeFile` (as lines 51 and 60 already do), and delete only lines 43-48.",
+   "location": "packages/core/tests/adoption/adoptionState.test.ts:38-41"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "5.1 omits two details a junior will need",
+   "description": "- The stored fixture project is `instruction: \"implementation\"` / Phase 6. The CLI, `context_build` and `template_preview` runs must pass `instruction: CONCEPT_PHASE`, as the deleted test did at `adoptionParity.test.ts:95,108`. Without it, the concept-prompt assertion fails with no clear reason.\n- `writeAdoptionState` is deleted in 4.3, before 5.1. The task should say how to seed `adoption.state = \"in_progress\"`: `new ConfigManager(dir).set('adoption.state', 'in_progress', 'project')` or a raw TOML write.",
+   "location": "packages/mcp-server/tests/fixtures/integration-project/projects.json:8-9"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "3.3 names CoreServiceFactory test cases that don't exist",
+   "description": "3.3 says to \"delete the options and adoption-wiring cases\" in `CoreServiceFactory.test.ts`. There are none. All six calls (lines 29, 35, 59, 99, 119, 141) pass `{ adoptionStateWrites: 'read-only' }` only as a required argument. The only work is updating those calls to one argument.",
+   "location": "packages/core/tests/services/CoreServiceFactory.test.ts:27-146"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The \"server setup\" caller in 3.6 needs no change; the real caller is the test helper",
+   "description": "`registerContextTools(server)` in `src/index.ts` already passes no options. The caller that does need changing is `tests/helpers/integrationSetup.ts:41`. Its `createIntegrationClient(options?: ContextToolOptions)` signature on line 38 must also lose the parameter. 3.6 only says to drop \"the `squadronProbe` option and its doc comment\" there.",
+   "location": "packages/mcp-server/src/index.ts:40"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Typecheck covers `src/` only, so the final greps should include tests",
+   "description": "Every package's `typecheck` uses a `tsconfig.json` limited to `src/**`, so stale `import type` lines and extra fields in test files compile and run silently. 4.2 and 4.4 already grep `packages/*/tests`. The 6.2 grep (line 198) checks `packages/*/src` only. Adding `packages/*/tests` there would catch any leftover `adoptionFacts`/`fileComprehension` test data that still passes without testing anything.",
+   "location": "packages/core/tsconfig.json:20"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "2.2 uses `git status` to show golden files are unchanged while they are still untracked",
+   "description": "Before the 2.3 commit, the golden files are untracked, so `git status` lists them as `??` after both runs and can't show \"unchanged\". Stage them first (`git add`), or compare hashes between runs.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:76"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The 6.2 export audit is narrower than the design's rule",
+   "description": "The audit asks for a consumer \"listed under the design's Interfaces Required\". `AdoptionError`, `readAdoptionState` and `ADOPTION_STATES` aren't listed there, but they must stay: detection modules throw the error, and navigation reads the state. The final \"only deleted code used\" test keeps them anyway. Restating the rule as the slice's Technical Requirement (slice line 196) would remove the ambiguity.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+  }
+ ]
+}

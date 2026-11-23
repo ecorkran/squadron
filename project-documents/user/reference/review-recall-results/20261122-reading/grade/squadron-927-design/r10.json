@@ -1,0 +1,96 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "D6's premise is false, and its fix would make every derived-verdict artifact claim its findings weren't parsed",
+   "description": "D6 says \"A PASS parsed with `fallback_used=True` (verdict read, findings not)\" can receive the synthetic finding and lose the not-parsed notice. The parser never produces that state.\n- `fallback_used=True` is set in exactly two branches. One is the mismatch branch (`src/squadron/review/parsers.py:1023-1025`), which only fires for CONCERNS or FAIL with **no** findings. The other is the derived branch (`parsers.py:972-993`), which requires findings to be **present**.\n- So a PASS with `fallback_used=True` always has findings. Its verdict was derived from them (`tests/review/test_persistence.py:656-667` is that case).\n- That artifact already renders through the `if result.findings` branch (`persistence.py:517`). The not-parsed notice never showed for it, so the cap can't hide anything.\n\nThe fix is the real problem. Rendering the `fallback_used` notice \"whenever `fallback_used` is set, after any findings\" means every derived-verdict artifact, capped or not, would append \"A verdict of PASS was parsed, but no findings could be extracted\" (`persistence.py:535-538`) right under the findings that were extracted. The same change to `_display_terminal` (`cli/commands/review.py:187-189`) would print \"verdict parsed, findings did not\" for those reviews. That turns a shipped 919 output into a false statement, which is the class of bug this slice exists to remove. SC7 (line 292) tests a state that can't occur.\n\n**Fix:** cut D6, SC7, and the D6 rows in the component table (lines 74\u201375). The capped derived PASS needs no render change.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D12's \"last model\" can't be read from a first-seen, deduplicated list",
+   "description": "- State Management (line 105) and D8 (line 174) store `answering_models` as distinct values in first-seen order.\n- The Data Flow (line 92) and D12 then set `result.model` to the **last** entry and call it \"the one that wrote the review\".\n\nTake a run where turn 1 is answered by A, a fallback answers with B, and the #92 recovery turn is answered by A again. The list is `[A, B]`, so `aiModel` becomes B even though A wrote the review. The substitution check and the WARNING then run against the wrong model.\n\n**Fix:** track the final answering model separately (for example, the last top-level model of the last turn), or keep an ordered list that isn't deduplicated and dedupe only for display.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The cap's \"failed calls don't count\" rule depends on an SDK counter that is never incremented",
+   "description": "D4 (lines 131, 135) counts a successful call as `tool_calls_made - failed_tool_calls`, and SC4 (line 289) tests the `== failed_tool_calls` case. On the SDK path (used by the walkthrough's `--model sonnet`), `_failed_tool_calls` only goes up when a **top-level** stream message is a `ToolResultBlock`.\n- In `claude-agent-sdk`, tool results arrive as content blocks inside `UserMessage`.\n- Nothing in `src/` handles `UserMessage`: grep finds no matches, and `translate_sdk_message` returns `[]` for it (`translation.py:42`).\n\nSo on the SDK path, a review whose every read failed still counts as having made successful calls, and the cap won't fire. This is exactly the case D4 says it covers.\n\n**Fix:** either fix the SDK failure count in this slice, or state that the rule is only reliable on the OpenAI-compatible path and test it on both.",
+   "location": "src/squadron/providers/sdk/agent.py:178-180"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A diff dropped entirely (D3) is still exempt from the cap after one unrelated tool call",
+   "description": "D3 records a budget-skipped diff as `injected_chars=0`. D4 then keeps the model's PASS if it made any successful tool call. The code's own comment (`src/squadron/review/review_client.py:151-153`, issue #81) says the diff is injected even on the tools path \"because no read-only tool can produce one.\"\n- So a model that saw **none** of the change and made one successful `Read` of any file keeps a clean PASS.\n- The Value bullet (line 27) promises a PASS now means the model \"saw the whole diff or read files with its tools\", but reading files doesn't show what changed.\n\nThe plan's exemption (\"a truncated diff where the model did read files stays a normal verdict\") was written for a cut tail, not for a diff skipped outright. **Fix:** cap regardless of tool calls when `injected_chars == 0`, or record why the exemption should cover that case.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "A failed `git diff` is neither recorded nor capped",
+   "description": "D2 says that when a diff is part of the review, `diffTruncated` is always written. The design never says what happens when the `diff` key is present but `_run_git_diff` returns `None`. That happens on a non-zero git exit or an `OSError` (`review_client.py:515-521`), and `_inject_file_contents` then skips the diff with only a log line (`review_client.py:422-424`).\n- The earlier `_run_git_diff_filenames` check (`review_client.py:110-117`) can pass while the content call fails.\n- Depending on how it's implemented, the artifact would say \"no diff\" (key absent) or \"saw it all\" (`DiffInjection(0,0)` is not `truncated`). Both are wrong.\n\nThis I/O path needs an explicit outcome: either treat it as truncation to zero, or raise as `EmptyDiffError` does.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:117-119"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The imposed CONCERNS feeds a fix instruction the implementer can't act on in review loops",
+   "description": "D4 only discusses `CheckpointTrigger.ON_CONCERNS`. In a loop body (the plan's own \"implementation \u2192 code review until pass\" shape), `DispatchAction._resolve_prompt_from_prior_review` (`src/squadron/pipeline/actions/dispatch.py:370-395`) turns each finding into a fix instruction. The synthetic \"Raise review.max_file_size_bytes, narrow the diff, or use a tool-enabled model\" finding goes to the implementing agent, which can't fix it by editing code.\n- The diff stays oversized each round, so the cap fires each round.\n- An `until: pass` loop runs until it hits `max`, and each round's dispatch is wasted work.\n\nThe design should name this interaction and choose an outcome. Options:\n- leave the synthetic finding out of the fix prompt;\n- mark it so it isn't fed back as something to fix;\n- explicitly accept loop exhaustion.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:137"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The PR comment, a published output, isn't covered",
+   "description": "`src/squadron/review/pr_comment.py:61-64` renders `**Model:** {result.model}` into the GitHub comment `sq review pr` posts, and its findings come from `structured_findings`. After this slice, that comment will:\n- name the answering model with no \"(requested \u2026)\" note;\n- show an imposed CONCERNS with the synthetic finding, but no `**Diff:**` line.\n\nSo the published surface disagrees with the artifact. That breaks the single-source agreement the design claims (lines 101, 308). `pr_comment.py` should be added to the component table with a decision on what it renders.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#component-structure"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 6 can't be run as written",
+   "description": "- The step says \"for each profile\", but the only command shown is `sq review slice 927 --model sonnet -v`. `sonnet` is an `sdk` alias (`src/squadron/data/models.toml:45-50`), so run as written it exercises the SDK four times and never touches openai, openrouter or local.\n- It says to record `answering_models` \"from `--output json`\", but the command shown doesn't use `--output json`. That needs a second run nobody wrote down.\n\nSince this step is where D9's captured ids come from, it should list one alias per profile and give the JSON command.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "D9's capture plan misses forms the design itself names as risks",
+   "description": "- D9 captures \"one review per configured profile (sdk, openai, openrouter, local)\" using each profile's \"default alias\". It leaves out the built-in `gemini` profile (`providers/profiles.py:61-67`), which also runs through the OpenAI-compatible agent and ships three preview aliases such as `gemini-3.1-pro-preview-customtools`.\n- The Risk section (line 359) names OpenRouter's `:free` suffix, and the shipped alias table has `qwen/qwen3.6-plus:free` (`models.toml:336`). One default alias per profile won't capture it.\n\nIf either returns a different id form, D10 writes `requestedModel` on every run, and gates read that key's presence as \"substituted\". **Fix:** capture every alias whose id form differs (vendor prefix, `:free`, preview suffix), including gemini, or narrow the claim made in the Mitigation section.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Development Approach miscounts the callers it must update",
+   "description": "- \"Update its two `review_client` call sites\": there is one, at `review_client.py:154`.\n- `test_injection_decision.py` never calls `_inject_file_contents`. It only mentions it in a comment at `:283`.\n- `test_review_client.py:224` patches it with `side_effect=lambda p, *a, **k: p`. Once the function returns a tuple, that lambda breaks tuple-unpacking and needs rewriting, not just a call-site update.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "\"SDK runs are unchanged\" doesn't hold for default-model runs",
+   "description": "When `requested` is `None`, today's artifact writes `aiModel: unknown` (`persistence.py:431`). Under D9 and D11, it will write the answering id. That changes the metrology judge identity (`metrology/identity.py:35,329`) for those runs too, not just for OpenAI dated snapshots. Worth stating next to the D10 consequence.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Capping a derived PASS replaces `verdictSource: derived`",
+   "description": "When the cap hits a PASS that 919 derived (`parsers.py:993`), the result becomes `IMPOSED`. That loses #97's \"the model never stated this\" fact from frontmatter; it survives only as `fallback_used` in JSON. Harmless for gating, since the verdict is non-PASS either way, but D5 should state which value wins.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Small rendering ambiguities around the synthetic finding and key order",
+   "description": "- The Run Digest's \"surviving validation\" count (`persistence.py:243`) will be one lower than the findings list whenever the cap fires.\n- The synthetic finding has no `location`, while slice 904's convention normalizes missing locations to `unverified`.\n- \"`diffTruncated` goes after the tool telemetry pair\" (line 241) doesn't say whether it comes before or after `toolsSuppressedReason` (`persistence.py:368-369`).\n\nEach needs one line of decision.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+  }
+ ]
+}

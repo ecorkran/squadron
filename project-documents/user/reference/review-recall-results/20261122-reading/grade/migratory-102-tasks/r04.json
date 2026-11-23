@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkbox tasks, and 6.3 is a catch-all commit",
+   "description": "Tasks 1.3, 2.3, 3.3, 4.3 and 5.4 are written as checkbox items (\"Commit: ...\"). Commit markers must be plain `**Commit**:` lines, never checkboxes. The placement after each working, tested section is sound and matches slice design step 7. Only the format needs to change.\n\nTask 6.3 is a final commit that adds \"any remaining changes\" as `docs: complete slice 102`. By this point everything is committed at 5.4, so the commit would hold only check-offs or notes. The project rules forbid a commit that only checks boxes or adds notes. Drop 6.3, or fold the `git status` clean-tree check into the 5.4 marker.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-182"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Section 6 and task 5.1 add redundant work",
+   "description": "- **6.2** re-checks `isinstance(..., BulkForce)`. That is already verified in 3.1 and 4.1 and tested in 3.2 and 4.2. Cut it.\n- **6.1** repeats the full-suite run already required by the Verify steps in 1.2, 2.2, 3.2, 4.2 and 5.x. Fold it into the last section's Verify step and delete Section 6.\n- **5.1** is a smoke test (N=10, 10 steps) whose only assertion is \"runs without error\". Task 5.2 already drives all five forces through `tick()` with 50 agents over 300 ticks, so a failure to run would surface there. Merge 5.1 into 5.2, or cut it. The step \"confirm forces interact correctly\" has no stated assertion.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Integration and differentiation assertions are vague and could pass vacuously",
+   "description": "- **5.2** asserts only that the mean heading has a positive x-component. The 45 non-leader agents start with random velocities, so a positive x-component can occur by chance and the test would pass without any leadership effect. The slice criterion is that the heading \"converges toward the leaders' initial heading\". Assert a threshold on the mean unit-heading x-component, or assert that it exceeds the starting value.\n- **5.3** passes if either heading variance is lower or the eastward component is higher. That is two loose chances to pass, and \"statistically measurable\" has no tolerance. \"Heading variance\" is also never defined. Name the metric, for example the circular variance of unit headings, and require a strict, specific comparison against the flocking baseline. Say what to do if the chosen parameters do not separate the two runs, such as adjusting weights or tick count rather than weakening the assertion.\n- **4.2** (lines 126-127): the known-geometry case has a computable expected value. The weighted heading is (0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 = [0.9, 0.1], and agent 2 is stationary, so the force is [0.9, 0.1] \u00d7 `leadership_weight`. State it, as 3.2 does for MomentumForce. The uniform-leadership test says only \"similar to plain velocity averaging\". Specify an exact comparison, such as the mean neighbor velocity minus own velocity, times the weight.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Epsilon threshold is specified twice as an \"e.g.\" value",
+   "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each give \"epsilon (e.g. 1e-10)\" for the zero-speed and zero-leadership-sum guards. The project rules forbid hard-coded and duplicated constants. The \"e.g.\" also leaves the value open to interpretation. Add one step in 3.1 to define a single module-level constant in `herding.py`, and have 4.1 reuse it. First check whether `flocking.py` already defines an equivalent constant, and reuse it if so.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  }
+ ]
+}

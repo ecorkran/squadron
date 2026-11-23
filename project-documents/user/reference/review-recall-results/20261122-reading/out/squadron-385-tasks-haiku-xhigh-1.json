@@ -1,0 +1,690 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 5.1 says both \"do not degrade to a default\" and \"proceed to the host default\" when cf is unavailable",
+      "description": "Lines 121\u2013122 tell the implementer not to degrade an unreachable `cf` to a default base, then say that when `cf` is unavailable \"the key is treated as unset and the chain proceeds to the host default.\" Those are the same act. With `squadron-pr` configured and `cf` down, the PR silently targets `main`, with no refusal and no WARNING. Slice design D1 (lines 239\u2013244) rejects this for the reason the task itself gives: silently retargeting a PR is a write. Task 5.2 (line 126) asserts \"cf unavailable \u2192 host default, no raise\", so the test enshrines the defect. The distinction D1 needs already exists: `ContextForgeClient.get_config` returns `\"\"` for an unset key and raises `ContextForgeNotAvailable` when `cf` is absent (`src/squadron/integrations/context_forge.py:201-215`; exception classes at lines 23\u201327). Fix: `ContextForgeNotAvailable` and `ContextForgeError` \u2192 refuse, naming the key; `\"\"` \u2192 host default; change 5.2 to assert the refusal.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:121-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Refusals raise unnamed types that `create` does not catch; detached-HEAD and git-failure behavior is unspecified",
+      "description": "Refusals are described as \"raise\" in Task 3.1 (line 79, detached HEAD), Task 5.1 (line 119), Task 6.1 (line 138, \"raising on refusal\"), and Task 12.1 (line 281, \"Failure raises\"). None names a type. The only pattern in the code is `except CodeHostError` (`src/squadron/cli/commands/review_pr.py:227-229`). Unless these are `CodeHostError` subclasses, `create` exits with a traceback, and Task 13.1 says nothing about catching them. Task 3.1 also gives `current_branch(...) -> str` no answer for `run_git` returning `None`. The precedent for detached HEAD is `TargetUnresolvableError` (`src/squadron/codehost/github_cli.py:188-190`), which the task should name. Task 10.2 (line 227) asserts \"exits non-zero\" at the composer level, but the composer is a library function. It should raise a named error that the command maps to exit 1.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A bad or stale `--base` fails late, and the range is computed against an unspecified ref",
+      "description": "Task 13.1 runs input gathering, which calls `commits_in_range(base, head)` (Task 3.1, line 80), before the composer and before `open_pull_request`. Two results follow, and neither matches D1 (design lines 232\u2013236, which says a bad `--base` is rejected by `open_pull_request` with a 422 that names it):\n\n- A base that is absent locally makes `git log base..head` refuse first. The operator sees a git error, not the 422.\n- A base that exists locally but not on the host passes gathering, then spends a full model call before the 422. That breaks the ordering rule in the design's data flow (lines 204\u2013205): refusals decidable without a model happen first.\n\nThe task also never says whether `base` is the local ref or `origin/<base>`. A local `squadron-pr` that trails the host lists commits the PR will not contain. Fix: validate `--base` with a read (`branch_exists`, or `git rev-parse --verify`) before the model call, and state the ref form used by `commits_in_range` and by the `rev-list` scan in 8.1.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:297-299"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6.1 takes `local_sha` but no task supplies it",
+      "description": "`check_head_pushed` takes `local_sha` (Task 6.1, line 138). Task 3 (lines 77\u201382) adds only `current_branch` and `commits_in_range`, and no other task names a source. `resolve_reviewed_sha(cwd)` already returns `git rev-parse HEAD` or `None` (`src/squadron/review/persistence.py:129-162`). A junior will either write a duplicate or pass `None` through. Fix: name `resolve_reviewed_sha` as the source, and state that `None` is a refusal, not a pass. Task 6.2 has no such case.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An `ls-remote` timeout escapes as `ProcessTimedOutError`, outside the pattern Task 14 requires",
+      "description": "`ProcessRunner.run` raises `ProcessTimedOutError` (`src/squadron/core/process_runner.py:122`), which is not a `CodeHostError`. On the `gh` path, `github_cli.py:493-495` converts it to `HostCommandTimeoutError`. Nothing in the refs or remotes code does that, and Task 6.1 (lines 141\u2013142) does not say to. Task 14.1 (lines 320, 324) scripts `ProcessTimedOutError` at all five sites and requires `except CodeHostError` at each. The `ls-remote` site would fail that test. Fix: the precondition converts the timeout to a named `CodeHostError` (for example `HostCommandTimeoutError` with the `ls-remote` argv), and Task 6.2 asserts the type.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/core/process_runner.py:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The composer as written would leave the default CLI tool set reachable on the `sdk` profile",
+      "description": "Task 10.1 requires \"no tools\" (line 218) but does not say how. The SDK provider sets `tools` and `allowed_tools` only when `config.allowed_tools is not None`. Passing `None` leaves the CLI's full default set reachable; the comment at lines 67\u201373 cites issue #69. `summary_oneshot` avoids this because `resolve_effective_tools` normalizes `None` to `[]` before building `AgentConfig` (`src/squadron/pipeline/summary_oneshot.py:71-97`). A composer that copies the signature with `allowed_tools=None` gives a description-writer tools, which D3 (design lines 308\u2013311) rules out. Fix: require `allowed_tools=[]` and `cwd=None` explicitly, and have Task 10.2 assert `config.allowed_tools == []`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:64-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The composer's one-shot sequence omits the SDK duplicate filter and agent shutdown",
+      "description": "Task 10.1 (line 216) lists the call sequence and Task 10.2 (line 225) requires the text returned unmodified. The existing one-shots do three things the task omits:\n\n- They skip messages whose `sdk_type` is `SDK_RESULT_TYPE`, `tool_use`, or `tool_result` (`summary_oneshot.py:139-140`; `src/squadron/review/review_client.py:275`). The SDK emits an AssistantMessage and a ResultMessage with identical content (comment at `summary_oneshot.py:128-130`). A composer that concatenates every response duplicates the body on `sdk`, and Task 10.2's `sdk` assertion (line 226) would not catch it.\n- They call `await agent.shutdown()` in a `finally` (`summary_oneshot.py:142-143`). The task never mentions shutdown, so a failure during `handle_message` leaks the agent.\n- The sequence is async (`await provider.create_agent`, `async for`). `compose_body` and the CLI are synchronous, and the task says nothing about bridging them.\n\nFix: name the skip filter, shutdown in `finally`, and the sync wrapper, and add a 10.2 case with an SDK-shaped fake that emits both the assistant and result messages.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/summary_oneshot.py:139-143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task defines `PrInputs` or the `gather_inputs` that joins commits, slice, and review",
+      "description": "Task 9.1 (line 198) takes `inputs: PrInputs`. Task 7.1 (line 157) builds \"the commit and slice halves of `gather_inputs`.\" Task 8.1 (line 176) adds `find_latest_in_range_review(...)` with no instruction to join it into `gather_inputs`. No task defines the `PrInputs` type or the function that combines the three, and Task 13.1 (line 298) says \"input gathering\" without naming it. Two details are also unstated: the verdict source (the review frontmatter's `verdict:` key, `src/squadron/review/persistence.py:327`), and what \"newest\" means in 8.1 (line 180), which should be the order of `git rev-list`. Fix: add a bullet to 7.1 or 8.1 that defines `PrInputs` and `gather_inputs`, and name the verdict key and the ordering.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Checked and unchecked items must be listed, but no task makes squadron write them",
+      "description": "The slice's functional criterion (design lines 534\u2013535) requires checked items under \"how it was verified\" and unchecked items under \"known gaps.\" D4 (design lines 338\u2013342) lists the deterministic facts squadron writes directly: commit list, design path, artifact path, verdict, and reviewed sha. Task items are not on that list. Task 11.1 (lines 260\u2013262) passes them to the model as prose input, and Task 11.2 (line 268) asserts only that a commit sha appears verbatim. Nothing makes an item's text appear in the output, so a model that paraphrases or drops items passes every test. Fix: either render the items beneath those two headings (which matches the traceability rule) or amend the criterion and D4. Add the matching assertion to 11.2.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-262"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The presence check must strip the deterministic block, but nothing defines how it is delimited",
+      "description": "Task 12.1 (line 280) says \"filled\" means content non-empty \"after stripping whitespace and the squadron-written deterministic block.\" Task 11.1 (line 261) places those facts beneath the prose but names no marker, fence, or structure. The check cannot identify what to strip. Fix: have 11.1 define the block's delimiters once, and have 12.1 reference them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:280-281"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.2's fixture cannot satisfy its own assertion",
+      "description": "Task 2.2 (line 67) asserts both groups are non-empty, using `384-tasks.post-findings-to-the-pr.md` \"until then.\" That file has 166 checkbox lines and no unchecked `- [ ]` item, so its unchecked group is empty. This file (385) is entirely unchecked until Task 16, so its checked group is empty. Neither candidate passes as written. The criterion (design lines 565\u2013566) requires \"this slice's own task file once it exists,\" but no task switches to it. Fix: assert non-empty groups only on a fixture with both states, check that counts sum on the real files, and say in 16.4 when the fixture switches to 385.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4.2 limits the shared-helper regression check to `sq pr show`",
+      "description": "`review_pr.py` imports `resolve_and_fetch_pull_request` (line 20), so changing it in Task 4.1 reaches `sq review pr`. Its tests (`tests/cli/test_review_pr.py`, `test_review_pr_post.py`, `test_review_pr_post_failures.py`, `test_review_pr_worktree.py`) patch `squadron.cli.commands.pr.build_github_host` and depend on this path (`tests/cli/test_review_pr.py:4, 68-69`). Task 4.2 (lines 103\u2013104) names only the `sq pr show` tests as the criterion. Its `resolve_locator` assertions also duplicate coverage the show tests already provide, so the test is extra. Fix: make the full `tests/cli/test_pr_show.py` and `tests/cli/test_review_pr*.py` the 4.1 criterion, and keep `resolve_locator` in `pr.py` so the existing monkeypatch targets (`test_pr_show.py:114, 376, 399`) still bind.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/review_pr.py:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--cwd` flag does not reach the cf reads, and the task and review paths are relative",
+      "description": "`ContextForgeClient._run` calls `subprocess.run([\"cf\", ...])` without `cwd` (lines 104\u2013110), and the client takes no directory. So `get_config(\"git.integration_branch\")` (Task 5.1, line 121), `list_slices`, and `list_tasks` read whichever project the process is in, while every git and host call uses the `--cwd` repository (Task 13.1, line 297). `TASKS_DIR` and `REVIEWS_DIR` are relative (`src/squadron/review/persistence.py:25, 35`), and `_tasks_input` ignores its `_cwd` argument (`src/squadron/review/template_inputs.py:40-43`). A task file can therefore be read from the wrong repository. `resolve_diff_base` has the same gap (`src/squadron/review/git_utils.py:312`), and the task copies that pattern. Fix: give the cf calls the `--cwd` directory, or state that `--cwd` does not reach them. Join design and task paths to `--cwd` in 7.1.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Context Forge calls on the create path have no timeout and sit outside the failure matrix",
+      "description": "Task 14 (lines 315\u2013325) and D8 (design lines 465\u2013473) cover five host calls. The create path also runs `cf config get` (Task 5.1) and the `cf` slice and task lists (Task 7.1). `ContextForgeClient._run` passes no timeout, so a hung `cf` blocks `sq pr create` indefinitely, and `subprocess.TimeoutExpired` is not in any handled set. The design's claim that every host call is bounded does not hold on this path. Fix: add the cf reads to the 14.1 matrix, with a bound added to `_run` and its own test, or state that cf reads are unbounded and why that is acceptable.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:103-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Degrade and skip paths name no exception type, and an unreadable artifact aborts the review scan",
+      "description": "Slice lookup raises `ValueError` for an unknown index (`persistence.py:96-97`). Task 7.1's \"cf cannot resolve \u2192 WARNING, no raise\" (line 160) must therefore catch `ValueError` as well as the two cf exceptions, and the task names none of them. Task 8.1's skip rule (line 181) covers missing, malformed, and unrecognized shas. `read_frontmatter` returns `None` only for missing or unparseable YAML, but `path.read_text(...)` raises `OSError` or `UnicodeDecodeError`, which `src/squadron/documents/frontmatter.py:66` does not catch. One unreadable neighbor artifact would abort the scan. The design says a malformed neighbor must not block creation (lines 454\u2013457). Fix: name the exceptions in 7.1 and 8.1, and add an unreadable-file case to 8.2.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:96-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13.2 has no command-level case for base refusal or push refusal",
+      "description": "Success criteria (design lines 541\u2013546) require, end to end, that an absent integration branch fails naming the branch without targeting the default branch, and that an unpushed or mismatched head fails before any write and prints the push command. Tasks 5.2 and 6.2 test the functions only. Task 13.2's cases (line 309) are happy path, dry run, equality, `--base`, `--title`, identity refusal, and presence failure. Line 310 covers ordering, but no case checks exit 1 with zero writes for either refusal. Fix: add a base-refusal case (zero `open_pull_request` calls; composer never called) and a push-refusal case (exit 1; push command in output; zero writes).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309-311"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 14 contains implementation that no implementation task places",
+      "description": "Task 14.1 is a test task, but line 324 requires each of the five call sites to use `except CodeHostError` \u2192 `render_code_host_error` \u2192 `typer.Exit(code=1)`. Task 13.1 (lines 296\u2013306) does not mention the catch-and-render wrapper. The existing wrapper is `pr.py:91-95`. As written, the wrappers are first written in 14.1, after the command is already complete. Fix: move the catch-and-render wrapper into 13.1, and keep 14.1 as the test matrix.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Live step 5 compares two independent model calls for equality",
+      "description": "Step 5 (design lines 613\u2013621, listed at Task 16.2 line 355) runs `sq pr create --dry-run > /tmp/dry.txt` and then `sq pr create`, and expects the PR's title and body to match. Those are two separate model invocations. D8's structural guarantee (design lines 498\u2013503) holds within one run and says nothing across runs. Model prose will not reproduce, and neither will the model-composed title in D4a's third term. The criterion (design line 552) is met by the unit test with a faked composer (Task 13.2), not by this live check. Fix: have the real run reuse the dry run's body (for example, a body file the dry run writes), or limit the live comparison to the deterministic blocks and headings, and say so in 16.3.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Step 1 of the live walkthrough needs a pushed slice branch, and no task pushes one",
+      "description": "`sq pr create` refuses an unpushed head (Task 6.1, line 139). Step 1 (design lines 575\u2013585) runs `sq pr create --dry-run` on `385-slice...` with no push, and no step pushes it before step 5. Unless someone pushes it outside the plan, step 1 refuses, and so does step 5 for the same reason. Fix: add an explicit \"push the slice branch\" step before step 1 and say who runs it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:354-355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The live walkthrough leaves state that no step removes or disposes of",
+      "description": "Step 3 (design lines 597\u2013606) creates local branch `385-scratch` with an empty commit and pushes it to the remote. Step 5 opens a real PR. Task 16.2 (lines 354\u2013359) and 16.4 (lines 366\u2013374) never say to delete the scratch branch locally or on the remote, and never say whether the evidence PR is closed, left open, or merged. The local merge in 16.4 (line 373) does not close the PR. These are states only a person can end. Fix: add cleanup for the scratch branch (local and remote), and state the evidence PR's disposition.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The integration-branch setting is left wrong if the walkthrough stops partway",
+      "description": "Step 2 (design lines 589\u2013593) sets `git.integration_branch` to `dev/does-not-exist`, and Task 16.2 (line 357) restores it after step 2. If the run is interrupted, or the step-2 command stops the shell, the setting stays at the nonexistent branch and step 5's live create refuses. The restore also hard-codes `squadron-pr` instead of recording the prior value. Fix: record the value before step 2, and make the restore unconditional, for example as one command or a `finally`-style step.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:357"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The context summary says the model is exercised once live; the walkthrough runs it several times",
+      "description": "Line 22 says \"It is exercised once, live, in Task 16.\" Steps 1, 4, and 5 each run the real composer. Step 2 refuses before the model, and step 6 runs a live `sq review pr`. Spend is pre-authorized, so this is about the record, not a gate. Fix the sentence.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"no production caller\" claim is wrong for `identify_operator`",
+      "description": "The frontmatter (line 7) and the context summary (line 16) say the four 381 operations have no production caller. `review_pr.py:226` already calls `host.identify_operator(record.host)` on the `sq review pr --post` path, using the catch-render-exit pattern this slice needs. Correct the claim, and point Task 13.1's identity check at this precedent.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/review_pr.py:226"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The design review response gives the title source as frontmatter; D4a and Task 10a say H1",
+      "description": "The Design Review Response says \"the slice's human name from the design's frontmatter.\" D4a (lines 368\u2013373) and Task 10a.1 (line 239) say the H1, because the frontmatter `slice` field is a kebab-case slug. The task follows D4a, which is correct, but the stale sentence in the review record could mislead a reader.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:698-699"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6.1 returns `None`; the design's component table says `refusal or HeadState`",
+      "description": "The component table (design line 149) gives `check_head_pushed() \u2192 refusal or HeadState`. Task 6.1 gives `-> None`. Nothing consumes a `HeadState`, so `None` is probably right, but the design should be corrected or the task should say it deliberately diverges.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 72-character bound is ambiguous at exactly 72",
+      "description": "Line 241 says \"under 72 characters\" and line 242 says \"over the bound falls back.\" The design's criterion (lines 550\u2013551) says \"over 72 characters ... falls back.\" A 72-character response is ambiguous. Task 10a.2 (line 247) tests 60 and 100 but not the boundary. Fix: state the bound inclusively and add 72 and 73 cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16.4's \"entry 5\" matches two entries in the 380 plan",
+      "description": "Line 197 is the feature-slice entry for 385 (\"5. [ ] **(385)...\"), but line 298 is also \"5. [ ]\" under Future Work. Task 16.4 (line 370) should say \"the (385) entry.\"",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-slices.pull-request-workflow.md:197"
+    },
+    {
+      "severity": "PASS",
+      "title": "The D3 premise holds: `summary_oneshot` does not refuse `sdk`, and the gate is in the caller",
+      "description": "`capture_summary_via_profile_with_telemetry` has no SDK check (`src/squadron/pipeline/summary_oneshot.py:48-145`). Its docstring (lines 1\u20137) matches the text Task 15.2 quotes. The gate `if is_sdk_profile(profile) and context.sdk_session is None` is at `summary.py:220`. Task 15.2's docstring-only correction is the right scope.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/summary.py:220"
+    },
+    {
+      "severity": "PASS",
+      "title": "The Task 4.1 extraction matches the function it targets",
+      "description": "The first three steps of `resolve_and_fetch_pull_request` are host construction, `parse_target` with `list_remotes`, and `select_remote`. `resolve_locator` returns those. `host.runner`, the seam the precondition needs, is available there.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/pr.py:33-58"
+    },
+    {
+      "severity": "PASS",
+      "title": "The timeout constants, parser gap, and name availability match the tasks",
+      "description": "`GIT_QUERY_TIMEOUT_SECONDS` is 30 in `refs.py:28` and `remotes.py:29`. `HOST_COMMAND_TIMEOUT_SECONDS` is 30 in `github_cli.py:68`, and `GIT_COMMAND_TIMEOUT_SECONDS` is in `review/git_utils.py:24`. No checkbox reader exists, and the only slice-branch lookup is `_find_slice_branch` (`review/git_utils.py:173-185`). `current_branch`, `commits_in_range`, and `CommitRecord` are not defined anywhere in `src/`.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/codehost/refs.py:28"
+    },
+    {
+      "severity": "PASS",
+      "title": "The gh-side failure paths in Task 14 are achievable",
+      "description": "The gh path uses `HOST_COMMAND_TIMEOUT_SECONDS` (line 483), converts `ProcessTimedOutError` to `HostCommandTimeoutError` (lines 493\u2013495), and `open_pull_request` raises `PullRequestCreationRejectedError` with a fix hint on 422 (lines 349\u2013356). Only the `ls-remote` site lacks the conversion (see the finding above).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/squadron/codehost/github_cli.py:483"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 5.1 says both \"do not degrade to a default\" and \"proceed to the host default\" when cf is unavailable",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:121-122",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Refusals raise unnamed types that `create` does not catch; detached-HEAD and git-failure behavior is unspecified",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A bad or stale `--base` fails late, and the range is computed against an unspecified ref",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:297-299",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 6.1 takes `local_sha` but no task supplies it",
+      "location": "src/squadron/review/persistence.py:129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "An `ls-remote` timeout escapes as `ProcessTimedOutError`, outside the pattern Task 14 requires",
+      "location": "src/squadron/core/process_runner.py:122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The composer as written would leave the default CLI tool set reachable on the `sdk` profile",
+      "location": "src/squadron/providers/sdk/provider.py:64-75",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The composer's one-shot sequence omits the SDK duplicate filter and agent shutdown",
+      "location": "src/squadron/pipeline/summary_oneshot.py:139-143",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "No task defines `PrInputs` or the `gather_inputs` that joins commits, slice, and review",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Checked and unchecked items must be listed, but no task makes squadron write them",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-262",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The presence check must strip the deterministic block, but nothing defines how it is delimited",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:280-281",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 2.2's fixture cannot satisfy its own assertion",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 4.2 limits the shared-helper regression check to `sq pr show`",
+      "location": "src/squadron/cli/commands/review_pr.py:20",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `--cwd` flag does not reach the cf reads, and the task and review paths are relative",
+      "location": "src/squadron/integrations/context_forge.py:104",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Context Forge calls on the create path have no timeout and sit outside the failure matrix",
+      "location": "src/squadron/integrations/context_forge.py:103-110",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Degrade and skip paths name no exception type, and an unreadable artifact aborts the review scan",
+      "location": "src/squadron/review/persistence.py:96-97",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 13.2 has no command-level case for base refusal or push refusal",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309-311",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 14 contains implementation that no implementation task places",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:324",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Live step 5 compares two independent model calls for equality",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:355",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Step 1 of the live walkthrough needs a pushed slice branch, and no task pushes one",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:354-355",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The live walkthrough leaves state that no step removes or disposes of",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:355",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The integration-branch setting is left wrong if the walkthrough stops partway",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:357",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The context summary says the model is exercised once live; the walkthrough runs it several times",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:22",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The \"no production caller\" claim is wrong for `identify_operator`",
+      "location": "src/squadron/cli/commands/review_pr.py:226",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "The design review response gives the title source as frontmatter; D4a and Task 10a say H1",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:698-699",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Task 6.1 returns `None`; the design's component table says `refusal or HeadState`",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The 72-character bound is ambiguous at exactly 72",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:241",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 16.4's \"entry 5\" matches two entries in the 380 plan",
+      "location": "project-documents/user/architecture/380-slices.pull-request-workflow.md:197",
+      "location_verified": true
+    },
+    {
+      "id": "F028",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The D3 premise holds: `summary_oneshot` does not refuse `sdk`, and the gate is in the caller",
+      "location": "src/squadron/pipeline/actions/summary.py:220",
+      "location_verified": true
+    },
+    {
+      "id": "F029",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The Task 4.1 extraction matches the function it targets",
+      "location": "src/squadron/cli/commands/pr.py:33-58",
+      "location_verified": true
+    },
+    {
+      "id": "F030",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The timeout constants, parser gap, and name availability match the tasks",
+      "location": "src/squadron/codehost/refs.py:28",
+      "location_verified": true
+    },
+    {
+      "id": "F031",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The gh-side failure paths in Task 14 are achievable",
+      "location": "src/squadron/codehost/github_cli.py:483",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-22T21:04:24.175500",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "chars": 31242,
+      "sha256": "381878477faf1d22cb0afbba09fb7fe833da9238bb3c50a0b7fcaf3a2dae9dcc",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+      "chars": 40134,
+      "sha256": "3141ecab48791b1556c4383fa91cbb37855d5ccc07203c67c788f2bec8e1f6ee",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/git_utils.py",
+    "src/squadron/codehost/refs.py",
+    "src/squadron/codehost/errors.py",
+    "src/squadron/codehost/github_cli.py",
+    "src/squadron/review/persistence.py",
+    "src/squadron/cli/commands/pr.py",
+    "src/squadron/documents/frontmatter.py",
+    "src/squadron/review/reviews_dir.py",
+    "src/squadron/pipeline/summary_oneshot.py",
+    "src/squadron/review/review_client.py",
+    "src/squadron/providers/sdk/provider.py",
+    "src/squadron/integrations/context_forge.py",
+    "src/squadron/review/template_inputs.py",
+    "src/squadron/cli/commands/review_pr.py"
+  ],
+  "searches": [
+    "grep ^def |^class |^[A-Z_]+ *=|GIT_COMMAND_TIMEOUT|GIT_QUERY_TIMEOUT|HOST_COMMAND_TIMEOUT in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/review/git_utils.py",
+    "grep GIT_QUERY_TIMEOUT_SECONDS|HOST_COMMAND_TIMEOUT_SECONDS|GIT_COMMAND_TIMEOUT_SECONDS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src",
+    "list_files **/{pr,pr_*,test_pr*,test_branch*,test_tasks*,test_git_utils*,test_import_boundaries*,test_base*,test_preconditions*,test_inputs*,test_assembly*,test_body*}* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "list_files project-documents/user/**/*{384,380,385,381,383}* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "grep ls-remote|rev-parse.*HEAD|def _branch_for|TargetUnresolvableError\\(|class PullRequestCreationRejectedError|class ProcessTimedOutError|def render_code_host_error|class CodeHostError|def open_pull_request|def branch_exists|def default_branch|def identify_operator|hint in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "grep open_pull_request|default_branch\\(|branch_exists\\(|identify_operator\\(|_branch_for\\( in /Users/manta/.config/squadron",
+    "grep ProcessTimedOutError|HostCommandTimeoutError\\(|except CodeHostError|render_code_host_error|typer.Exit\\(code=1\\) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src",
+    "grep def resolve_slice_info|def list_tasks|def list_slices|def get_config|def read_frontmatter|def resolve_reviews_dir|def locate_review|def _tasks_input|reviewedSha|def _find_slice_branch|class ContextForgeNotAvailable|class ContextForgeError in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src",
+    "grep is_sdk_profile|One-shot summary execution|def capture_summary_via_profile_with_telemetry|def run_review_with_profile|allowed_tools|tool_use|tool_result in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "list_files src/squadron/{pipeline/summary_oneshot.py,review/review_client.py,review/client*.py,providers/sdk/*.py,core/models.py} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "grep summary_oneshot|def run_review_with_profile|def capture_summary_via_profile|oneshot in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "grep allowed_tools|sdk_session|is_sdk_profile|setting_sources|tools=|preset in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/providers/sdk",
+    "grep is_sdk_profile|sdk_session|\"sdk\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/cli/commands/review.py",
+    "grep sdk in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/review/review_client.py",
+    "grep pr_comment|PullRequestRecord|def test_|review/ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/tests/codehost/test_import_boundaries.py",
+    "grep ^\\s*- \\[[ xX]\\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/tasks/384-tasks.post-findings-to-the-pr.md",
+    "grep ^\\s*- \\[ \\] in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/tasks/384-tasks.post-findings-to-the-pr.md",
+    "grep ^#  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/slices",
+    "grep ^#  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/slices/384-slice.post-findings-to-the-pr.md",
+    "grep ^#  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md",
+    "grep 385|create-a-pr|^## |^### |^\\| 5|^5\\. in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/project-documents/user/architecture/380-slices.pull-request-workflow.md",
+    "list_files {CHANGELOG.md,DEVLOG.md,project-documents/user/architecture/380-arch.pull-request-workflow.md} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "grep resolve_and_fetch_pull_request|commands\\.pr import|commands\\.pr\\.|build_github_host in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/tests",
+    "grep dry_run|dry-run|--post|def review_pr|def _post_review in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/cli/commands/review_pr.py",
+    "grep -slice\\\\\\.|-slice\\.\\{|\\\\\\[x\\\\\\]|\\[xX\\]|class CommitRecord|class RepositoryLocator|class OperatorIdentity|remote_name:|def _tasks_input in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "grep def filename_stem|return f\"|def resolve_effective_tools|return \\[\\]|if allowed_tools is None in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "grep #88|issue 88|schema.drift in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "grep ^TASKS_DIR|^REVIEWS_DIR|ContextForgeClient\\(|def _design_file|TASKS_DIR =|SLICES_DIR in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron",
+    "grep def __init__|cwd|def _run_json|subprocess|cwd= in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/integrations/context_forge.py",
+    "grep def get_config|def load_config|cwd in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron/config/manager.py",
+    "list_files tests/{cli,review,codehost,pipeline}/__init__.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks",
+    "grep \\.open_pull_request\\(|\\.branch_exists\\(|\\.default_branch\\(|\\.identify_operator\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-385-tasks/src/squadron"
+  ],
+  "sections_in_document": 19,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 31,
+    "in_fences": 0,
+    "in_section": 31,
+    "surviving": 31
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 53,
+  "prompt_tokens": 2811372,
+  "cached_tokens": 2646542,
+  "cache_write_tokens": 164784,
+  "completion_tokens": 131019,
+  "reasoning_tokens": null,
+  "duration_seconds": 568.0579309170134,
+  "cost_usd": 0.467707,
+  "cost_basis": "provider"
+}

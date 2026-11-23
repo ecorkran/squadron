@@ -1,0 +1,68 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "All three WorkflowNavigator sites are `SliceStatus.status`, which TD-3 excludes",
+   "description": "The scope table (line 36), Component Structure (line 75) and Migration step 4 (line 90) say to sweep 3 `=== 'complete'` checks in `WorkflowNavigator.ts`. The only three literals left in that file are:\n\n- `packages/core/src/introspection/WorkflowNavigator.ts:312`: `slice.status === 'complete'`\n- `:345`: `slice.status === 'complete'`\n- `:588`: `return { ...base, status: 'complete', taskProgress }`\n\n`slice` is a `SliceStatus` (the same variable is compared to `'pending-review'` at `:294`), and `:588` constructs one. These are exactly the workflow-position union that line 49, TD-3 (line 106) and the success criterion at line 136 say must remain untouched. The file's real `NormalizedStatus` comparisons (`:319`, `:577`, `:695`) already use `STATUS.*`.\n\nThe two instructions cannot both be followed:\n- **Follow the table:** TD-3 and line 136 are violated.\n- **Follow TD-3:** the file has zero sites, and line 135's \"zero matches in the six swept files\" fails.\n\nThe tasks file (task 9) has already taken the table's side. Fix: set WorkflowNavigator to 0 sites / no change, and drop it from the swept-file list, steps and totals.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker's 36 matches are not 36 `NormalizedStatus` comparisons",
+   "description": "Line 33 describes the 36 matches as comparisons \"across ~15 rule functions\". They sit in 8 rule functions and break down as:\n\n| Class | Count | Example | Issue |\n|---|---|---|---|\n| Comparison against `inferredStatus` | 6 | `:286`, `:325`, `:352` | Genuine `STATUS` sites |\n| Comparison against a raw frontmatter string | 15 | `:357`, `:373`, `:469`, `:717`, `:814`, `:885`, `:967` | Left side is `frontmatter.data.status.toLowerCase()` (`:351`, `:463`, `:715`, `:811`, `:884`, `:962`), not `normalizeStatus()` output |\n| `fixAction.detail.value` | 12 | `:368`, `:384`, `:403`, `:480`, `:546`, `:728` | Tokens that `applyFixes` writes to disk via `updateFrontmatterField` (`:213-214`) |\n| Inside a comment | 3 | `:514` | Not code; goes stale once TD-1 retypes the field |\n\nThe 15 raw comparisons and 12 written values are frontmatter vocabulary, not `NormalizedStatus`. Rule 5 shows this directly: it writes `'in_progress'` (underscore) at `:530`. By TD-2's own reasoning (line 102), matching spelling does not make them the same type. Sweeping them means a future edit to `STATUS.InProgress` silently changes what `cf check --fix` writes into users' files.\n\nAlso unaddressed: 19 lines in the same file embed the values double-quoted in user-facing strings (e.g. `:363` `'Update frontmatter status to \"in-progress\"'`). The single-quote grep cannot see them, so line 23's \"defined in exactly one place\" is not true after the slice.\n\nFix: add a per-class decision (sweep, exclude, or defer) for raw comparisons, written values, the `:514` comment, and message strings.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The acceptance grep cannot return what the design says",
+   "description": "Walking line 135 and lines 149-151 as written:\n\n- **Dead filter:** `grep -roE` has no `-n`, so output is `file:match`. The `grep -v 'introspection/types.ts:[3-6]:'` filter never matches, and the four `STATUS` definition lines stay in the output.\n- **\"Zero matches in the six swept files\" is unreachable** even with `-n`:\n  - `types.ts:269` (`SliceStatus`) remains by design.\n  - `statusNormalizer.ts:9` and `:13` keep their quoted keys `'in-progress':` and `'not-started':`, excluded at line 48.\n- **Uncounted match:** `ProjectModelBuilder.ts:179` is a comment containing `'not-started'`. Line 50 says the file's one match is `'unknown'`, which is at `:181` and does not match the pattern.\n- **No-op filter:** `grep -v '.test.ts'` removes nothing; there are no test files under `packages/core/src`.\n- **Wrong breakdown:** \"Before: ~75\" is right (I count 75). But line 150 says 8 out-of-scope sites and line 151 says 3 + 4. The real figures are `frontmatterSchema.ts` 3 and `SliceStatus` in `types.ts` 1.\n\nThe actual \"after\" count is 11 if WorkflowNavigator is swept and 14 if TD-3 governs, plus 3 if the `:514` comment is left. Fix: add `-n`, state the expected residual set file by file, and drop the \"zero in six files\" wording.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Site counts are wrong in three rows and repeated in four places",
+   "description": "- **`statusNormalizer.ts`:** 14 value-side sites (lines 5-18), not 13, and 2 quoted alias keys, not 3. A sweep done \"to 13\" leaves one literal behind.\n- **`types.ts`:** 3 sweepable literals (line 44), not 5. \"5 of 8 total; 4 are the `STATUS` definition\" does not add up; the file has 4 + 3 + 1. Those 3 collapse into one `NormalizedStatus` reference, not `STATUS.*`.\n- **Total:** the design's rows do sum to 65, but from wrong rows. The code sites are 33 + 14 + 3 + 4 + 4 = 58 if all of ConsistencyChecker is swept, and fewer per the finding above.\n\nThe same numbers appear at lines 33-38, 72-78, 82 and 87-91. The Component Structure table restates the Technical Scope table; keep one so corrections land once.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:34-41"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The reason given for excluding tests is false",
+   "description": "Line 51 says grep confirms zero `.test.ts` files assert against these literals. The grep found nothing because tests live in `packages/core/tests/`, not beside the source. They assert the literals directly and heavily:\n\n- `tests/introspection/taskFileParser.test.ts:48`: `expect(result.inferredStatus).toBe('in-progress')`\n- `tests/introspection/statusNormalizer.test.ts:7`\n- `tests/introspection/slicePlanParser.test.ts:69`\n- `tests/introspection/types.test.ts:6-9,19`\n- `tests/introspection/ConsistencyChecker.test.ts`: 100 matching lines\n\nLeaving tests alone is still the right call. Those literal assertions are what make the suite an independent guard, which the architecture's \"no behavior changes without tests\" principle (arch line 37) requires. State it as a deliberate decision instead; the false premise is already copied into the tasks file (line 17).",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Every production-code site\" leaves one CLI comparison behind",
+   "description": "Line 17 and the functional requirement at line 135 say \"production code\"; line 29 scopes to `packages/core/src`; line 84 says no consumer updates are needed. `packages/cli/src/commands/arch.ts:189` still has `s.status === 'complete'`. That value comes from `normalizeStatus()`, and the file already imports `STATUS` (`:12`, used at `:99`). It is the only such site in `cli` or `mcp-server`. Either add this one line to scope or narrow lines 17 and 135 to `packages/core/src`.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:17"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Step 1's \"must land together\" constraint does not exist",
+   "description": "`taskFileParser.ts:60` declares `let inferredStatus: TaskFileResult['inferredStatus']`. Widening the field to `NormalizedStatus` widens that variable too, so the bare-string assignments at `:62-68` still compile. Either order builds. Doing both together is harmless, but the stated reason is wrong, and tasks line 31 repeats it.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:86-87"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`statusDerivation.ts` does not use the import pattern attributed to it",
+   "description": "`statusDerivation.ts:1` is a single statement: `import { STATUS, type NormalizedStatus } from './types.js';`. The two-statement form the design prescribes is what `WorkflowNavigator.ts:4-13` does. I found no lint rule against either; cite the right precedent or use the single-statement form.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:113"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Unverifiable references and baseline",
+   "description": "- **Baseline counts:** core 931/934 is corroborated only by the 912 slice doc (line 246). The cli 428/432 and mcp 184/184 figures appear only in the 910 documents.\n- **Workspace coverage:** `pnpm -r` also covers `packages/electron` (whose test script is `vitest` without `run`) and `packages/context-forge`. The baseline gives no expected result for either.\n- **F005:** the \"912 code review (F005)\" cited at lines 52 and 129 is not in `project-documents/user`. This does not affect the design.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:142"
+  }
+ ]
+}

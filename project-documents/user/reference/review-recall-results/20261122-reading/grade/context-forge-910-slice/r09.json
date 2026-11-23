@@ -1,0 +1,40 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "All three WorkflowNavigator sites belong to the `SliceStatus.status` union that TD-3 excludes",
+   "description": "The scope table lists `WorkflowNavigator.ts` as 3 `=== 'complete'` sites to sweep (line 36, and again at lines 75 and 90). In the current source, all three are `SliceStatus.status` values: two comparisons of `slice.status === 'complete'` and one return of `{ ...base, status: 'complete', taskProgress }`. That is exactly the union TD-3 (lines 104\u2013106) says must not be swept to `STATUS.Complete`, because doing so \"implies the two unions are related, which they aren't.\" The `NormalizedStatus` checks in that file already use `STATUS.*` (e.g. `taskResult.inferredStatus === STATUS.Complete`).\n\nSo the design contradicts itself. Following the table breaks TD-3. Following TD-3 leaves 3 matches, which fails the \"zero matches in the six swept files\" criterion at line 135. To fix: move WorkflowNavigator to Excluded, alongside the `SliceStatus` rationale, and drop step 4 of the work order. The swept set is then 5 files. Alternatively, explicitly reverse TD-3, but the doc's own reasoning argues against that.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`ConsistencyChecker.ts` mixes comparisons with values that `--fix` writes to frontmatter, and the design treats them all as one kind",
+   "description": "The design counts 36 ConsistencyChecker sites, all described as \"`=== 'complete'` / `'in-progress'` comparisons\" (line 33). About a dozen of them are not comparisons. They are fix payloads, `detail: { key: 'status', value: 'in-progress' | 'complete' }`, which are values that `cf check --fix` writes into users' frontmatter files. One sibling payload in the same file already writes the raw underscore token `'in_progress'`. So these payloads currently use both vocabularies that TD-2 says must be kept apart.\n\nIf these payloads are swept to `STATUS.*`, what gets written to disk becomes tied to `NormalizedStatus`. Respelling a `STATUS` value would then silently change user files. That undercuts the claims at line 84 (\"internal-representation change only\") and line 120 (\"no downstream interface\"). The design needs to decide which vocabulary fix payloads belong to and say so in a TD:\n- **Option A:** leave them as frontmatter tokens and exclude them, like `frontmatterSchema.ts`.\n- **Option B:** deliberately sweep them, and state that `STATUS` now also defines the canonical frontmatter write value.\n\nIt should also note the existing `'in_progress'` / `'in-progress'` inconsistency, either as out of scope or as an issue to file. Either way, the 36-site count and the zero-match check need to be updated to match.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The test-file rationale is based on a grep of the wrong directory",
+   "description": "Line 51 says \"grep confirms zero `.test.ts` files assert against these literals directly.\" That grep was limited to `packages/core/src`, but core's tests live in `packages/core/tests/`. Searching there finds 186 matches across 13 test files, including `ConsistencyChecker.test.ts` (100), `WorkflowNavigator.test.ts` (23) and `statusNormalizer.test.ts` (16).\n\nLeaving test literals alone is still a reasonable choice. Literal values in tests check the wire values independently of `STATUS`, which strengthens the regression guard required by the architecture's \"No behavior changes without tests\" principle. But the doc should give that as the reason, not a verification that never happened. It should also confirm that the success criteria limit themselves to `src/` on purpose.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The verification command and site counts are wrong, so the success criterion would fail",
+   "description": "The zero-match command at line 135 uses `grep -roE \"'(complete|in-progress|not-started|deprecated)'\"`. That pattern also matches the quoted alias keys in `STATUS_MAP`, `'in-progress':` and `'not-started':`. Those keys must stay literal (line 48), so the check can never return zero, even after a correct sweep.\n\nSeveral counts are also off:\n- **`statusNormalizer.ts`:** 14 value-side sites and 2 quoted keys, not 13 and 3 (line 34). Bare keys like `in_progress` don't match the pattern at all.\n- **`types.ts`:** the `SliceStatus` union contains 1 matching literal, not 4 (lines 150\u2013151).\n- **`ConsistencyChecker.ts`:** 30 matching lines. The 36 total is plausible only if some lines contain two literals.\n\nTo fix: rewrite the check to exclude object-key positions, or to list the remaining expected matches by file and line. Then recompute the before/after numbers in the walkthrough.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Excluding ProjectModelBuilder differs from the slice plan entry, but it is justified",
+   "description": "The slice plan entry (900-slices, item 10) lists `ProjectModelBuilder.ts` as having sites to sweep. The design finds that its only status literal is the `'unknown'` sentinel (TD-2a) and excludes it. The source confirms this: no `NormalizedStatus` literals appear outside comments. The scope wasn't dropped; the plan's inventory was simply wrong.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:50"
+  }
+ ]
+}

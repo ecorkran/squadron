@@ -1,0 +1,38 @@
+{
+ "case": "migratory-140-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Current State: \"The wire protocol is currently uncompressed JSON over WebSocket ... 84 KB/tick (24 bytes x 3,500 agents)\", and Tier 2: \"Binary WebSocket replaces JSON\". At `fc7b39c^` `src/migratory_server/protocol.py` builds every message with `struct.pack` and `positions.tobytes()` (lines 184-213, 280-369) and ships bytes; `project-documents/reference/terrain-wire-protocol-v2.md` documents the binary format. The 24 bytes (6 x f32) is the binary size. **VALID**: contradicts code. Needs: code. Raised by the original review (F006: \"24 bytes cannot be JSON, either the byte count or the format is wrong\"; the author answered that the format claim was stale). The reviewer did not know which half was wrong, but did raise the inconsistency.",
+   "hits": {
+    "r01": [3],
+    "r02": [2],
+    "r03": [4],
+    "r04": [2],
+    "r05": [3],
+    "r06": [11],
+    "r07": [1],
+    "r08": [0],
+    "r09": [2],
+    "r10": [6]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Related Work says `100-arch.behavior-engine.md` \"Defines the `SpatialQuery` protocol, `BulkForce` interface, CSR edge representation, and profile-driven force model\". At `fc7b39c^` 100-arch contains none of `SpatialQuery` (it speaks of a \"neighbor-query interface\"), `CSR`, or a `BulkForce` interface (one passing mention of a \"BulkForce pattern\"). Those live in code and slice designs 100, 110 and 111. **VALID** (minor): contradicts a referenced document. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F1: r01 i3 and r10 i6 do not say the protocol is already binary but, like the original review, flag that 24 B/agent cannot be JSON; counted per the flaw text. F2: r10 i13 says 100-arch's spatial contract is radius-based and that CSR comes from slice 111. It argues the existing interfaces do not match the GPU design, and never says Related Work credits 100-arch with SpatialQuery/BulkForce/CSR. Not counted."
+}

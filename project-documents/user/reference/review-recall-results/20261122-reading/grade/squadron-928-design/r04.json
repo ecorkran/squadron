@@ -1,0 +1,82 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`skills uninstall --commands-dir` \"must match the receipt destination\" cannot hold for Claude receipts",
+   "description": "The contract says `--commands-dir` on uninstall is a check against the receipt's destination, exiting 1 with nothing removed on a mismatch. The slice's own reading of the receipt is wrong for Claude packs.\n- For Claude packs, `_install_prefix` records `destination = commands_dir/<prefix>` (`installer.py:83,91`). `_install_dispatch` records `commands_dir/sq` (`installer.py:103`). Neither is the root the flag names.\n- The existing uninstall tests pass `--commands-dir <root>`: `test_cli_skills.py:107-194` (round trip, unrelated file, idempotent). Those receipts hold `<root>/analysis`, so a strict comparison exits 1 and all three tests fail.\n- Today `skills uninstall` ignores `--commands-dir` entirely; it only uses `receipt.destination` (`skills.py:95,110`). Making it a hard check breaks existing scripts too.\n- Line 184 and criterion 6 (line 226) promise that no-flag and existing behavior is unchanged. This contradicts both.\n\nDrop the check for `skills uninstall`, or compare against the install root (receipt destination, or its parent for Claude). State which, and which existing tests change.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Agents uninstall can remove `~/.agents/skills` itself; the receipt `surface` for agents installs is never specified",
+   "description": "The data flow says `remove_receipt_files` never removes the destination. It also says \"for a Claude prefix pack the now-empty prefix directory is still removed, as today.\" That rmdir lives in `skills.py:120-122`. It fires on `receipt.surface == PREFIX` and removes `destination` when it is empty.\n- An agents receipt's destination is the shared root (data flow, line 97).\n- If the agents receipt carries `surface=PREFIX`, which `_write_install_receipt` derives from `entry.prefix` (`installer.py:50`), uninstalling the last skill would `rmdir ~/.agents/skills`. That violates criterion 2 (line 222).\n- Walkthrough step 5 (line 269) hides this by leaving `mine.txt` in the directory.\n\nSpecify the surface for agents receipts (`None`) and gate the prefix-dir removal on the Claude target. Add a test where the root empties.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:102"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Receipt-name refactor breaks existing `test_targets.py` tests and is under-specified at `install_pack`",
+   "description": "Line 184 says existing tests pass \"without edits other than the moved fixture paths\". That is false.\n- `tests/skills/test_targets.py:58` reads `receipt_base`, which D5 renames to `receipt_suffix`.\n- `test_targets.py:62-74` calls `receipt_name(target, local=)`, which becomes `receipt_name(base, target, *, local)`.\n- There are 14+ existing `install_pack(\"mypack\", entry, commands_dir[, receipts_dir])` calls (`test_installer.py`). The new `target` parameter must default to Claude.\n\nTwo gaps remain in the install path:\n- The component table gives `install_pack(..., target)` no `local`, but the receipt name needs the scope (D5).\n- `write_receipt` names the file from `receipt.pack_name` (`receipts.py:39`). For an agents receipt, `pack_name` must therefore carry `analysis-agents[-local]`, as `install_for_target` does. `InstallResult.pack_name` is also printed to the user as the pack name (`skills.py:77`).\n\nSay where the suffixed name lives, add `local` to the signature, and list the test edits.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:184"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The D4 move breaks the agents-tree bijection tests and silently drops coverage of the moved skills",
+   "description": "The Migration Plan calls the consumers \"fixtures\". In `tests/cli/test_install_commands.py:478-580`, `_agents_root()` returns the single directory `commands/agents` and drives five structural tests.\n- `test_every_claude_command_has_an_agents_twin` (line 512) iterates the CLAUDE `bundle_subdirs`, including `analysis`. It expects `commands/agents/analysis-understand/SKILL.md`, which no longer exists after the move, so it fails.\n- The name, description, `openai.yaml` and no-substitution tests (lines 532-580) iterate `commands/agents` only. After the move, `analysis-*` is no longer covered by any of them.\n\nState that `_agents_root` becomes the set of AGENTS `bundle_subdirs`, and that the bijection is checked across all of them.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Agents install status via `p-*` glob gives false \"Installed\" and ignores the receipt-as-authority principle",
+   "description": "For a prefix pack, `installed_path` on the agents target is \"first `root/p-*/SKILL.md`\". `~/.agents/skills` is shared with every other skill source.\n- Any unrelated `analysis-foo` skill makes the `analysis` pack read as installed in `skills list` and in doctor.\n- Short prefixes match even more.\n- The design's own D3 rationale (line 123) and Patterns (line 176, \"receipts remain the only authority\") argue against this.\n- The existing `test_agents_check_ignores_third_party_skills` (`test_doctor_checks.py:138`) was written for exactly this false OK.\n\nFor agents, base status on the receipt, or on the receipt's recorded files.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:108"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" needs source resolution that doctor does not do, and the hint rule contradicts itself",
+   "description": "D8 has doctor report `WARN \u2014 pack ships no Codex content`, with no install hint. Doctor cannot know that without resolving the pack source, and `installed_path` (lines 104-109) only checks install state.\n- `check_skill_packs` is documented as pure, reading only the manifest and filesystem (`doctor_checks.py:432-435`).\n- For `github:` sources, resolving means `git clone` (`resolver.py:61`) on every `sq doctor` run.\n- For relative sources it means path resolution against the config dir.\n- The design gives no behavior for an unresolvable source or a github pack. The \"no hint because it would fail\" rule cannot be applied to a pack whose content is unknown.\n- `commands_dir` is an existing parameter (`doctor_checks.py:429`). Its meaning across two targets is not stated, and the agents root is not parameterized.\n- Walkthrough step 7 (line 279) only exercises a local source.\n\nProportionality: per-target doctor rows go beyond the plan's Part A (`install`/`uninstall`, line 454) and bring in this I/O path. Either defer them, or restrict the \"no Codex content\" state to local and bundled sources. Use \"not installed\" for the rest, and name what the hint says.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "New receipt-name collisions across packs and across projects are excluded only for squadron's own names",
+   "description": "D5 builds the receipt name as `pack + suffix + (\"-local\")`. Pack names are free-form manifest keys, so `-agents` and `-local` are ambiguous.\n- Pack `foo` installed with `--ide codex` and pack `foo-agents` installed for Claude both write `foo-agents.toml`.\n- Pack `foo` installed with `--local` and pack `foo-local` both write `foo-local.toml`.\n\nClaude `--local` for skills is new in this slice, so this is not the pre-existing collision that line 52 excludes. That exclusion covers only \"squadron's own receipt names or skill names\".\n\nLocal receipts are also one file per scope under `~/.config`, not per project. Installing the same pack `--local` in two projects overwrites the first record, and `skills uninstall --local` run from project A then deletes project B's files, because the receipt holds an absolute destination. `install-commands` accepts the same limit. A new skills surface should either reject colliding names at install, or document the limit.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The rule's contents are left to implementation, and the probe table omits commands that reach providers or the network",
+   "description": "D9 and criterion 8 depend on D10's subcommand list. D10's table leaves `review`, `run`, `metrology`, `skills install`, the daemon commands and `auth login` as \"confirm by probe\" or \"probe\". Probing at implementation time is reasonable, but the rule grants unsandboxed execution (line 153), so the candidate set has to be complete.\n- The table is not exhaustive against `cli/app.py:47-70`. It omits `sq summary` and the hidden `_summary-instructions`, `_summary-run` and `_dispatch-run`. `commands/agents/sq-summary/SKILL.md:29-70` invokes `sq _summary-instructions`.\n- It also omits `doctor`, `setup`, `config`, `pools`, `events` and `serve`.\n- D12 adds the sandbox hint to only `sq-review`, `sq-run` and `sq-pr`. If any other probed command lands in the rule, its skill has no hint.\n\nEither complete the enumeration, or state the rule that decides membership and who owns the omitted commands.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Failure and sequencing states of the agents install are not enumerated",
+   "description": "\"Nothing written\" holds only for validation failures (lines 94-95). The write is `write_skill_dirs` (copytree), followed by the receipt.\n- If copytree fails partway (permissions, disk full), partial skill directories exist and no receipt does. `skills uninstall` then says \"not installed\", and `list` and doctor report \"Installed\" from the glob.\n- A kill between the write and the receipt leaves the same state.\n- A receipt-write failure only logs a WARNING (`installer.py:57-66`). For nested skill directories, that means uninstall can never remove them.\n- On reinstall after a pack drops a skill, the new receipt lists only the current files. The old skill directory is orphaned permanently. `install_for_target` handles this by diffing the previous receipt, and `install_pack` has no such step. With multi-file skill directories this is more likely than on the Claude path.\n\nState how each state recovers, or that it is accepted.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:85-98"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Proportionality: the `PACK_LAYOUTS` module and the bundled-pack move carry more mechanism than the two-target slice needs",
+   "description": "The slice plan assigns effort 2/5 for Part A plus docs, and the design raises it to 3/5. Three pieces can be cut or reduced.\n- A new `pack_layouts.py` with a `PackLayout` dataclass and an exhaustiveness assertion is justified by \"a new target is a new entry\" (D6). The slice excludes every other target (`copilot`, `cursor`, line 51). Two functions next to `install_pack`, plus `installed_path` in `targets.py`, deliver the same behavior.\n- D4's move of the bundled skills forces edits to `bundle_subdirs`, `bundled_skill_names`, the fixtures and the bijection tests (see the bijection finding). The aim is \"no bundled special case\", but the install path is unchanged either way. Weigh the cost against a filter at resolve time before committing to it.\n- Per-target doctor rows (see the doctor finding).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:72-79"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Verification walkthrough is macOS-only, and the `model list` fix touches six lines",
+   "description": "- `sed -i ''` is BSD-only, so step 4 fails on GNU sed.\n- The Overview and criterion 9 describe the `sq model list` fix as \"one line each\" (line 24). In fact `commands/sq/review.md:60,112,158` and `commands/agents/sq-review/SKILL.md:82,134,180` each contain three occurrences, six edits in total.\n- The `sq models list` command does exist (`app.py:55`).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:265"
+  }
+ ]
+}

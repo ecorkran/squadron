@@ -1,0 +1,82 @@
+{
+ "case": "context-forge-268-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass after 3.1 and 3.2 (stop rendering `Comprehension:` and the Adoption Facts section) and commits there. Tests that assert the rendered output exist at `f903c18b` outside the two files 3.1-3.2 edit: `core/tests/pipeline-integration.test.ts:184` (`toContain('Comprehension: ...')`) and `core/tests/adoption/adoptionBuild.integration.test.ts` (asserts the `### Adoption Facts` heading); they are changed or deleted only in 3.3 and 4.1. The full-suite gate at 3.2a cannot pass. **VALID**: the task cannot be completed as written. Needs: code (grep of tests). **Raised by the original review (F001)**.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [],
+    "r05": [
+     0,
+     12
+    ],
+    "r06": [],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [],
+    "r10": [
+     0,
+     7
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The note under heading 3 says \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" After 3.4 rebuilds core's `dist`, `cli/src/commands/build.ts` (line 84) still passes a second argument to the one-argument `createContextPipeline`, so `cli` fails typecheck until 3.5, as the note's own second sentence implies. **VALID** (minor): self-contradiction and contradicts code. Needs: code. **Raised by the original review (F002)**.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     7
+    ],
+    "r04": [],
+    "r05": [
+     13
+    ],
+    "r06": [
+     7
+    ],
+    "r07": [],
+    "r08": [
+     13
+    ],
+    "r09": [],
+    "r10": []
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Design Success Criteria: \"No exported symbol remains that only the deleted code used\", with exceptions only for `history`, `comprehensionAnalysis` and `adoptionOutcome`. The design's Interfaces Required names `sourceVolume` as consumed by \"docs map (`discoverDocs`)\", but at `f903c18b` `discoverDocs.ts:9` imports only the `EXCLUDED_DIRS` constant; `measureSourceVolume` and `SourceVolume` are used only by `adoptionResolver.ts`, `adoptionFacts.ts` and tests, and Task 6.2's audit accepts everything exported from the `sourceVolume` module. After the cut, `measureSourceVolume` is an orphan export the criterion forbids and the audit keeps. **VALID** (minor): contradicts code and the design's own criterion. Needs: code. Confidence is lower than the two above because the intent to keep it for 271's report is plausible (Task 4.1 still calls it in the rewritten test).",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [
+     6
+    ],
+    "r09": [],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F1: r05[12] and r10[7] restate that the 3.2a commit sits at a red/untested point by reference to their FAIL finding; counted alongside it. r09[0] covers only the 3.7 gate (adoptionBuild test surviving to 4.1), not the 3.2a gate; not counted. r03[5] only predicts 3.2a disappears; not counted. F3 (borderline): r01[1] identifies that discoverDocs imports only EXCLUDED_DIRS and measureSourceVolume has no production consumer after the cut, but reads the audit as removing it and recommends retaining it; counted as the same underlying orphan-export defect. r08[6] says measureSourceVolume loses its only production caller, is outside the retained list, and the task leaves its fate undecided; counted. r07[10]/r09[2] concern other kept symbols; not counted."
+}

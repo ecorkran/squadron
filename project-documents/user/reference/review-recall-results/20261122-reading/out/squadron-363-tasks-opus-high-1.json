@@ -1,0 +1,327 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The selector conflicts with text in the comprehension flow that Task 7.4 forbids changing",
+      "description": "The only argument handling in the skill today is inside `## Flow: Comprehension Analysis`:\n- Line 389: \"This is the default flow and the only one this skill implements.\"\n- Line 392: \"Any argument other than the comprehension default is **unrecognized**.\"\n\nTask 1.1 says to \"extend the argument handling\" but never says where the selector goes. If it is added in place, concept routing ends up inside the comprehension section, which the slice says not to change (design line 68). If it is added elsewhere, lines 389 and 392 stay in the file and contradict it, so `concept` is both recognized and unrecognized. Task 7.4 makes this worse: it allows only the line-393 sentence to change and requires \"no other comprehension-flow text changed\".\n\nTwo smaller stale spots are also left alone. Line 3 (the frontmatter `description`) describes only comprehension. Line 291 (\"This flow does not use `[INFERRED]`\") sits in the shared Gap markers section and becomes unclear once two flows exist.\n\nFix: Task 1.1 should place the selector in a shared spot before either flow (for example, between Document Conventions and the flows). Task 7.4 should cover lines 389, 392 and 393 together.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:389-393"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The existing staleness prompt makes the \"exactly two questions plus one confirmation\" count false",
+      "description": "Preflight runs unchanged (Task 1.1, design lines 146\u2013148). On drift, it asks the PM whether to proceed or refresh the graph (line 180).\n\nThe graph's `gitCommitHash` is `1bfbca1faa106d7a50a6febad4641bb512d491b1` (`.understand-anything/meta.json:3`), but HEAD is `68c4cb8`, and the slice branch adds more commits. So in Task 8.1 the staleness question will fire. That breaks:\n- Task 8.1's check \"nothing else asked\"\n- Task 5.3's required inventory of \"exactly two questions plus one confirmation\"\n- The PM interaction notice, which lists only the two answers and the confirmation\n\nThe plan has to state how this prompt relates to Success Criterion 2 before it can be checked. For example: the preflight staleness decision is part of the shared contract and is outside the flow's question count. That statement belongs in Task 5.1/5.3, the Task 8.1 check and the PM framing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:180-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.4's byte-identity check compares against nothing, because the concept is still uncommitted",
+      "description": "Task 8.4 confirms populated sections are \"byte-identical (`git diff`)\". But the Task 8.1 document is only committed at the end of Task 8.6. At 8.4 it is an untracked file, and `git diff` shows nothing for untracked files, so the check passes whatever augment changed.\n\nAugment also leaves a dated, appended block in the real concept. That block is then committed in 8.6 as \"the generated concept\". No step decides whether to keep that state or roll it back to the 8.1 version.\n\nFix: commit (or snapshot) the 8.1 document before 8.4. Then say whether the augmented result is kept or reverted with `git checkout`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 8.2 and 8.3 will hit the existing-document stop instead of the path they mean to test",
+      "description": "- **Task 8.2** runs on \"a scratch copy of the tree\" after 8.1 has written `000-concept.squadron.md`. In that copy, re-run semantics (Task 6.2: existing document \u2192 stop by default) fire before the interview, so the decline path is never reached. The step must delete the concept from the copy, or copy the tree before 8.1.\n- **Task 8.3** runs against the real tree, where the concept already exists. \"Nothing is written\" can then be caused by the re-run stop rather than the contract check. Neither the plan nor Task 6.1/6.2 says which check runs first.\n- **Scratch-copy setup:** the copy must also contain an initialized `project-documents/ai-project-guide` submodule (`.gitmodules:1-3`). It is not initialized in this worktree, so the guide path does not exist here. The copy must also still resolve a cf project name, or preconditions 2 and 3 stop the run before any decline. Task 8.2 states neither requirement.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.5 runs the full comprehension flow twice and leaves two new analysis documents",
+      "description": "With no argument, or with `comprehension`, the run executes the whole comprehension flow. Each run writes a new document at the lowest unused index \u2265 940 (943 and 944 already exist, so 945 and 946 would be created), and each also triggers the staleness prompt.\n\nTask 8.6's check `git diff --name-only main` does not list untracked files. Task 9.3 then either commits these documents or cannot \"confirm clean tree\". No step stops the flow once routing is confirmed or removes the documents.\n\nFix: Task 8.5 should stop each run as soon as the routing decision is visible (before extraction), or remove the generated documents explicitly.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:353-356"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success Criteria 3, 4, 10 and 12 are never checked against the generated document",
+      "description": "- **SC4** (dropped topics appear nowhere, neither as content nor as gap markers): Task 4.1 writes the rule, but no walkthrough step searches the written concept for why-now, audience-evolution or methodology content.\n- **SC3** (every structural claim names its graph field): Task 8.1 checks README citations only. Initial Technical Direction is not inspected at all, and Solution Approach is checked for content, not for field attribution.\n- **SC10**: Task 8.1 checks that the inferred-claims line exists. It does not check that each section has one outcome from the full outcome set, or that each `[INFERRED]` sentence meets the rule written in Task 7.1.\n- **SC12** (a concept a PM would edit rather than discard): no task asks for the PM's judgment. Task 9.3 asks only for merge review.\n\nFix: add these checks to Task 8.1, and add an explicit PM judgment step for SC12 to Task 8.1 or 9.3.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes and come after every task",
+      "description": "Every commit appears as `- [ ] Commit: ...` (lines 99, 125, 164, 185, 221, 254, 296, 351). They should be plain `**Commit**:` lines, not checkboxes.\n\nThere is also one at the end of each of Tasks 1\u20138. After Task 1, `concept` routes to an empty section shell, and the intermediate commits up to Task 6 hold a partial flow. For a markdown-only slice, about three commits at working points are enough:\n1. After the selector, preconditions and sources (Tasks 1\u20133)\n2. After the full flow text (Tasks 4\u20137)\n3. After the walkthrough",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.1 does not say how the skill should resolve the project name",
+      "description": "Precondition 3 says only \"from the cf project registration\". The command that does this, `cf get` and its Name field, appears only in the verify step (Task 2.2). A junior implementer writing the skill text has no stated mechanism to put in it. Task 2.1 should name the command and field the skill uses, and the condition that counts as \"no registration resolves a name\".",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The rule for which existing guide checks overlap is unstated",
+      "description": "Precondition 2 in Task 2.1 and Check 1 in Task 6.1 both test whether the guide is readable and both stop naming `cf init` / `/cf:onboard`. The plan does not say whether Check 1 re-runs at write time or is satisfied by the precondition. The duplication is harmless but worth one sentence. Task 8.3 also covers only the renamed-heading case of SC7, not the absent or unreadable guide.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Small citation and wording issues",
+      "description": "- Task 7.1 cites design lines 278\u2013280 for the `[INFERRED]` rule; the quoted block is at lines 277\u2013279.\n- Task 7.3 drops 361's **Generated on** line (`commands/analysis/understand.md:323`). \"361's shape\" probably implies it, but listing it would make the task self-contained.\n- Task 8.6 lists the DEVLOG among changed files before Task 9.2 writes it. This is harmless.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Anchors and design references check out",
+      "description": "- `gitCommitHash` matches `1bfbca1`.\n- The graph has exactly one `\"name\": \"squadron-ai\"` and no nodes with a `filePath` under `tests/` or `.github/`.\n- `pyproject.toml:70,80` has `[tool.ruff]` and `[tool.pytest.ini_options]`.\n- `.github/workflows/ci.yml` and `README.md` exist.\n- `project-documents/user/project-guides/` holds only `001-initiative-plan.squadron.md`.\n- The skill file is 669 lines.\n- Slice-plan entry 3 is 363.\n- No test in `tests/skills/` pins `understand.md` content.\n- `.gitignore:184` already covers the trash directories, so preflight hygiene will not add a second changed non-document file.\n- The concept-guide heading count could not be checked here because the submodule is not initialized in this worktree.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": ".understand-anything/meta.json:3"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every design section is traced and sequenced",
+      "description": "Every Technical Decisions subsection and every Implementation Note maps to a task, and the build order has no cycles. Each authoring task is followed by its own verify task. No task falls outside the slice's scope. The slice states no performance or load requirement (NFR), so no load-test or CI task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/363-slice.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The selector conflicts with text in the comprehension flow that Task 7.4 forbids changing",
+      "location": "commands/analysis/understand.md:389-393",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The existing staleness prompt makes the \"exactly two questions plus one confirmation\" count false",
+      "location": "commands/analysis/understand.md:180-182",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 8.4's byte-identity check compares against nothing, because the concept is still uncommitted",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tasks 8.2 and 8.3 will hit the existing-document stop instead of the path they mean to test",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Task 8.5 runs the full comprehension flow twice and leaves two new analysis documents",
+      "location": "commands/analysis/understand.md:353-356",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success Criteria 3, 4, 10 and 12 are never checked against the generated document",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes and come after every task",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 2.1 does not say how the skill should resolve the project name",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "The rule for which existing guide checks overlap is unstated",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Small citation and wording issues",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Anchors and design references check out",
+      "location": ".understand-anything/meta.json:3",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every design section is traced and sequenced",
+      "location": "project-documents/user/slices/363-slice.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-22T21:56:22.732875",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "chars": 24055,
+      "sha256": "52ed0497db7a8fdb24105a831a84217e994c4e808f1190a93d699586bc6a8bfb",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/363-slice.concept-generation.md",
+      "chars": 25321,
+      "sha256": "8af83c5db83c5657c355ac5beaa315a18e95f09d0374cb889b9df9cc646df0a6",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "commands/analysis/understand.md",
+    ".understand-anything/meta.json",
+    "project-documents/user/architecture/360-slices.document-intelligence.md"
+  ],
+  "searches": [
+    "grep ^#|argument|comprehension|363|364|INFERRED|gitignore|---$ in commands/analysis/understand.md",
+    "list_files .understand-anything/* in .",
+    "list_files project-documents/user/project-guides/* in .",
+    "grep ^##  in project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md",
+    "grep understand|trash in .gitignore",
+    "grep understand in tests",
+    "list_files project-documents/* in .",
+    "list_files **/guide.ai-project.000-concept.md in .",
+    "list_files **/prompt.ai-project.system.md in .",
+    "list_files project-documents/user/architecture/360* in .",
+    "grep ai-project-guide in .",
+    "list_files .gitmodules in .",
+    "grep ai-project-guide in .gitignore",
+    "grep ^\\s*\\d+\\.|363|concept in project-documents/user/architecture/360-slices.document-intelligence.md",
+    "list_files project-documents/user/analysis/9* in .",
+    "grep ^\\[tool\\.(ruff|pytest\\.ini_options)\\] in pyproject.toml",
+    "list_files {.github/workflows/*,tests/skills/*.py,README.md} in .",
+    "grep analysis|understand in tests/skills",
+    "grep cf get|cf validate|DEVLOG in .",
+    "grep \"name\": ?\"squadron-ai\" in .understand-anything/knowledge-graph.json",
+    "grep \"filePath\": ?\"(tests|\\.github)/ in .understand-anything/knowledge-graph.json",
+    "grep cf get|cf project|registration in project-documents/user"
+  ],
+  "sections_in_document": 13,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 475238,
+  "cached_tokens": 422804,
+  "cache_write_tokens": 52414,
+  "completion_tokens": 16957,
+  "reasoning_tokens": null,
+  "duration_seconds": 170.3349230834283,
+  "cost_usd": 0.8452155000000001,
+  "cost_basis": "provider"
+}

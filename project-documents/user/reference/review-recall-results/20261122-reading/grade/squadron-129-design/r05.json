@@ -1,0 +1,96 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D8 empty-response error skips the review pipeline's one-shot recovery turn",
+   "description": "When a turn completes with an empty or blank `final_response`, D8 (and the matching table row at line 133) raises a plain `ProviderError(\"Codex turn completed with no response text\")`. The review pipeline already has a contract for this case. `_collect_review` (`src/squadron/review/review_client.py:370-386`) catches `EmptyFinalTurnError`, a subclass of `ProviderError` (`src/squadron/providers/errors.py:34`), on the first turn. It then sends one recovery prompt on the same conversation. A plain `ProviderError` goes straight past that `except`, so a Codex review fails where an OpenAI or SDK review would be retried once. Raise `EmptyFinalTurnError` instead (`finish_reason=None`, `reasoning_chars=0`, `tool_calls_made=0`, `failed_tool_calls=0`, or values taken from `usage`), and test that the recovery turn runs.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`create_agent` checks credentials before the install check, so the install hint can't be reached on a fresh machine",
+   "description": "The data flow (line 80) and the table row at line 122 say `create_agent` raises the install hint when the package is missing. The design doesn't say where that check sits relative to the existing credential check. Today `CodexProvider.create_agent` (`src/squadron/providers/codex/provider.py:32-34`) raises `ProviderAuthError(\"No Codex credentials found. Run 'codex' CLI\u2026\")` first. On a fresh venv with no `~/.codex/auth.json` and no `OPENAI_API_KEY`, that is the error users see. So walkthrough step 1 (line 210) and the requirement that any `openai-oauth` use without the extra shows the install command (line 190) both fail as written. State that `resolve_codex_runtime()` runs before `strategy.is_valid()`, and add a test with no credentials and no extra.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`sq auth login`/`logout`/`status` don't say what happens when the extra isn't installed",
+   "description": "`login.py` imports `openai_codex` inside functions (line 76). Without the extra, `sq auth login openai-oauth`, `sq auth logout openai-oauth`, and `sq auth status` will all raise `ImportError`. `status` reaches the import whenever the profile is valid, for example an old npm-Codex `auth.json` or `OPENAI_API_KEY` set. The failure table only covers \"timeout or SDK error\" in `account()` (line 126), and `ImportError` is neither. Nothing defines what login or logout should do here. Line 190 requires the install command for any use, and the test list (line 199) has no case for these commands without the extra. Specify that `login`/`logout` exit non-zero with the install hint from `runtime.py`, and that `status` shows validity without account details. Add a test for each.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"works\" branch of the `OPENAI_API_KEY` check leaves a stale setup hint and contradicts walkthrough step 8",
+   "description": "Only the \"fails\" branch updates `setup_hint`. Today the hint is `\"Run 'codex' CLI to authenticate, or set OPENAI_API_KEY\"` (`src/squadron/providers/codex/auth.py:64`). After this slice, a user with only the bundled binary has no `codex` on PATH, so in the \"works\" branch every place that shows the hint gives wrong advice: `create_agent`, `sq auth status`, and doctor's `openai-oauth` profile row (`doctor_checks.py:233`). The hint should name `sq auth login openai-oauth` in both branches. Also, walkthrough step 8 (line 219) expects `\u2717 not authenticated` after logout. In the \"works\" branch that only holds if `OPENAI_API_KEY` is unset, so the walkthrough needs to depend on the branch or unset the key.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Existing tests this design breaks are not listed",
+   "description": "The test plan lists only new tests. These existing tests fail or change meaning:\n- `tests/providers/codex/test_agent.py:168-180` (`test_none_response_yields_empty` asserts `\"\"`, which D8 forbids).\n- `test_agent.py:250-260` (asserts the effort WARNING that D5 removes).\n- `test_agent.py:125` (`assert_awaited_once_with(\"follow up\")`, which breaks once `run` takes an `effort=` keyword).\n- `test_agent.py:17-28, 90-95, 199-211` (patch `codex_app_server` and `resolve_codex_binary`).\n- `tests/providers/codex/test_provider.py:57-77, 99-113` (patch `resolve_codex_binary` and expect `npm i -g @openai/codex`).\n- `test_provider.py:56,71,97` (satisfy credentials through `OPENAI_API_KEY`, which breaks in the \"fails\" branch).\n- `tests/providers/codex/test_auth.py:30-39, 68-70, 95-103, 122-126` (pin the API-key fallback and `\"OPENAI_API_KEY\" in setup_hint`).\n- `tests/cli/test_auth.py:66-74` sets `OPENAI_API_KEY`, which makes `openai-oauth` valid. `sq auth status` would then call `account_summary()`. With the extra installed in the dev env, that starts a real Codex runtime inside a unit test, with a 30-second cap.\n\nName each test as rewrite or remove, and require that CLI auth tests fake `InteractiveLogin`.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:199"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"pyright clean\" and the real-SDK-types test don't work with the current pyright config and dev environment",
+   "description": "`pyproject.toml:94-98` runs pyright in strict mode over `src` with `reportMissingImports = true`, and excludes only `providers/codex/agent.py`. The new `login.py` uses SDK types, and `runtime.py` probes the package. In the default dev environment, which line 204 requires to work without the extra, their `openai_codex` imports fail strict mode. The design doesn't choose between installing `[codex]` in the dev/CI dependency group, extending the exclusion, or using targeted ignores. It also doesn't say whether the `agent.py` exclusion stays, now that the SDK is typed (tech-debt item F050). Similarly, the real-types test is skipped when the extra is absent (line 200), and nothing makes CI install the extra. The \"drifted SDK fails loudly\" guarantee could therefore never run.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:200-204"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`InteractiveLogin.login(timeout: float)` forces the generic CLI to read a Codex-specific config key",
+   "description": "`timeout` is required in the Protocol, and its default comes from `codex.login_timeout_s` (line 108). That means `cli/commands/auth.py` has to read `codex.login_timeout_s` when `--timeout` is omitted, which puts a Codex-specific key into the provider-agnostic command. This contradicts the claim that future providers need no CLI changes (line 179). Make it `timeout: float | None` and have the strategy fall back to its own key, as `account_summary()` already does with `codex.account_timeout_s`. Also, the API Contracts section (lines 154-155) says what `--device-code` does on a non-interactive profile but not `--timeout`.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The `sq model list` marker is internally inconsistent and adds unhandled lookups",
+   "description": "- Line 173 says \"the hint text is the marker's source\", but the marker is `(needs [codex] extra)` and the hint is `pip install 'squadron-ai[codex]'`. One can't be produced from the other without parsing.\n- \"Notes/Profile cell\" is ambiguous. The Notes column exists only in verbose mode, and its text is cut to 30 characters (`src/squadron/cli/commands/models.py:136`). For the marker to appear in default output it has to go in the Profile cell.\n- D9 has `_show_aliases` call `get_profile` and `ensure_provider_loaded`/`get_provider` for every alias. Today it does neither (`models.py:102-113`). A user alias pointing at an undefined profile, or a profile whose provider isn't registered, raises `KeyError` (`registry.py:22-24`), and nothing catches it. Today such an alias just lists. The change also imports every provider module (including `claude_agent_sdk`) on each `sq model list` run.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:173"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "What `missing_extra_hint` returns when the package is installed but no binary is found is unspecified",
+   "description": "`resolve_codex_runtime()` raises in two different cases: the package is missing (line 80), or neither the bundled binary nor PATH has one (D2, line 98). `CodexProvider.missing_extra_hint()` is built on that resolver, but D9 doesn't say whether the second case counts as \"extra missing\". If it does, doctor and `model list` tell the user to `pip install` a package they already have. If it doesn't, doctor's row needs a separate state with the PATH remedy (line 123). Define the return value for both cases, and say how doctor catches the resolver's exception to build its detail line.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The turn-timeout row needs an interrupt API that \"Interfaces Required\" doesn't list",
+   "description": "The timeout rows say \"cancel the turn\" and \"turn handle interrupted\". But the only turn API listed is `AsyncThread.run(...) \u2192 TurnResult` (line 54), which returns no handle. Only the login handle's `.cancel()` is listed. Either name the SDK's turn/interrupt surface or say that the timeout cancels the asyncio task and the client is torn down. The design also clears `_codex` and `_thread` only on `TransportClosedError` (line 129). It doesn't say whether a long-lived agent (daemon `spawn` and message) reuses its thread after a timeout or a failed interrupt, so a follow-up message could land on a thread with a turn still running. I couldn't confirm the SDK surface itself because `openai_codex` isn't installed here.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "What the Codex agent writes to `metadata[\"turns\"]` (and the empty-usage form) is undefined",
+   "description": "D6 says to use \"the same metadata keys the OpenAI agent uses\". There, `turns` is `RunTelemetry.turns`, documented as requests sent (`core/usage.py:49-57`), and the artifact adds it up (`review/turn_capture.py:158-172`). A single agentic `thread.run` makes an unknown number of model requests, so stamping 1 under-reports and leaving it out is a decision too. Neither is chosen. D6 also says usage is \"`None` (never 0)\", while the OpenAI agent always stamps a `TokenUsage` whose fields can be `None`. State which form is stamped. `collect_turn` skips a `None` value, so either works, but the tests need to pin one.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Deferred slice 907 plans conflicting codex packaging and should be marked as superseded",
+   "description": "`907-slice.optional-dependency-split-serve-and-codex-extras.md` (status `deferred`) plans an empty `codex = []` extra (line 40) and an `npm i -g @openai/codex` hint in `create_agent` (lines 102-118, 168). If someone picks it up after this slice, it would undo D1 and D2. Mention it here and mark its \u00a73 as superseded.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#dependencies"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Proportionality: the scope matches the plan entry; the PATH fallback is nearly unreachable",
+   "description": "Parts A, B and C each match the slice plan entry (`100-slices.orchestration-v2.md:79`), and nothing assigned to this slice is dropped. `ExtraRequirement` is justified because slice 128 bans string dispatch. The PATH fallback is in the plan, but `openai-codex` pins `openai-codex-cli-bin==0.159.3` (line 51), so the bundled binary is missing only after a `--no-deps` install or a missing platform wheel. One test for that branch is enough.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:98"
+  }
+ ]
+}

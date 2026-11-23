@@ -1,0 +1,103 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 6 omits the CI typecheck gate",
+   "description": "Task 6 runs `pnpm -r build`, `pnpm lint` and `pnpm test` and then declares the slice green. CI also runs `pnpm typecheck` (`.github/workflows/ci.yml:20`; root `package.json:11` maps it to `pnpm -r typecheck`). The three new source files and the new exports in `index.ts` and `node.ts` are only typechecked by that step, so a type error would turn CI red after the slice was marked done. Add `pnpm typecheck` to line 130 and to the success line at 132.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:130"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The parity sweep compares only verdicts, so missing-section output is never checked",
+   "description": "Step 6 (design lines 213\u2013217) keeps `head -1 | cut -d' ' -f1`, which is the verdict only. When both the script and cf say FAIL but name different missing headings, the sweep reports no DIFF and Task 5's success line (124) passes. The only missing-section test uses one level-2 heading (`## Value`, task lines 88 and 109). The design's own example, `### Verification Walkthrough` (design line 121), and any multi-heading case are never checked against the script. Success criterion design line 168 (\"one missing line per missing section, written as in the template\") is therefore tested for one heading. Compare full output for FAIL files, and add a level-3 plus two-level-2 case to Task 4T.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:121-124"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The real-file tests and the sweep depend on the working directory and a registered project, which the plan does not mention",
+   "description": "- `resolveProjectWorktree` (`packages/cli/src/utils/project.ts:88-143`) resolves only by cwd, or by a cwd that is a git worktree of a registered project. Otherwise it throws `PROJECT_NOT_FOUND` (lines 136\u2013142), which Task 4 turns into exit 2. An unregistered checkout therefore exits 2 for every input unless `--project` names a registered project. That conflicts with design line 167 (\"prints PASS \u2026 for every existing slice design\"), and the plan doesn't record it.\n- `pnpm --filter <pkg> test` runs with the package directory as cwd. Task 4T's relative `project-documents/user/slices/\u2026` paths (line 108) and Task 3T's \"resolve from the repo root\" (line 86) resolve to nothing unless the test computes the repo root from `import.meta.url`.\n- CLI tests load `@context-forge/core/node` from `dist` (`packages/core/package.json` exports `./node`; no CLI vitest alias). Line 115 runs the CLI tests without a preceding build.\n- The sweep (line 121) runs from the repo root, so an unregistered developer checkout prints `script=PASS cf=` for every file, which reads as a DIFF.\n\nState the pattern: mock `FileProjectStore` as `validate.test.ts:14-17` does, with `projectPath` set to the repo root, pass `--project`, build the fixture paths from the repo root, and run `pnpm -r build` before the CLI tests. Add the registration precondition to Task 5.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The base directory for file arguments is unspecified",
+   "description": "Line 100 says to resolve the checkout root for the template only. The `frontmatter` subcommand it copies resolves explicit paths under `operationPath` (`packages/cli/src/commands/validate.ts:165-171`). An agent following \"the same way\" could resolve design file arguments against the checkout root. The script, and design line 105 (\"printed exactly as given\"), read paths relative to the working directory. Say that file arguments resolve against the process working directory, so `cf validate design user/slices/x.md` from a subdirectory behaves like the script.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:100-101"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`parseFrontmatter` swallows read errors, so a late fs failure exits 1 instead of 2",
+   "description": "Task 3 (line 78) says to take `docType` from `parseFrontmatter`, and line 79 says to wrap fs errors. But `parseFrontmatter`'s catch returns `{ found: false, data: {} }` for any error (lines 9\u201310 and 63\u201365; the docstring at line 7 says \"Never throws\"). If the file is removed or becomes unreadable after the preflight at line 77, `docType` comes back empty, the file fails with `reason: 'doctype'`, and the run exits 1. Design line 78 requires every I/O failure to exit 2. Read the text in the file layer first, inside the wrapper, so a read failure surfaces before the swallowing parser runs.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63-65"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The CLI exit-2 tests miss four of the cases the criterion lists",
+   "description": "Design line 171 requires exit 2 with stderr, empty stdout, and `--json` included, for: no arguments; a missing, non-regular or unreadable file; a missing or unreadable template; and a template with no required headings. Line 113 covers four: no arguments, a nonexistent path, valid-before-missing, and a missing template. Not covered at the CLI level are a directory passed as a file, an unreadable file (`chmod 000` in a temp dir), an unreadable template, and a template with no markers. Task 3T covers the directory and no-marker cases only at the function level (line 91), so nothing checks the CLI's exit code or empty stdout for them. Add them to line 113.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Lines 71, 94, 117, 126 and 134 are checkbox task items (`- [ ] **Task 2C: Commit** \u2014 \u2026`). The required form is a plain `**Commit**:` line. The placement is right (after 2T, 3T and 4T, which are the working tested points), so only the form needs changing.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71-134"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 5C's `docs:` label doesn't cover code fixes Task 5 may require",
+   "description": "Line 122 says any unexplained DIFF must be fixed and given a test in the matching test file. That changes source and test files. The only commit point after it is 5C, labeled `docs: record slice 214 parity sweep results`. A code fix would therefore land under a docs message, and a fix to the 4T test file would sit outside any marker placed after 4C. Give code fixes their own commit point and message, and keep the `docs:` label for the design-only change.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Release handoff names a session the design doesn't name, and the integration criterion has no in-slice task",
+   "description": "Line 31 says \"ai-project-guide-old session\". Design lines 156 and 162 say \"the ai-project-guide session\". The name \"ai-project-guide-old\" appears nowhere else in the repo, so confirm the session before the handoff. Design line 186 (\"the guide can replace every reference and remove the script\") has no task. That is expected, since the guide-side edits are excluded at design line 38, but line 31 is the only place the handoff is tracked. The design's guide line references are also stale: the prompt reference is at `prompt.ai-project.system.md:293` (design line 157 says 291), and the readme reference is at `readme.md:72` (design line 161 says 68).",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:31"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`parseFrontmatter`'s signature is not stated",
+   "description": "`parseFrontmatter(filePath: string): Promise<FrontmatterResult>` reads the file itself and is async. Task 3 (line 78) says only \"parse frontmatter with parseFrontmatter\". A junior could pass file text or omit `await`. State `await parseFrontmatter(path)` and read `.data.docType`.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:9"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The Task 5 leniency list is incomplete, and one item can't change a verdict",
+   "description": "Line 122 lists \"quoted docType, CRLF, \\r, real heading syntax\" as valid causes of a DIFF. `parseFrontmatter` also trims whitespace on the `---` delimiters and on the `docType` line (`frontmatterParser.ts:16, 24, 40`). The script's awk requires an exact `---` on line 1 and an exact `docType: slice-design` line (`scripts/validate-slice-design:82, 84`). Those are the likelier DIFF causes, so add them. \"Real heading syntax\" can't change a verdict: a `#hashtag` line has level 8, and no required heading in the template is deeper than level 3.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Real-slice fixtures are unnamed, and one candidate is gitignored",
+   "description": "Line 108 says \"several files \u2026 that pass the bash script today\" without naming them. `.gitignore:34` excludes `project-documents/user/slices/120-slice.plugins-1.md`, which CI won't have. Name a fixed list of tracked files and run the script on each before writing it into the test.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 1's \"no other file hard-codes the template path\" conflicts with the literal path in Task 3T",
+   "description": "Line 44 says no other file hard-codes the template path, but line 86 (and design line 181) require a literal path in the real-template test. That literal is deliberate, since the test pins the real location, so say so.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:44"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "`SliceDesignValidationError` isn't a `UserError`, so its messages and JSON code differ from the frontmatter command's",
+   "description": "`UserError` is defined in the CLI (`errors.ts:16`). A core error therefore prints `Error: <message>` in human mode (`errors.ts:66`) and `\"code\":\"UNKNOWN\"` in JSON mode (`errors.ts:53-55`). Exit codes and stdout are correct, so this only affects wording and the JSON code. The design doesn't require either, so note the choice or map the error in the action.",
+   "location": "packages/cli/src/utils/errors.ts:16"
+  }
+ ]
+}

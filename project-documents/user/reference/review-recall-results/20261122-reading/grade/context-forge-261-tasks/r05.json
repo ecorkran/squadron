@@ -1,0 +1,61 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Guide fixture cannot distinguish concept, Phase 2 and brownfield prompts, or load a profile",
+   "description": "Task 9T builds the `brownfield-guide` fixture by copying this file and adding \"a `brownfield-adoption: [...]` profile line and a short `##### Brownfield Adoption` section\". Task 12 then asserts \"concept prompt\" (items 1, 2, 6, 7, 9) and \"the Phase 2 prompt\" (item 10). The source file has three problems:\n- **No concept or architecture prompt.** Its prompts are Context Initialization, Tool Usage, implementation, design, review and Task Breakdown. `SectionBuilder.buildInstructionSection` (`SectionBuilder.ts:109-117`) falls back to `Custom instruction: Phase 0: Concept`. Nothing in the output marks a \"concept prompt\" or a \"Phase 2 prompt\", so those assertions can only be \"absence of Adoption Facts\" or are impossible.\n- **No `context_profiles` block.** `ContextProfileParser.parseProfiles` (`ContextProfileParser.ts:131-150`) needs a fenced yaml block containing `context_profiles`. \"A profile line\" does not create one.\n- **No `_default` profile.** If the fixture holds only `brownfield-adoption`, `getProfileForInstruction` (`:162-176`) returns `[]` for every other instruction. `applyProfileFiltering` then blanks every artifact field on concept and Phase 2 builds.\n\nTask 9T should specify:\n- distinct `##### Concept` and `##### Architecture` sections\n- a full fenced `context_profiles:` block with a `_default` entry and a `brownfield-adoption` entry\n\nTask 12 should then assert the markers by text.",
+   "location": "packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:1-30"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`generateContext` gets a required parameter after optional ones",
+   "description": "The current signature is `generateContext(projectId, overrides?, additionalInstructions?, worktreeId?)`. Task 11 says it \"gains a required `adoptionStateWrites` parameter\" with no position. Appended at the end, TypeScript rejects it (\"a required parameter cannot follow an optional parameter\"). Task 13 calls `generateContext(..., 'persist')`, which hides the same ambiguity. Task 11 should state where it goes. Putting it first, or turning the trailing arguments into an options object, would work. It should also update the two call sites at `contextTools.ts:200` and `:264` explicitly.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57-62"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Resolver writes `in_progress` before the facts that can still fail",
+   "description": "Task 9 runs step 5, the state write, before step 6, which gathers `readHistory`, `presentPaths` and `recognizeCi`. `pathPresent` rethrows every non-ENOENT error. A candidate like `docs/adr` under a regular file `docs` gives `ENOTDIR`, and an unreadable directory gives `EACCES`. Task 4T asserts this throw. Two consequences follow:\n- **State left behind.** The build fails after `adoption.state = in_progress` is already committed to `.context-forge.toml`. This is the same \"failed build leaves state written\" hazard that D9 avoids for the guide check, and nothing undoes it.\n- **No remedy shown.** The thrown error is a plain `Error`, not `AdoptionError`. `generateContextFromProject` turns it into the error stub, so `cf build` returns a stub prompt with no override message.\n\nTask 9 should gather and render the facts first, assuming the write will succeed, and write last. Task 4 or Task 9 should also wrap the `presentPaths` and `recognizeCi` errors in `AdoptionError` with the override remedy. Task 9T should add a case where fact gathering throws and the state stays `''`.",
+   "location": "packages/core/src/detection/pathPresent.ts:19-31"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Planning-artifact pattern `\\d{3}` is narrower than the repo's conventions, and the task's claim about them is wrong",
+   "description": "Task 6 matches `^\\d{3}-(arch|hld|slices)\\..+\\.md$` and says it follows \"the same conventions ProjectModelBuilder already parses\". The code is less strict:\n- `documentDetector.ts:34` says matching is padding-insensitive, covering both `50-arch.foo.md` and `050-arch.foo.md`.\n- `ConsistencyChecker.ts:1328` and `:1342` use `\\d+`.\n\nUnder `\\d{3}`, a project with `50-arch.x.md` is not seen as planned. It then goes through the source walk and can be falsely classified as brownfield. That is the costly misfire D1 warns about. Task 6 should use `\\d+`, or Task 6T should add an unpadded-index case if three digits is deliberate.",
+   "location": "packages/core/src/introspection/parsers/documentDetector.ts:34"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`adoption.state` reads fall through to user config, and Tasks 2T, 9T, 12 and 13 don't isolate it",
+   "description": "`ConfigManager.get` checks the project file, then the user config file. `readAdoptionState` goes through `get`. A user-level `adoption.state` (`cf config set --user`) would silently force or suppress brownfield in every project. The key is meant to be shared and repo-scoped. The plan neither blocks nor mentions this.\n\nExisting tests isolate the user file with `process.env.CONTEXT_FORGE_DATA_DIR` (`ConfigKeys.test.ts:54-69`, `CoreServiceFactory.test.ts:77-95`). Task 2T says only \"temp directories\". Tasks 9T, 12 and 13 also don't mention it. On a developer machine with a user-level key set, they could read real config. Tasks 2T, 9T, 12 and 13 should require setting `CONTEXT_FORGE_DATA_DIR` per test. Task 2 should either read the project file only or record the user-scope behavior as accepted.",
+   "location": "packages/core/src/config/ConfigManager.ts:121-178"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 15 before/after diff procedure is ambiguous and likely to differ for the wrong reason",
+   "description": "Task 15 builds `/tmp/before.md` from \"a temporary `git worktree add` of `main`, built there\". The slice walkthrough runs both builds in this repo's registered project. A fresh worktree has no `node_modules`, so it needs a `pnpm install` first. If the CLI from that worktree builds the registered project, the output is not identical, because the project path and worktree resolution differ. If it builds the new worktree's own path, it is not a registered project. The task should say:\n- build `main`'s CLI `dist` in the worktree\n- run that CLI with this repo as cwd, then run the slice branch's CLI the same way\n- diff the two outputs",
+   "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:350-355"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Test volume beyond what the criteria need, and overlap between 9T and 12",
+   "description": "The file has about 34 work items. Cuts that lose no criterion coverage:\n- **Task 4T** (line 112) runs `it.each` over every entry of all three constant lists, about 21 cases that restate the constants. Keep one case per list.\n- **Task 1T** (line 61) re-tests `resolvePhaseValue` for three inputs. This is existing behavior, and `projectSchema.ts:140-141` already holds the legacy alias. One assertion that `CONCEPT_PHASE` equals `PHASE_STRINGS[0]` is enough.\n- **Tasks 9T and 12** both run the same D4 selection cases against real directories: empty, 2000 lines, resume, declined, planned, explicit, read-only, missing profile. Task 9T should keep only what an integration run can't see (no-fs spy, walk never runs, write failure, check-before-write). Task 12 should carry the end-to-end matrix.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:112"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 4 leaves the barrel status of `presentPaths` itself unclear",
+   "description": "Task 4 forbids adding \"them\" (the lists) to the barrel but is silent on `presentPaths`. Task 9 doesn't say how the resolver imports them. It should say the resolver imports `presentPaths` and the lists directly from `detection/presentPaths.js`. `node.ts:58` re-exports the whole barrel, so anything added there becomes public API.",
+   "location": "packages/core/src/detection/index.ts:1-2"
+  }
+ ]
+}

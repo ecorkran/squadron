@@ -1,0 +1,72 @@
+{
+ "case": "migratory-102-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 2.1 adds two required fields to `BehavioralProfile`, and Task 2.2 updates test call sites only (\"search for `BehavioralProfile(` across `tests/`\"). At `6d86232^` the production call site `src/migratory_server/simulation.py:18` (`build_profiles`) also constructs `BehavioralProfile` with the six existing fields, fed from `ProfileConfig` in `src/migratory_server/config.py`. After Task 2.1 that call raises `TypeError`, every server test that builds profiles fails, and the \"all existing tests still pass\" check in 2.2 and 6.1 cannot be met. No task touches `migratory_server`. The parent slice design says the same (\"all existing tests must be updated\"). **VALID**: the tasks cannot be completed as written. Needs: code. The implementing commit `55364da` changed `config.py` and `simulation.py` as well (and added defaults to `ProfileConfig`), which no task or design line mentions.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [],
+    "r03": [
+     0
+    ],
+    "r04": [],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     0
+    ],
+    "r10": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Slice design Technical Requirement 1: \"both forces are vectorized within each agent's neighborhood\". No task checks or enforces it (the tasks' sketches loop per agent with scalar NumPy calls). **VALID** (`coverage`, minor): the tasks omit verification a success criterion names. Needs: doc (design plus tasks). Raised by the original review (its only CONCERN); the response added the source-inspection checks.",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     4
+    ],
+    "r04": [],
+    "r05": [
+     5
+    ],
+    "r06": [
+     4
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     4
+    ],
+    "r09": [
+     2
+    ],
+    "r10": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "F2: r06 finding 4 is mainly about neighbor_lists indexing but explicitly states the vectorization requirement is not carried into 4.1; counted. r08 finding 4 likewise combines both; counted."
+}

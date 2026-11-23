@@ -1,0 +1,516 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 1.1 would add a second BoundsPolicy and break WRAP/REFLECT dispatch",
+      "description": "The enum already exists at config.py:17\u201323 with four members (`OPEN`, `WRAP`, `REFLECT`, `SOFT`). Task 1.1 (task file lines 46\u201355) says to define a three-member `BoundsPolicy` \"before WorldBoundsConfig\". That adds a second module-level class that shadows the first and drops `SOFT`. `bounds_enforcement.py:41` (`case BoundsPolicy.SOFT:`) would then raise AttributeError. A `match` tests cases in order, so WRAP and REFLECT calls reach that line and fail too. The SOFT branch at config.py:213\u2013219 and the SOFT tests at tests/test_config.py:242\u2013328 would also break.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:17"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Most planned work already exists; the plan describes a pre-313 tree",
+      "description": "Verified against the tree:\n- Task 1.2: `policy` is at config.py:52, and `soft_bounds` (line 53) is not mentioned.\n- Task 1.3: policy and SOFT loading are at config.py:198\u2013248. The plan puts `_validate_world_bounds` at \"around line 156\" (task line 69); it is at config.py:180.\n- Task 1.4: all six named tests and the round-trip test exist at tests/test_config.py:172\u2013219.\n- Tasks 2.1\u20132.3: bounds_enforcement.py and tests/test_bounds_enforcement.py (20 tests) exist.\n- Tasks 3.1\u20133.2: `world_bounds` is at simulation.py:64, `_bounds_policy` at :76, and the gate at :112\u2013119.\n- Task 3.3: server.py:130 passes `world_bounds`, and server.py:134\u2013137 logs the policy.\n- Tasks 4.1\u20134.2: `policy: wrap` is at config/default.yaml:12 and config/test.yaml:12.\n- Task 5.3: both frontmatters say `status: complete` (task file line 9, slice line 10), and architecture line 43 is already `[x]`.\n- Task 5.4: CHANGELOG.md:27\u201333 and :42 already have the slice 313 entries.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.1 asks for a required `world_bounds`, but the code makes it optional",
+      "description": "The signature is `world_bounds: WorldBoundsConfig | None = None` with a fallback to `entity_manager.world_bounds` (simulation.py:73\u201376). Current constructions without it do not fail. Making it required would mean editing the 20 `SimulationManager(` calls in tests/test_simulation.py (lines 137\u2013565) that pass no `world_bounds`. The claim at task line 233 that they \"will fail otherwise\" is false for the current signature.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.4 would duplicate CHANGELOG entries",
+      "description": "Lines 27\u201333 and 42 already contain the 313 entries. Adding the bullets at task lines 318\u2013320 creates duplicates.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "CHANGELOG.md:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Task 3.4 flip test cannot pass as specified",
+      "description": "The plan places an agent at (99, 50) with velocity (10, 0), steps once, and asserts `vx < 0`, without setting dt or max_speed. The existing fixture uses `_profile()` with `max_speed=5.0` (tests/test_simulation.py:86\u201395) and `dt=0.05` (for example line 142). The engine clamps speed before integrating (src/migratory/engine/integration.py:39, 43, 47\u201373), so vx becomes 5 and x becomes 99 + 5\u00d70.05 = 99.25. No edge is crossed, so vx stays positive. Starting at x=99.9 with the fixture values gives 100.15, which crosses the edge. The test should say so.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`np.mod` can return `width` for tiny negative inputs",
+      "description": "Criterion 7 (slice lines 369\u2013371) and the plan's Task 2.2 note (task line 134) require `[0, width)`. For float64, `np.mod(-1e-15, 100.0)` computes `100 \u2212 1e-15`, which rounds to exactly `100.0`, because the ulp at 100 is about 1.4e-14. That output is outside the half-open interval. This is derived from IEEE rounding and NumPy's remainder implementation, not executed. The existing edge tests (tests/test_bounds_enforcement.py:105\u2013112) use exact values and miss it. Fix: after the mod, set values `>= width` to 0.0 for each axis, and add a `-1e-15` test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/migratory_server/bounds_enforcement.py:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 leaves config/test.yaml on a non-default policy with an ambiguous restore",
+      "description": "Steps 6\u20137 edit config/test.yaml to `reflect`, then `open`. Step 8 says to restore \"whichever policy you want to keep (recommend wrap)\", which is not deterministic. If the run is interrupted after Step 6, the file stays on `reflect`, and nothing in the plan detects it. Task 5.5 stages only docs, so the uncommitted edit is left in the tree. Fix: make Step 8 \"set `policy: wrap`\", add a grep check before Step 4, and state what to do if a previous run was interrupted.",
+      "file_ref": null,
+      "category": "state",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes",
+      "description": "Lines 96, 179, 249, 286, and 325 use `- [ ] **Commit:** \u2026`. Commit markers must be plain `**Commit**:` lines, not checkboxes.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Task 4.3 commit comes before any test run after the config change",
+      "description": "Tasks 4.1\u20134.2 only check that the YAML loads. The first full pytest after the config change is Task 5.1, which runs after this commit. `test_main.py:66\u201370` starts the server with the default config, and default.yaml now sets `policy: wrap` on a 1000-unit world. The commit is not at a tested point. Add a pytest run to 4.2 before the commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:283"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter status and dependencies are wrong before the work is done",
+      "description": "`status: complete` (line 9) is set before Section 5 runs, which makes Task 5.3 a no-op. Dependencies (line 6) list only 302 and 303. The plan relies on 308 (the \"Forces wired\" log that Task 3.3 anchors to, server.py:117\u2013121) and on 309 (the pattern Task 3.5 cites, and the slice's cross-slice note at slice lines 335\u2013336). Set `status` to in-progress until 5.3, and add 308 and 309.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Notes says SOFT is deferred, but it has shipped",
+      "description": "The Notes say SOFT is \"intentionally deferred\" and that adding it later is \"purely additive\". SOFT is in the enum (config.py:23), is a no-op in `apply_bounds_policy` (bounds_enforcement.py:41\u201342), and is wired through `force_builder` by slice 314 (CHANGELOG.md:15\u201326). The three-variant framing in the Context Summary (task lines 18\u201320) is stale for the same reason.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:332"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several line numbers and class names in the plan are wrong",
+      "description": "Task 1.1 says `WorldBoundsConfig` is at \"line 25\"; it is at config.py:46\u201353. Task 1.3 puts `_validate_world_bounds` at \"around line 156\" (task line 69); it is at config.py:180. Task 1.4 names a `TestWorldBounds` class that does not exist; the tests are in `TestRangeValidation` (tests/test_config.py:139).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The plan only partly covers round-trip serialization",
+      "description": "Task 1.4's round-trip test passes because `config_to_yaml` runs `_serialize_for_yaml` (config.py:657\u2013681), which converts StrEnum to its value. The plan never mentions that function. If someone rewrites `config_to_yaml` from the plan, the round-trip test (test_config.py:207\u2013219) is the only thing that catches the break.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:657"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3.2 claims zero import-time overhead, but the import is at module top",
+      "description": "simulation.py:10 imports `apply_bounds_policy` at load time, so that cost is always paid. The Notes at line 329 say no import is avoided. Keep the existing top-level import and drop \"import-time\" from the check.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2.1's required comment is missing",
+      "description": "Task 2.1 (line 124) asks for a comment referencing `build_world_bounds` in simulation.py. The `_apply_wrap` docstring says the origin is (0, 0) but does not reference `build_world_bounds`.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/migratory_server/bounds_enforcement.py:53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3.5 cites the wrong call-site files",
+      "description": "tests/test_clients.py constructs no SimulationManager. tests/test_force_builder.py:201\u2013207 and tests/test_repulsor_integration.py:53\u201359 already pass `world_bounds`. The \"Files touched\" list (lines 30\u201340) omits the docs and any test file that Task 3.5 might edit.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Manual viewer checks cannot be performed by an agent",
+      "description": "Step 5 needs a Three.js viewer, 30\u201360 seconds of watching, and visual judgment. Criterion 14 (slice lines 390\u2013392) depends on it. The plan should name who performs the check, or add an automatable proxy such as a short WebSocket client that asserts snapshot positions stay in bounds, and record the result.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Criteria 10 and 11 have no tests in the tree yet",
+      "description": "No bounds-policy test exists in this file. Task 3.4 is the only place these criteria are covered, so it has to be fixed (see the flip-test finding above) before it can serve as the coverage.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/test_simulation.py:1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.1 repeats Step 2 of Task 5.2, and the plan is heavier than the slice needs",
+      "description": "There are 23 task entries for a 2/5 slice that is mostly done, including five one-line commit tasks. Task 5.1 runs the same pytest as Task 5.2 Step 2 (task line 300). Fold 5.1 into 5.2, and fold 4.3 into 4.2 so the commit follows a passing run.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:322"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config loader meets criteria 2\u20135",
+      "description": "A missing key defaults to OPEN (198\u2013200), matching is case-insensitive (204), the error lists the valid options (206\u2013210), and the round trip works through `_serialize_for_yaml` (657\u2013681).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:198"
+    },
+    {
+      "severity": "PASS",
+      "title": "Step gate and dispatch match criterion 10",
+      "description": "The gate runs only when the policy is not OPEN. It passes `[:count]` views and runs after `tick` (simulation.py:103\u2013119). The mock target `migratory_server.simulation.apply_bounds_policy` exists, because the function is imported by name at simulation.py:10.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:112"
+    },
+    {
+      "severity": "PASS",
+      "title": "Enforcement unit tests cover criteria 6\u20139",
+      "description": "The 20 tests cover OPEN no-op, WRAP single, large, negative, edge, velocity, and both-axis cases, and REFLECT clamp, flip, and corner cases, matching the Task 2.3 list. The only gap is the float-edge case noted above.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/test_bounds_enforcement.py:18"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 1.1 would add a second BoundsPolicy and break WRAP/REFLECT dispatch",
+      "location": "src/migratory_server/config.py:17",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Most planned work already exists; the plan describes a pre-313 tree",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 3.1 asks for a required `world_bounds`, but the code makes it optional",
+      "location": "src/migratory_server/simulation.py:64",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 5.4 would duplicate CHANGELOG entries",
+      "location": "CHANGELOG.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The Task 3.4 flip test cannot pass as specified",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`np.mod` can return `width` for tiny negative inputs",
+      "location": "src/migratory_server/bounds_enforcement.py:59",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "state",
+      "raw_category": null,
+      "summary": "Task 5.2 leaves config/test.yaml on a non-default policy with an ambiguous restore",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The Task 4.3 commit comes before any test run after the config change",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:283",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Frontmatter status and dependencies are wrong before the work is done",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Notes says SOFT is deferred, but it has shipped",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:332",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Several line numbers and class names in the plan are wrong",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The plan only partly covers round-trip serialization",
+      "location": "src/migratory_server/config.py:657",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 3.2 claims zero import-time overhead, but the import is at module top",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 2.1's required comment is missing",
+      "location": "src/migratory_server/bounds_enforcement.py:53",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 3.5 cites the wrong call-site files",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Manual viewer checks cannot be performed by an agent",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Criteria 10 and 11 have no tests in the tree yet",
+      "location": "tests/test_simulation.py:1",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 5.1 repeats Step 2 of Task 5.2, and the plan is heavier than the slice needs",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:322",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Config loader meets criteria 2\u20135",
+      "location": "src/migratory_server/config.py:198",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Step gate and dispatch match criterion 10",
+      "location": "src/migratory_server/simulation.py:112",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "pass",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Enforcement unit tests cover criteria 6\u20139",
+      "location": "tests/test_bounds_enforcement.py:18",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-22T21:32:19.955673",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "chars": 19874,
+      "sha256": "86396dd86d0b9fc858bb2c2f9cb2e1793a8c6fa7a499147b0e92ed2381028e9a",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+      "chars": 19499,
+      "sha256": "366a23da778aeae18fe666801a84c1de2074567e79b3c4a794f48a134b1d0109",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory_server/config.py",
+    "src/migratory_server/simulation.py",
+    "src/migratory_server/server.py",
+    "src/migratory/environment/bounds.py",
+    "config/default.yaml",
+    "config/test.yaml",
+    "CHANGELOG.md",
+    "src/migratory_server/bounds_enforcement.py",
+    "tests/test_bounds_enforcement.py",
+    "tests/test_config.py",
+    "src/migratory/engine/tick.py",
+    "src/migratory/engine/integration.py",
+    "tests/test_simulation.py",
+    "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "tests/test_server.py",
+    "project-documents/user/tasks/309-tasks.initial-velocity-spawn.md",
+    "tests/test_repulsor_integration.py"
+  ],
+  "searches": [
+    "grep SimulationManager\\(|SimulationManager\\b in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "list_files src/migratory_server/bounds_enforcement.py in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "list_files tests/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "list_files project-documents/user/**/*31[0-9]* in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep SimulationManager\\( in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep SimulationManager\\(|BoundsPolicy|apply_bounds_policy|world_bounds= in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests",
+    "grep ^class |def test_.*bounds|def test_.*policy|def test_.*round|config/|default\\.yaml|test\\.yaml in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests",
+    "list_files config/* in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "list_files src/migratory_server/__main__.py in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep def state|def count|def world_bounds|def profile_list|self\\._state\\b|class EntityManager in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/src/migratory_server/entities.py",
+    "grep 313|World Bounds Policy|bounds policy in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/project-documents/user/architecture",
+    "list_files project-documents/user/**/309* in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks",
+    "grep requires-python|numpy|pyyaml in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/pyproject.toml",
+    "grep Task 3\\.2|fix pattern|world_bounds in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/project-documents/user/tasks/309-tasks.initial-velocity-spawn.md",
+    "grep policy|Bounds policy|apply_bounds in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/tests",
+    "grep test_output|\\.log|simulation\\.log in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/.gitignore",
+    "grep --config|add_argument in /Users/manta/.config/squadron/reading-20261122/wt/migratory-313-tasks/src/migratory_server/__main__.py"
+  ],
+  "sections_in_document": 30,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 22,
+    "in_fences": 0,
+    "in_section": 22,
+    "surviving": 22
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 831427,
+  "cached_tokens": 700833,
+  "cache_write_tokens": 130576,
+  "completion_tokens": 74191,
+  "reasoning_tokens": null,
+  "duration_seconds": 311.1544411671348,
+  "cost_usd": 0.21176297,
+  "cost_basis": "provider"
+}

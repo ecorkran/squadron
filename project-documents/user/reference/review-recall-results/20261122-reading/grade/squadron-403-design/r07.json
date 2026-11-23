@@ -1,0 +1,131 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The export type-count safeguard cannot detect the risk it names",
+   "description": "Risk line 375 says that if pyright resolves `import squadron` to the live editable install, export type counts measure live code. Mitigation line 380 relies on the in-place-equals-export test at HEAD. At a clean HEAD the export tree and the live tree have identical content, so both measurements read the same code and match whether or not pyright used the export. Walkthrough step 4 (line 366) checks only that type counts are absent when the lockfile changed. It asserts nothing about what pyright read when the lockfile is unchanged. A wrong type-count record would therefore be written under the commit's key, with a valid environment identity and no failing test. Fix: specify a fixture test where the export differs from the live install (for example, an export-only type error), asserting the export's error appears. Also state how pyright's import root is pinned to the export rather than relying on resolution order.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "A write race has no signal, against the failure-mode rule",
+   "description": "The row for two commands writing `slice_ranges` at once says \"last write wins\" and gives the signal as \"None\". The project's review rules require every failure mode to be observable at WARNING or above and to have a test asserting the signal, and they call silent paths \"bugs in waiting.\" A lost fast-forward landing may be unrecoverable once its reflog expires. Fix: re-read the record immediately before the replace, and if its landing set changed since this run's read, log a WARNING naming the lost `after_sha` values. Add a caplog test. Locking is an option if the team wants to prevent the loss rather than detect it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Git read failures are reported as \"no answer\", contradicting the helper contract and the doc's own rule",
+   "description": "Row 164 treats a `None` from a reflog read or merge search as \"this path can't answer,\" logs INFO, and falls through. Integration line 327 says \"a `None` from `run_git` is never an answer.\" API line 275 says `slice-ranges` exits 1 on a git error. The existing `run_git` docstring says callers must distinguish a `None` (git could not run or timed out) from a non-zero return (git refused), because they are different failures. The helpers the doc reuses (`_find_slice_branch`, `_resolve_fork_point`, `_search_merge_commit`) return `None` for both git failure and no match. Reused as-is, a timed-out reflog read becomes `unresolved: reflog_unavailable`, the same as a fresh clone, and the run exits 0. `run_git` already logs a WARNING on timeout, so the INFO level is also inconsistent. Fix: separate error from absence in the helper return types, map git failure to WARNING or ERROR with exit 1, and reserve `REFLOG_UNAVAILABLE` for a missing creation entry.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The fast-forward path runs only when no merge landing exists",
+   "description": "Line 114 gates the fast-forward path on the merge search finding nothing. A slice whose first landing was a fast-forward and whose follow-up is a merge commit then gets only the merge landing, and the fast-forward landing is never resolved. Phase 7 runs `git merge`, which fast-forwards whenever the target hasn't moved, so this order is plausible. D1 says a slice can land more than once and that every landing is kept, which this gate contradicts unless the first landing was stored earlier. The two paths can run together without double counting, because the first-parent check already keeps a merge-landed branch out of the fast-forward path. Fix: run both and union them on `after_sha`. Add the fast-forward-then-merge case to the resolver test list at line 347.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The merge-search helper does not return the list D1 needs",
+   "description": "Data flow line 112 lists all landing merges, oldest first (`--reverse`, no `-1`). The named helper, `_search_merge_commit`, returns one newest commit. The doc changes only its signature, adding a `first_parent` argument, and `sq review code` must keep its single-result behavior (criterion at line 351). The two-landing case (D1, criterion 3) therefore needs a list-returning search that the component table does not name. Fix: name that function and state that the single-result helper stays for the review path.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:89"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The export integrity check would fail on a dirty live checkout",
+   "description": "Line 130 reads config from the live checkout with no clean check, so exports are meant to run mid-slice. `take_snapshot_at` shares `_measure_all` with `take_snapshot`, and `take_snapshot` ends with `check_integrity`. As that function exists, it raises on any dirty path after measurement. The doc does not say whether the export calls it. If it does, a routinely dirty checkout fails every export with \"The repo changed while measuring,\" which misstates the cause. Criterion 4 (line 335) still needs a check that the measured repo is unchanged. Fix: compare the dirty set before and after measurement, and raise only on paths that became dirty during the export.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:130"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Reports cross the layering the doc sets for them",
+   "description": "The component table says the three report modules do no git work and no store writes beyond `ensure_snapshot` and `record_slice_ranges`. But `history` orders snapshots \"by the target's first-parent history\" (line 298), which needs git. The stored-landing existence check uses `git cat-file -e` before `ensure_snapshot` (line 165), and the doc does not say which module makes that call. Fix: inject an ordering and existence port alongside the resolver, or name the module that makes these calls. Otherwise the fake-based tests at line 103 cannot cover those paths.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Review attribution contradicts the 402 contract",
+   "description": "The 402 design (its 403 contract paragraph) says review records with `commit_sha is None` or `slice_index is None` roll up at project level only. This doc's D9 (line 243) and Integration Points (line 325) test only `slice_index`. A review with a slice index but no commit SHA would be listed under its slice here, against 402's contract. Fix: add the `commit_sha` rule to D9 and to the integration contract.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:325"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Off-line landings and other targets' landings are not defined for reports",
+   "description": "`history` leaves out snapshots of commits off the target's first-parent line, and places review findings \"on the row of the landing's `after_sha`.\" A landing whose `after_sha` is off that line has no row, and the doc does not say where its reviews go. The closing line covers only reviews with no resolved landing or no `slice_index`. Also, `slice_ranges` is one record per project (line 173), and each landing carries `target_ref`, but no rule says whether reports filter by target. A checkout whose target is `main` would then attribute a landing that was resolved under a worktree target. Fix: state where off-line landings' reviews are counted, and state whether reports filter on `target_ref`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "A corrupt or unsupported-version slice-range record has no failure row",
+   "description": "The failure table has no row for an unreadable or unsupported-version `slice_ranges` record. The store's list methods skip such a file with a WARNING. The doc's `get_slice_ranges` is a store scan (line 110), so a corrupt record would read as absent. The next write would then replace the file and discard every stored landing, including fast-forward landings whose reflogs have expired. That breaks \"stored landings never change\" (lines 186 and 334). Fix: add the row. Load the record by id, and raise `MetrologyStoreError` naming the file rather than treating corruption as empty.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The review noise-floor criterion is deferred with no owner",
+   "description": "The 403 plan entry requires that \"LLM-sourced numbers are shown against their noise floor.\" The doc excludes creating a review floor (line 61) and marks every review figure \"no floor measured\" (D8, line 237). Neither this doc nor the plan names a slice that will measure one, and the plan's Future Work does not list it. Either name the owning slice, or restate the criterion in this doc as audit-only with the reason.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:61"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The design is heavier than the slice needs in several places",
+   "description": "Cut candidates that the plan does not require:\n- **Patterns and Conventions (258\u2013261)** restates CLAUDE.md (enums for compared values, store method shape). Delete it.\n- **Risk Assessment mitigations (379\u2013381)** restate D2, D4 and the failure table. Cut each to one line or remove.\n- **Verification Walkthrough (359\u2013370)** duplicates criteria 1\u201311. Keep it only if the PM wants a manual script, and say so.\n- **Failure rows 162 and 167** restate behavior from 400 (\"unchanged from 400\", \"as in 400\"). A one-line reference is enough.\n- **`absent_before` and `absent_after` (D7)** could be one `absent` break that names the side, since the absence reason is already on the measurement.\n\nKeep the resolver states, export, comparability and the review noise rule, which the plan requires.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:258"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The environment_root test-impact claim is wrong",
+   "description": "Step 4 says the 400 tests pass unchanged after `environment_root` becomes a required field. Two existing test helpers construct `AdapterContext` directly, and both will fail with a missing-argument error until they are updated. State that they change.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:389"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The 401 conditional can be settled now, and the coverage-absent claim has a gap",
+   "description": "401's design reads coverage from `repo_root` and computes everything else in-process, so it has no tool resolution to move. The \"implemented before or after 403\" branch can therefore be settled now: 403 changes nothing in 401 except covering it with the conformance test. Separately, 401's freshness rule runs `git ls-files` at the repo root. At an export that root is a temp directory with no git metadata. D6's claim that coverage is absent at an export holds only when the report is untracked, as squadron's is. A tracked report would be read from the export and hit a failing freshness check. State that case.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The 420 integration cannot be checked yet",
+   "description": "The doc names 420 as a consumer of `take_snapshot_at` and `get_slice_ranges`, but no 420 slice document exists under `project-documents/user/slices/` yet. These signatures are unverified against a consumer. Mark the contract as provisional, or have 420's design confirm the calls it needs.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:320"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The history report's data source is implied, not stated",
+   "description": "Only `report slice` writes snapshots (line 395), so `history` shows only commits already measured. On a fresh store it is empty, and walkthrough step 8 would show nothing without a prior `snapshot --commit` per commit. State this, and say how a user fills the history.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "\"Same trust boundary\" understates the export's execution scope",
+   "description": "An export runs the `eslint.config.*` from a historical commit, which the user did not check out. `report slice` chooses those boundary commits automatically. The user owns the repository, so the risk is modest. The doc should still say that a report can execute repository-supplied JavaScript at historical commits without a per-commit choice.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:396"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "The shared git helpers are owned by the review package",
+   "description": "Metrology takes a dependency on the review package's git helpers, and this slice changes their public surface (renames, a new pattern function, a `first_parent` argument). Either move them to a neutral git module, or state why review owns them. This is not blocking.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Merge-commit and fast-forward resolution are mutually exclusive, so mixed-landing slices lose their first landing",
+   "description": "- **The flow:** The Data Flow runs the fast-forward path only when the merge-commit search finds nothing (\"none found \u2192 fast-forward landing\").\n- **The failing case:** A slice can land first by fast-forward and then by a follow-up merge commit. D1 itself cites \"merge: slice 940 code review follow-up fixes\" as the pattern. In that case only the follow-up merge resolves, and the fast-forward landing is never recorded.\n- **Why it matters:** This is the failure D1 rejects (\"keeping only the newest landing would show the follow-up alone as the slice's effect\"). It also undercuts criterion 3.\n- **Persistence:** The wrong range is then persisted permanently, and the Risk section already says wrong landings are never corrected.\n- **What to change:** Run both paths and union the results by `after_sha`. Treat a branch tip equal to a found merge's `M^2` as already covered, not as `LANDED_ELSEWHERE`. Add a resolver fixture for fast-forward followed by merge.\n- **Related gap:** The schema promises \"oldest first\" and the store is append-only. A landing discovered later but older than a stored one breaks that ordering, so the design should say what the order is sorted by.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:111-121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Overweight design: scope that can be cut or deferred",
+   "description": "- **`report history` review placement:** Placing review findings per category on the row of the landing's `after_sha` is a second attribution mechanism beyond the slice plan's \"over-time breakdowns\". Count reviews in the closing project-level line only. Per-slice review breakdown stays in `report slice`.\n- **Module count:** The design adds about 12 new modules, including `slice_range_models.py` (four small types) and `boundaries.py` (one function). Fold the models into `slice_range.py` and `ensure_snapshot` into `take.py` or the report package's `__init__`, unless the 300-line cap forces a split.\n- **Related slice:** The Prerequisites paragraph on 401 covers a slice that isn't implemented, and it branches on ordering (see the next finding).\n- **Conclusion:** None of these is required by a slice-plan success criterion. At Relative Effort 4/5 with the keystone's contract being changed, trimming them lowers risk.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Open-ended coupling to unimplemented slice 401",
+   "description": "- **The conditional:** The design says 401 is not a prerequisite, but then branches: \"If before, 403 updates whatever of 401's code reads `ctx.repo_root` for tools or environments.\"\n- **Why that is unspecified:** The work depends on 401's implementation order and is not enumerated.\n- **The contract change:** D5 makes `environment_root` a required field with no default. The slice plan states 401 needs \"no change to\u2026 adapter contract\", and this slice changes the keystone contract.\n- **What to change:** State the cross-slice rule once, either as a note for 401's design or as an explicit ordering. Then remove the \"whatever of 401's code\" clause, or list the files.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes missing for report-side git and store reads",
+   "description": "- **Missing git failure:** `report history` and `report project` add a first-parent walk of the target (`rev-list` or `log`), a target resolution, and a read of the `slice_ranges` record. None of these appears in the Failure modes table.\n- **The questions the table doesn't answer:** What happens if the walk returns `None` or times out? Does the report abort, or silently omit the off-line count and ordering? What happens if the stored `slice_ranges` record fails the model validator, for example after a hand edit?\n- **Why it matters:** The project rule requires explicit handling for each new I/O path, an observable signal at WARNING or above, and a test asserting that signal. Criterion 11 ties success to the table being complete.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Missing-commit check has no owner and cannot be tested with the stated fakes",
+   "description": "- **The contradiction:** The assembly modules (`slice_report.py` and the others) are described as having \"No git\", and tests pass fakes for the store, resolver and `ensure_snapshot`. The failure table has the slice report run `git cat-file -e` before `ensure_snapshot`.\n- **The gap:** Either the report modules need git, or the check belongs inside `ensure_snapshot`, or it needs its own injected `commit_exists` argument. The required test (\"a stored landing whose commit is gone still prints other landings\", line 350) can't be written with fakes until this is decided.\n- **What to change:** Name the owner and the injected seam.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Audit noise-floor provenance is unspecified",
+   "description": "- **What D8 says:** Audit figures reuse `compute_delta` and `is_within_floor` and report \"the floor's `n_runs`\".\n- **What it leaves out:** Which floor record is used is not stated. A project can have several noise-floor records measured at different commits and prompt hashes.\n- **Why it matters:** The slice-plan criterion is \"LLM-sourced numbers are shown against their noise floor\". A floor measured at an unrelated commit or prompt would label a delta \"beyond floor\" incorrectly.\n- **What to change:** State the selection rule, for example the floor matching `audit_prompt_hash` and nearest to `before_sha`. State the result when none matches, which should be \"no floor measured\".",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Export reads squadron settings from the live checkout, narrowing the architecture's per-commit config rule",
+   "description": "- **The deviation:** The architecture says an exported commit \"reads that commit's config\". D5 does this for rule-set configs, but reads limits, exclusions and timeout from the live checkout.\n- **The consequence:** A slice that edits its own limits shows no `limits_changed` break between two exports.\n- **Assessment:** The rationale (`.squadron.toml` is gitignored) is sound, and both the Risk section and the per-record settings disclosure cover it. No change needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Store-scan cost of boundary lookups isn't restated against the coarse-records principle",
+   "description": "- **The gap:** The design asserts \"one store scan per command\" for ranges. `ensure_snapshot` per boundary reads \"the stored snapshot\", and the only store method named is `list_snapshots`. That implies one full scan per boundary, which is 2N scans for N landings.\n- **Assessment:** The architecture states no numeric target, so this is not a finding. It would be cheap to have `ensure_snapshot` accept a pre-listed snapshot index.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:147"
+  }
+ ]
+}

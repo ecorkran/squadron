@@ -1,0 +1,208 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Workload schema is 3-D; the engine and loader are 2-D",
+   "description": "The design's `mid-flock` example sets `world_size: [200.0, 200.0, 200.0]` and 3-element `cluster_centers` (slice doc 366\u2013368). The engine fixes `DIMS = 2` (`src/migratory/__init__.py:4`), and the existing loader rejects `world_size` with anything other than 2 entries (`src/migratory/bench/workload.py:187-191`). So the design's own example fails to load. Worse, `_parse_formation` keeps only the first two components of each center (`workload.py:207`) with no error, which violates the design's \"no silent defaults\" rule (slice doc 402) and the loader-error criteria (563\u2013566). Fix: write the schema as 2-D, and make the loader reject any center length other than `DIMS`.",
+   "location": "src/migratory/__init__.py:4"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The `numpy` backend as specified runs Numba kernels by default",
+   "description": "The design defines the numpy backend as calling `engine.tick.tick()`, the NumPy reference (slice doc 60\u201362, 131\u2013132). In the code, `USE_JIT_KERNELS` defaults to `True` (`_jit_config.py:14`). Each force wrapper reads it on every call (`flocking.py:82`, `herding.py:32`) and dispatches to `@njit(cache=True)` kernels (`forces_jit.py:30`). The server also warms those kernels at startup (`src/migratory_server/server.py:66-100`). A harness calling `tick()` with defaults therefore benchmarks Numba, not NumPy. This breaks three things the design depends on: the NumPy golden parity hash (slice doc 458\u2013467), the 142 gate, which compares against NumPy and Numba (architecture plan line 30), and the planned numba runner (slice doc 341\u2013343), which uses the same flag. Unless the numpy runner pins `USE_JIT_KERNELS = False`, the two registry rows are one code path. The design must specify each backend's flag setting. Under `--all-backends` (slice doc 481) that is a process-global mutation, and the numba runner would reach into the private `_jit_config` module, which the design does not acknowledge.",
+   "location": "src/migratory/engine/_jit_config.py:14"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-force timings are deferred although plan 141 requires them",
+   "description": "The plan's 141 entry requires \"force totals per force\" (`project-documents/user/architecture/140-slices.simulation-scaling.md:26`). The design keeps `force_total` as one number and defers per-force timing to 142 (slice doc 292\u2013296). Plan 142 says per-force resolution is \"the gate for the cohesion port\" (plan line 30). The deferral moves a 141 deliverable into 142 and adds a schema change there. The force loop at `src/migratory/engine/tick.py:110-111` is a simple bracket point, so the cost of delivering it now is small. Either deliver it in 141 or record a plan change.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"one file per backend\" promise fails for slice 142",
+   "description": "Slice doc 586\u2013588 say 142 can add a `quadrants` backend with \"zero changes elsewhere.\" But the design also says 142 adds per-force timings by extending `PhaseTimings` (292\u2013296), which requires a `schema_version` bump (530\u2013532). That touches `PhaseTimings` and `aggregate()` (`src/migratory/bench/runner.py:23-79`), the JSON writer, and the Markdown renderer. The renderer reads every file in `bench/results/` (slice doc 440), and the design says old readers must reject unknown versions (531\u2013532). The design doesn't say what the renderer does with v1 files once v2 exists. The stable-schema promise (530) and the one-file promise (586\u2013588) cannot both hold.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:586-588"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Numba runner ownership is ambiguous, and 142 needs Numba before 144",
+   "description": "Slice doc line 92 places the Numba runner in \"slice 144 / 118 territory.\" Slice 118 is complete (`project-documents/user/architecture/100-slices.behavior-engine.md:61`, marked `[x]`), and the Numba kernels are in the tree. Plan 142 benchmarks against \"the existing NumPy and Numba implementations\" (plan line 30), and 142 precedes 144. The Integration Requirements (589\u2013591) assign numba to 144. As written, 142's gate has no Numba row. Either register `numba` in 141, which is one file given the existing code, or name 142 as its owner.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`mid-flock` is not the default operating point it claims to be",
+   "description": "Slice doc 352\u2013355 say `mid-flock` is \"roughly equivalent to the live-server default config.\" The default config has one profile named `default` (not `flocker`/`leader`) at line 146. It runs 100 agents in a 1000\u00d71000 wrap world (`config/default.yaml:260-262`, `27-29`), tick rate 20 (line 23), and leadership and momentum weights commented out, so they are 0 (lines 162\u2013163). `build_forces` includes a force only if some profile has a positive weight (`src/migratory_server/force_builder.py:59-62`). The default therefore engages Cohesion, Separation, Alignment, and Propulsion (`propulsion_weight: 0.1`, line 176). The design's list (slice doc 379\u2013384) adds momentum and leadership and omits propulsion. Its order also differs from production (`force_builder.py:31-38`), and the force sum is order-dependent (`tick.py:110-111`), so the parity hash changes. The 60 Hz `dt` (slice doc 386) differs from the 20 TPS default. Either rename `mid-flock` as a synthetic regime and drop the equivalence claim, or derive it from the config.",
+   "location": "config/default.yaml:146-176"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Name-resolution claims do not match the code",
+   "description": "- Slice doc 392\u2013396 say profile names resolve to \"existing BehavioralProfile constructors used in config/default.yaml\" and that the harness \"does not invent new profiles.\" The code hard-codes two profiles' values and calls `leader` \"a derived profile\" (`workload.py:30-31`). The default config has neither `flocker` nor `leader`, and `flocker` sets `max_neighbors=32`, which the default doesn't.\n- Slice doc 398\u2013400 say force names resolve to \"module-level singleton instances ... (e.g. `flocking.cohesion_force`).\" No such singleton exists. The instances are built inside the harness (`workload.py:67-74`).\n- Slice doc 138\u2013139 and 543\u2013544 say there are five `BulkForce` implementations. There are six. `PropulsionForce` (`src/migratory/engine/herding.py:102`) is registered in `workload.py:73` and in `force_builder.py:37`.\nThese copied tables can drift from `config/default.yaml` and `force_builder.py` without any test catching it. The design should say the values are copied, or derive them.",
+   "location": "src/migratory/bench/workload.py:30-31"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The spatial backend the design calls \"used today\" is not the server default",
+   "description": "Slice doc 136\u2013137 and 541\u2013542 say the harness uses `KDTreeQuery`, \"the spatial backend used today,\" and cite it as `engine.spatial.KDTreeQuery`. There is no `engine/spatial` module. `KDTreeQuery` is at `src/migratory/spatial/kd_tree.py:16`. The server default is `adaptive` (`config.py:293`, `858`; `config/default.yaml:127`), and `kdtree` is opt-in (`src/migratory_server/server.py:228`). The adaptive backend uses HashGrid or BruteForce and feeds `record_density` each tick (`tick.py:129-130`). A KD-tree harness therefore measures a configuration the live server does not run by default. Name the spatial backend per workload, or use the server default, and say why. Also, `migratory.spatial` has no construction helper (slice doc 136); construction is in `server.py:209-248`. The design should say whether it copies that code.",
+   "location": "src/migratory_server/config.py:293"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The harness measures a narrower tick than production, and the design doesn't say so",
+   "description": "Slice doc 58\u201362 and 145\u2013146 describe the numpy backend as \"today's `engine.tick.tick` driven by SimulationManager-equivalent setup.\" Production `SimulationManager.step` also runs environment `pre_tick`/`post_tick` (`simulation.py:109-110`, `132-133`) and, for any non-OPEN bounds policy, `apply_bounds_policy` on the result arrays (`simulation.py:122-128`). The default config uses `wrap` (`config/default.yaml:29`). The harness omits all three, and the design doesn't list them as out of scope. Its `total_ns` and parity hash therefore describe a different computation from the 57 TPS baseline (`140-arch.simulation-scaling.md:50`). The architecture says synthetic numbers should be \"supplemented with live-server measurements\" (`140-arch.simulation-scaling.md:38`). The design's out-of-scope rationale (slice doc 100\u2013103) addresses only the wire. Include these steps, or exclude them and state what that does to comparability.",
+   "location": "src/migratory_server/simulation.py:122-128"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Setup reproduction is unspecified and depends on server logic the design says it avoids",
+   "description": "The design says the harness does not depend on `migratory_server` (slice doc 145\u2013146), but setup needs several things that live there:\n- Spatial construction: `_build_spatial` and `_derive_cell_size` (`server.py:209-248`).\n- Force list: `build_forces` (`force_builder.py:41-80`).\n- Profiles: `build_profiles` (`simulation.py:26`).\n- Velocities: `spawn_population` applies `initial_speed` and random heading (`entities.py:138-147`). The workload schema has no velocity fields, so the default's `initial_speed: 3.0` (`default.yaml:166`) is silently dropped and the initial velocity state is unspecified.\n- Formation: the `uniform`/`two-flock`/`packed` kinds (slice doc 360\u2013368) have no implementation in `src/` outside `workload.py`. The sampling distribution and RNG are not given.\nThe parity hash depends on all of these. Without a specified algorithm, the determinism claim (slice doc 463\u2013467) is not testable as written. Specify each, or name the code the harness copies.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:133-141"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Profile-to-agent assignment is unspecified",
+   "description": "The fractions (0.95/0.05) are not converted to integer counts. The rounding rule (floor, round, largest-remainder) is not given, nor is the order in which agents receive profiles (block layout, seeded shuffle). For N=3500 the example is exact, but other N or fractions are not, and the parity hash depends on the assignment. Fractions that do not sum to 1 are not handled. Specify the rounding rule, the assignment order, and the error on a bad sum.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:370-376"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Two of three required workloads and the density field are undefined",
+   "description": "Scope line 71 lists \"density\" and \"formation seed,\" and line 72 lists \"RNG seed,\" but the schema (357\u2013389) has only `seed`, with no density field. The success criteria require `dispersed` and `packed-herd` to be checked in (558), yet neither has a definition anywhere in the design. The `mid-flock` YAML is the only one written out. Define the parameters of all three, and decide whether density is a field or derived from `n` and `world_size`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-75"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented` duplication is understated, and the Risk section misplaces `all_radii`",
+   "description": "The design says the duplication is \"~5 lines per phase\" (slice doc 266\u2013267). The duplicated surface is the whole of `tick()` (`tick.py:42-132`): the empty-state early return (42\u201344), the `active_indices` handling (49\u201353), and two query branches chosen by `all_capped` (74\u2013102). A bracketed copy must reproduce both branches and both return paths. The Risk section says `force_total` includes the per-tick `all_radii` setup (slice doc 697\u2013699). In the code, that setup is at `tick.py:58-63`, before the query (78, 88) and before the force loop (110). Bracketing at the design's boundaries puts `all_radii` in `spatial_query` or `csr_assembly`, not `force_total`. The design should state the copy's real size, and evaluate a lighter option: wrap the `SpatialQuery` and `BulkForce` collaborators to time build, query, and force without copying `tick()`. That covers three of the five phases, so the other two would still need a copy.",
+   "location": "src/migratory/engine/tick.py:58"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The runner is said to call `tick()` directly and also `tick_instrumented()`",
+   "description": "Lines 131\u2013132 and 541 say the NumPy runner calls `tick()` directly. Lines 255\u2013258, 498\u2013501, and 721\u2013722 say the numpy backend uses `tick_instrumented()`. Only one can be true, and the choice decides what the timings measure and what the bit-equality test (688\u2013691) compares. Name one.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Data flow runs `finalize()` before the parity hash",
+   "description": "The data flow runs `BackendRunner.finalize()` (described as releasing GPU memory, line 338) and then `parity.hash(result)`. `TickResult` arrays are valid only until the next `tick()` call (`src/migratory/engine/tick_result.py:50-55`), and future backends may recycle buffers. Hashing after a GPU release reads freed memory. The hash should be computed before `finalize`, and the design should say so.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:205-211"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "The parity-hash contract is internally inconsistent and cannot carry a tolerance",
+   "description": "- Line 81 hashes the \"post-warmup\" `TickResult`. Lines 208\u2013211 and 460\u2013462 hash \"after the measure phase.\" These are different states, tick 60 and tick 660.\n- Lines 533\u2013534 say slice 145's tick-level parity test \"consumes the harness's NumPy parity hash as the reference.\" Lines 748\u2013755 call the trajectory tool \"the parity oracle\" and the bench \"the timing oracle.\"\n- Lines 469\u2013473 and plan 145 (`140-slices.simulation-scaling.md:36`) require a documented tolerance for GPU reductions. A SHA-256 can only test equality.\n- Line 462 says \"dtype-locked\" but names no dtype. The state's arrays are float64 (`tick_result.py:92`), so the design should name it.\nPick one state. Have 145 compare trajectory data or raw arrays under tolerance, not hashes.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:81-83"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Failure handling covers setup only; mid-measure, input, and I/O failures are missing",
+   "description": "The list (510\u2013517) covers a missing field, an unregistered backend, a `setup` error (with `finalize` in try/finally), and TPS below 1. It does not address:\n- `tick_once()` raising during warmup or measure. The try/finally is described only for `setup`.\n- Malformed YAML, an empty file (`yaml.safe_load` returns `None`, and `\"name\" not in None` raises `TypeError`, `workload.py:124-136`), or a non-mapping top level.\n- Nested fields: a profile entry without `fraction` raises a bare `KeyError` (`workload.py:140`), not the \"clear error naming the missing field\" that criterion 563\u2013564 requires.\n- Zero counts: `n=0` returns early in `tick()` (`tick.py:43-44`); `measure_ticks=0` makes `aggregate()` raise `ValueError` (`runner.py:63-64`) only at the end of the run, and TPS divides by `wall_seconds`.\n- Result-write failure (disk full, permissions), a missing `bench/results/` on a clean start, `KeyboardInterrupt` mid-measure, and `git rev-parse HEAD` failing outside a checkout (slice doc 232\u2013233).\nEach needs an explicit outcome: fail, warn and write, or skip.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "A killed or failed write leaves a file that breaks later Markdown renders",
+   "description": "The design writes a \"fresh result file\" (232\u2013236) with no write strategy. A kill during the write leaves a truncated `bench/results/*.json`. The Markdown renderer reads \"across all backends in `bench/results/`\" (slice doc 440), so every later render reads that file. The only documented repair is for a person to delete it. Write to a temp file and rename on success. State whether the renderer skips or fails on unreadable files, and apply the same to a partial `.md`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:232-236"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Markdown source and layout are ambiguous",
+   "description": "Line 440 says one table per workload \"across all backends in `bench/results/`,\" which reads every file in the directory. The data flow (217\u2013220) passes the current run's aggregate to `markdown_report.write()`, and the walkthrough (617\u2013621, 645\u2013646) expects one table per run. These give different output after a second run: a per-run table, or a history with several rows per backend. The `.md` output path is not given. Line 80 asks for a table \"sortable on TPS,\" which static Markdown cannot do. Pick one source, name the file, and drop \"sortable\" or define its order.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "The design's overhead definition disagrees with the existing `PhaseTimings` docstring",
+   "description": "The design says `total_ns` is \"tick wall time, including overhead,\" and lists \"density-record dispatch\" as overhead (slice doc 283\u2013290). The existing docstring defines `total_ns` as the window from the start of `spatial_build` through the end of `integrate` (`runner.py:27-30`). `record_density` runs after `integrate` (`tick.py:129-130`), so under that definition it is excluded from both total and overhead. The report's overhead line would not show the overhead the design names. Pick one window and document it in both places.",
+   "location": "src/migratory/bench/runner.py:27-30"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "Reproducibility metadata misses dirty trees and dependency versions",
+   "description": "The Value section says a run can be repeated on a later commit for an \"apples-to-apples\" comparison (44\u201348). But the header records only `git rev-parse HEAD` and platform fields (232\u2013236). It does not record whether the tree was dirty, nor the numpy, numba, scipy, or Python build versions that change timings. A run on uncommitted changes is attributed to the last commit. The JSON example also abbreviates the SHA (418, `\"fc989bf\"`), while line 233 specifies the full `HEAD`. Record a dirty flag and the library versions.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:232-236"
+  },
+  {
+   "i": 21,
+   "severity": "CONCERN",
+   "title": "The CLI spec doesn't match the walkthrough, and clean-start path resolution is unspecified",
+   "description": "The CLI spec lists three invocations (480\u2013483). The walkthrough runs `--list-backends` and `--list-workloads` (605, 611), which the spec does not define. `--workload-dir` (482) appears without `--workload` and without defined semantics. Two operator-walk problems follow:\n- Registration: `@register_backend(\"numpy\")` only runs once `numpy_backend.py` is imported. The registry lives in `backends/__init__.py` (slice doc 301\u2013311), and the numpy module imports the decorator from there. The design doesn't say what imports the numpy module, or how the import avoids a cycle. Without it, `--list-backends` prints an empty registry.\n- Paths: `bench/workloads/` (174) and `bench/results/` (236) are repo-root paths, but the package installs from `src` (`pyproject.toml:31-32`). The design doesn't say whether these resolve from the working directory, the package location, or a flag.\nThe worktree already has the package as a placeholder (`src/migratory/bench/cli.py:3`), so the scaffold needs reconciling too.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:480-483"
+  },
+  {
+   "i": 22,
+   "severity": "CONCERN",
+   "title": "No TPS target or NFR is restated, though the design instruments the tick path",
+   "description": "The architecture's NFR is to scale from 3,500 at 57 TPS to 2 million at 60 TPS (`project-documents/user/architecture/140-arch.simulation-scaling.md:18`), with per-tier targets (68\u201376) and the 57 TPS baseline (50). The harness instruments that path, but the design restates no TPS target. The only threshold is \"TPS < 1 \u2192 warn\" (516). The design says explicit thresholds are not asserted (668). Restate the 60 TPS target and the 57 TPS baseline, and state that the harness reports against them without gating.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#technical-requirements"
+  },
+  {
+   "i": 23,
+   "severity": "CONCERN",
+   "title": "Scope that can be cut without losing a requirement",
+   "description": "- `--all-backends` (481): with one backend it equals `--backend numpy`. The design's own open question defers it until 142 (762\u2013764).\n- `--workload-dir` (482): the three named workloads are enumerated by `--list-workloads`, so this adds a second discovery path.\n- `PhaseTimings.force_breakdown` placeholder (292\u2013296): speculative, and it conflicts with the per-force requirement above. Either add per-force now or cut the placeholder.\n- `pytest-benchmark` reuse (122\u2013124): no described harness test uses it. Drop the claim.\n- \"Sortable\" Markdown (80), noted above.\n- The `PhaseTimer` name (63, 162) overlaps with `tick_instrumented` (255\u2013258), which does the timing. Keep one.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:480-483"
+  },
+  {
+   "i": 24,
+   "severity": "NOTE",
+   "title": "Verification step 8 and the baseline criterion describe different test runs",
+   "description": "Criterion 581\u2013582 expects \"1100 passed, 2 skipped, modulo the pre-existing flaky test_main.py,\" but step 8 runs with `--ignore=tests/test_main.py` (657), which drops test_main's tests from the count. The flaky-test claim is not evidenced in the file: `tests/test_main.py` has three tests and no flake marker or skip. The pyright baseline of 433 errors (576\u2013577) is also unverified here. Restate both against a recorded run.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:655-659"
+  },
+  {
+   "i": 25,
+   "severity": "NOTE",
+   "title": "The design describes a clean start that the worktree does not have",
+   "description": "The frontmatter says `status: not_started`, and line 155 says \"New package.\" But `src/migratory/bench/` already exists with placeholder modules (`cli.py:3`, `backends/__init__.py:1`), and `workload.py` already implements the loader with changes from the design (2-D, no density). `.gitignore:173-174` already ignores `bench/results/*.json` and `*.md`, which the design lists as a to-do (734\u2013736). Reconcile the design with the branch.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:10"
+  },
+  {
+   "i": 26,
+   "severity": "NOTE",
+   "title": "Overview misquotes plan 142",
+   "description": "The quoted phrase \"benchmark a Quadrants cohesion force against Numba and NumPy\" does not appear in plan 142 (plan line 30). The plan says the force is \"benchmarked against the existing NumPy and Numba implementations on both Apple Silicon (Metal) and a CPU fallback target.\" Quote it exactly or paraphrase without quotation marks.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:39-40"
+  },
+  {
+   "i": 27,
+   "severity": "NOTE",
+   "title": "Phase and timer names don't match the architecture's budget table",
+   "description": "The design says the architecture's table calls out `csr_assembly`. The table calls that phase `self_excl_cap` (`project-documents/user/architecture/140-arch.simulation-scaling.md:54`). The timer is also named three ways: `PhaseTimer` (63, 162), `PhaseTiming` (202), and `PhaseTimings` (276). Align the names with the architecture, or document the rename.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:246-248"
+  },
+  {
+   "i": 28,
+   "severity": "NOTE",
+   "title": "The \"mid-flock should match Entry 8\" check compares a different scenario",
+   "description": "Step 9 says the mid-flock run \"should be in the same shape\" as the architecture's N\u22482500 table. That table is performance journal Entry 8 (`project-documents/user/notes/900-notes.performance-journal.md:1490`): 2,490 elk and 2 coyotes, predator-prey, on an 800\u00d7400 wrap world, using the KD-tree backend. It is a profile-shape reference for a different scenario. Say so in step 9.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:661-668"
+  }
+ ]
+}

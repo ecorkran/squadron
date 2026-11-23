@@ -1,0 +1,68 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Commit gates 3.2a and 3.7 cannot pass: stale brownfield tests still run",
+   "description": "- **3.2a:** 3.2a requires `pnpm --filter @context-forge/core test` to pass. The task file's 3.1\u20133.2 remove the `Comprehension:` line and the Adoption Facts section render. That breaks tests that stay until later:\n  - `adoptionBuild.integration.test.ts` asserts `FACTS_HEADING` is present (line 102) and `'not evaluated'` (line 224).\n  - `pipeline-integration.test.ts:154-185` asserts the probe JSON, the `Squadron: unavailable` line and the `Comprehension:` line. Those cases are not deleted until 3.3.\n- **3.3 and 3.7:** 3.3 changes the factory signature, so `createContextPipeline(dir, {...})` no longer swaps to the brownfield prompt. `adoptionBuild.integration.test.ts:100` (`BROWNFIELD_PROMPT`) then fails. That file is only deleted in 4.1, so the `pnpm -r test` in 3.7 fails as well.\n- **Fix:** delete `adoptionBuild.integration.test.ts` and the brownfield block of `pipeline-integration.test.ts` in 3.1/3.2, before the 3.2a commit. Alternatively, drop the 3.2a commit and move the 4.1 test deletions ahead of 3.7.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:100-102"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Typecheck and lint do not cover tests, so several \"Success\" gates are empty for test references",
+   "description": "- Core and mcp tsconfigs have `\"include\": [\"src/**/*\"]`, and `eslint.config.mjs:9` ignores `**/tests/**`.\n- 3.4 (\"remove remaining references in core tests\", success = core typecheck) cannot detect a stale `adoptionFacts: FACTS` in `createTestEnhancedContextData(...)` (`ContextTemplateEngine.test.ts:227,243`).\n- The 4.3 claim \"any leftover `switch` on `kind` fails to compile\" holds only for `src`.\n- 3.7's typecheck and lint say nothing about tests. 6.2's greps are limited to `packages/*/src`.\n- **Fix:** add `packages/*/tests` greps to 3.4 and 6.2 for `adoptionFacts`, `adoptionStateWrites`, `ContextToolOptions` and `resolveAdoptionFn`. Exempt the legitimate `fileComprehension` hits in the fixture prompt and the detection tests.",
+   "location": "packages/core/tsconfig.json:20"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "4.3 \"delete the write cases and keep the read cases\" misdescribes `adoptionState.test.ts`",
+   "description": "- There are no pure read cases that use a writer-free setup. `it.each(ADOPTION_STATES)('round-trips %j')` (line 38) seeds each state with `writeAdoptionState`. It is the only test that reads every valid state.\n- Deleting it as a write case, or leaving it as a read case, either loses that coverage or breaks once the writer is gone.\n- **Fix:** have the task say to rewrite it to seed `.context-forge.toml` with `writeFile` and assert `readAdoptionState`. The `readFile` import is left unused after the deletions.",
+   "location": "packages/core/tests/adoption/adoptionState.test.ts:38-48"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "4.1 `outOfTreeLinks.test.ts` rewrite leaves dead setup unmentioned",
+   "description": "- The task says to remove only the `createAdoptionResolver` and `SquadronProbe` imports.\n- Once the case calls `decideOutcome` directly, these become dead: the `CONCEPT` constant, `BROWNFIELD_GUIDE`, the guide copy in `beforeEach`, `PROMPT_FILE_RELATIVE_PATH`, `cp`, `fileURLToPath`, and probably the `CONTEXT_FORGE_DATA_DIR` setup.\n- The rewrite must also pass `state: ''` to `decideOutcome`, and it must assert `kind: 'brownfield'` both before and after `writeDocsMap`.\n- Lint will not catch the dead code (tests are ignored), so the task needs to name it.",
+   "location": "packages/core/tests/docs-map/outOfTreeLinks.test.ts:84-119"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "3.6 misstates the MCP caller and under-specifies `integrationSetup.ts`",
+   "description": "- \"Update its caller in the server setup\": `mcp-server/src/index.ts:40` already calls `registerContextTools(server)` with no options, so there is nothing to update there.\n- The real caller needing change is `integrationSetup.ts`. It imports `ContextToolOptions` (line 9), takes `options?: ContextToolOptions` (line 38) and calls `registerContextTools(server, options)` (line 41).\n- \"Drop the `squadronProbe` option\" must say to remove the import, the parameter and the pass-through. Otherwise the file breaks when the type is removed. `mcpIntegration.test.ts` also calls `createIntegrationClient`, so it should be named as a call site to check.",
+   "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9-41"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Several steps say \"delete\" where only call arguments change",
+   "description": "- **3.3:** it says to delete the \"options and adoption-wiring cases\" in `CoreServiceFactory.test.ts`. The file has no adoption cases. All six calls are plain `createContextPipeline(x, { adoptionStateWrites: 'read-only' })` in the basic and permissiveness suites. A junior following the text could delete the permissiveness cases, which must stay. They only need the argument dropped.\n- **3.5:** it says to delete \"adoptionStateWrites/adoption assertions\" in `cli/tests/integration/build.integration.test.ts`. Lines 42-65 are four ordinary build tests that pass the options as call arguments. They should be updated, not deleted.\n- **Real deletions:** `contextTools.test.ts:176` and `:371` are genuine adoption cases and can go.",
+   "location": "packages/core/tests/services/CoreServiceFactory.test.ts:29-141"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "5.1 never sets the Phase 0 instruction, and the guards it adds are not shown to work",
+   "description": "- The integration fixture's stored instruction is `implementation` (Phase 6). The old parity test forced `instruction: CONCEPT_PHASE` (`adoptionParity.test.ts:95,108`). 5.1 says to \"reuse createBrownfieldCheckout\" but never says to override the instruction for the CLI, `context_build` and `template_preview` runs.\n- Without the override, \"output contains the concept prompt\" fails, or the test never exercises Phase 0 at all. Add the override to the steps.\n- The only mutation check (writing `.context-forge.toml`) shows the snapshot assertion works. Nothing shows that the `sq` marker guard can fail, for example by running the fake `sq` from the test and confirming the marker appears. As written, the test cannot show a detection or `sq` regression.",
+   "location": "packages/mcp-server/tests/fixtures/integration-project/projects.json:8-9"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, not `**Commit**:` markers, and 3.2a is not a tested point",
+   "description": "- Commits appear as checkbox tasks (2.3, 3.2a) and checkbox sub-items (`- [ ] Commit: \u2026` in 3.7, 4.1\u20134.4, 5.1 and 6.3). The convention is a plain `**Commit**:` line, never a checkbox.\n- Four consecutive commits in section 4 are more than the working points need. 4.1\u20134.4 could be one marker at the end of section 4.\n- The 3.2a point is not actually tested (see the FAIL above).",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79,99-101,148,155,163,169,186,206"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Proportionality",
+   "description": "- A single task file fits a 2/5-effort slice.\n- Tasks 3.1/3.2 and 3.2a could merge into one task.\n- 6.3 says to run walkthrough steps 1\u20135, but steps 3\u20135 repeat 5.1, 2.2 and 6.2. Only steps 1\u20132 add something new, and the Success line lists only those. Say \"steps 1\u20132\" instead.\n- 5.1 bundles purity, parity, the explicit-key check and the mutation check into one effort-3 task. That is acceptable because each maps to D5.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:89-129"
+  }
+ ]
+}

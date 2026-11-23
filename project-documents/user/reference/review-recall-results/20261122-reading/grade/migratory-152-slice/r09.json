@@ -1,0 +1,117 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Outer loop stays in spawn order, so neighbor reads still don't coalesce across a warp",
+   "description": "For a warp to coalesce, neighbouring threads must read neighbouring addresses in the same instruction. The force kernel gives one thread to each original-order agent `i` (`quadrants_fused_kernels.py:355`). Agents `i` and `i+1` are next to each other in spawn order, not in space, so they scan different cells: thread `i` reads `_px_c[start_i + t]` while thread `i+1` reads `_px_c[start_{i+1} + t]`, in unrelated cells. The design keeps this loop (lines 124, 322) and rejects walking the outer loop in coherent order (line 165). That rejected option is the Hoetzlein/FRNN approach the design cites at line 21.\n\nWhat a coherent layout still gives under the chosen design is per-thread cache-line reuse. That is a real gain, but it is not the \"standard ~2\u20133\u00d7 DRAM bandwidth improvement\" from coalescing that the plan and gate assume (lines 17, 21, 130, 133, 286).\n\nTwo supporting claims are also wrong:\n- Line 165 says scattered writebacks would be \"just as bad as the original gather problem\". That is 4 writes per agent against about 1400 reads per agent.\n- Line 169 says \"adjacent agents' heaps tend to evict slots from the same nearby cell range\". Adjacent `i` values are not spatially near each other.\n\nThe design needs to either walk the outer loop in coherent slots (accepting a 4-scalar scatter on writeback, or adding a reorder pass), or rewrite its expected-gain reasoning and gate on per-thread locality only.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:161-165"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Departs from the plan entry: gate changed, `k_first` removed, FRNN deferred, `radius_only` added",
+   "description": "The plan entry (`140-slices.simulation-scaling.md:56`) sets these exit criteria: \"k-nearest TPS at N=200k within 20% of **k-first** TPS \u2026 no regression on k-first path\". It also assigns \"k-nearest via FRNN (collect all within radius R, then partial-sort \u2026)\" to this slice.\n\nThe design instead:\n- deletes `k_first`, so the \"no regression on k-first path\" criterion can't be checked (lines 34, 67, 177-179)\n- re-bases the gate on a new `radius_only` mode (line 358)\n- defers FRNN to a future slice (lines 75, 187-193)\n- adds a third mode-set change that isn't in the plan\n\nDeferring scope the plan assigns is a CONCERN under the review rules. Either update the plan entry to match (gate, modes, FRNN deferral) or bring the design back in line with the plan.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:29-34"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Rewritten `k_nearest` loop reads `_px_c[-1]` for uncapped profiles",
+   "description": "Today a profile with `max_neighbors` set to `None` is stored as `0` (`agent_state.py:390`), and the current `k_nearest` branch handles it with an explicit uncapped sub-branch (`quadrants_fused_kernels.py:470-486`). Line 68 promotes that sub-branch to `radius_only`, and the AFTER pseudocode drops it from `k_nearest`.\n\nWith `max_neighbors=0`:\n1. `heap_size < max_neighbors` is false.\n2. `dsq < heap_dsq[0]` (the initial value is 1e38) is true.\n3. So `evicted = heap_idx[0] = -1`, and the code reads `_px_c[-1]` and de-accumulates garbage.\n\n`heap_push` then refuses to insert (`heap_size > 0` is false), yet the incoming neighbor is still accumulated. The design should keep the uncapped sub-branch in `k_nearest`, or define `k_nearest` with `max_neighbors<=0` as an error.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:297-312"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Heap declaration gated by a plain `if` goes out of scope",
+   "description": "Line 317 says the `qd.Vector` heap initializer is \"gated on `neighbor_mode != NEIGHBOR_MODE_RADIUS_ONLY`\". In Taichi/Quadrants, a variable declared inside a non-`qd.static` `if` belongs to that block. The `k_nearest` branch and the pruning block (`quadrants_fused_kernels.py:420`), which use `heap_dsq`/`heap_idx`, are in separate blocks, so the kernel won't compile as described.\n\nThe gate needs `if qd.static(neighbor_mode != \u2026)`, and the mode-dispatch `if`s should be `qd.static` for consistency. The new integer values for `NEIGHBOR_MODE_RADIUS_ONLY`/`K_NEAREST` are also never given. The existing pruning test uses the literal `neighbor_mode != 0` (`:420`), and removing `K_FIRST=0` changes what that literal means.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:317-318"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`coherent_to_original` duplicates `sorted_agent_ids`, and `profile_index_c` has no reader",
+   "description": "- **`coherent_to_original`:** The reindex sets `_coherent_to_original[kk] = _sorted_agent_ids[kk]` (line 120), so it is the same array, not an inverse permutation. `_sorted_agent_ids[kk]` is already read sequentially in `kk` (`quadrants_fused_kernels.py:437`), so self-exclusion can stay `_sorted_agent_ids[kk] != i` with no new field. Several parts of the design exist only because of this field and can go with it: the \"Inverse permutation\" decision, Risk 2 (line 425), the permutation assertion in verification step 1 (already covered by `tests/bench/test_quadrants_fused.py:157-199`) and the fail-diagnosis at line 395.\n- **`profile_index_c`:** The force kernel reads `_profile_index` only for self (`quadrants_fused_kernels.py:357`), never for a neighbor. So `profile_index_c` has no consumer, and line 63's substitution \"for `_profile_index`\" refers to a read that doesn't exist.\n\nCutting both removes 2 of the 7 fields and 2 of the 7 writes per slot from the reindex.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-163"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Component list omits files the design changes",
+   "description": "Line 93 says \"No file outside the GPU compute path is touched\", but the change also reaches:\n- `migratory_server/config.py:311-347` (default, `_VALID_NEIGHBOR_MODES`, error)\n- `migratory/bench/workload.py:118,171-175` (its own hard-coded `{\"k_first\",\"k_nearest\"}` set)\n- `migratory_server/gpu_driver.py:24-25,82,110-112`\n- `bench/backends/quadrants_fused_backend.py:36-37,93-95`\n\nBoth `gpu_driver` and `quadrants_fused_backend` resolve the mode with `_NEIGHBOR_MODE_MAP.get(name, NEIGHBOR_MODE_DEFAULT)`. Once `k_first` leaves the map, any `k_first` string that gets past parsing (see the deprecation-window finding below) silently maps to the default instead of failing. That contradicts line 199's \"No silent migration\". The design should list these files and replace `.get(..., DEFAULT)` with a lookup that fails.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93-98"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`ConfigurationError` doesn't exist",
+   "description": "Lines 67, 199 and 349 say a `ConfigurationError` is raised at parse time. There is no such class anywhere in `src/`. `_parse_compute_config` and `Workload.from_dict` raise `ValueError`, and the bench CLI catches only `(KeyError, ValueError, RuntimeError, FileNotFoundError)` (`cli.py:93`). A new exception that isn't a `ValueError` subclass would surface as an uncaught traceback in the bench, and the server path would also need a check.\n\nFix: use `ValueError`, or define `ConfigurationError(ValueError)` and say where it lives. No test of the rejection path is specified either.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Intermediate states and the gate-fail path are undefined",
+   "description": "The design contradicts itself on `k_first`:\n- Line 433 keeps `k_first` \"still parsed, with a deprecation warning\" until the final commit.\n- Lines 67 and 199 raise at parse time.\n- Step 2 of the development approach (line 442) already removes `k_first` from the kernel.\n\nCommits 2 and 3 therefore ship `ComputeConfig`/`Workload` defaults of `\"k_first\"` (`config.py:311`, `workload.py:118`) against a kernel and map that no longer have it. Through the `.get(..., DEFAULT)` fallback the live server would run whatever `NEIGHBOR_MODE_DEFAULT` now points to, and nothing defines that value.\n\nIf gate 4 fails, the design gives no state to land in: either `k_first` is already gone and the default still says `\"k_first\"`, or the commits must be reverted. The design needs to define the default and the map contents at each commit, and what ships if the gate fails.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Criterion 3's stop condition assumes less work than `radius_only` actually does",
+   "description": "Lines 357, 387 and 424 make \"`radius_only` at N=10k must beat 213.9 TPS\" a slice-stop condition, justified as \"strictly less work than scattered reads + early exit\". That premise is wrong.\n\nOn `mid-flock-10k` (query_radius 50, S=1), `k_first` stops after 32 accepted neighbors. `radius_only` scans and accumulates every candidate: about 1400 per agent, using the design's own figure. That is roughly 40\u00d7 more inner-loop iterations against a hoped-for 2\u20133\u00d7 bandwidth gain. It is also a different physical model on that workload, with no cap and averaging over every candidate.\n\nThe check would likely stop the slice for reasons unrelated to reindex cost. A better test of reindex cost is to time the reindex kernel directly, or compare `k_nearest` before and after the change.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Parity criterion misstates the existing test and doesn't cover `k_nearest`",
+   "description": "Criterion 2 says `tests/bench/test_quadrants_fused_parity.py` checks 5% at N=4500. In the code:\n- It loads `mid-flock.yaml` (`:60,175`), which is N=3500 (`bench/workloads/mid-flock.yaml:6`).\n- It asserts 20% tolerance (`:116-117,237-238`).\n- That YAML sets no `neighbor_mode`, so the test runs the default mode, which is `k_first` until step 4.\n\nAs written, \"continues to pass\" doesn't exercise the coherent `k_nearest` path, and doesn't meet the plan's 5% requirement. The test needs a `k_nearest` variant at 5%, and the design should list it in scope.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:356"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Verification commands, flags, workloads and config don't exist",
+   "description": "Walking the verification steps in order:\n- **Steps 2\u20135:** `cli.py` has no `run` or `parity` subcommand and no `--neighbor-mode` or `--ticks` flag. The only options are `--workload`, `--backend`, `--workload-dir`, `--results-dir` and the `--list-*` flags. `neighbor_mode` is a workload YAML field (`workload.py:171`).\n- **Step 5:** needs `mid-flock-500k` and `mid-flock-1M`, but only `mid-flock-200k` is planned (lines 367, 443, 452).\n- **Workload sizing:** \"Matching mid-flock-10k shape, scaled\" doesn't pin the density. `mid-flock-50k.yaml` is actually n=100000.\n- **Step 6:** `config/x-fractal.yaml` isn't in the repo (only `default`, `test`, `test-soft-bounds`, `no-populations`, `invalid-population`). The design gives it as N=4500 (line 359) but as ~10000 / 9998 orbs (lines 27, 185).\n- **Step 7:** no test in `tests/` mentions `neighbor_mode`, so `pytest -k neighbor_mode` collects nothing (pytest exit code 5).\n\nThe commands should be rewritten against the real CLI, the per-mode YAML workloads should be specified, and the tests should be named.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:377-418"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Architecture's absolute TPS target isn't restated",
+   "description": "The slice is on the GPU tick path that carries the architecture's per-tier TPS NFRs (60 TPS; Tier 3 = 250k, per arch line 74 and plan line 81). The design only gives relative gates (`k_nearest` \u2265 0.8\u00d7 `radius_only`) and calls Tier 3 \"N=200k\" (lines 17, 44).\n\nA relative gate can pass while both modes run far below the tier target. The design should restate the Tier 3 target (60 TPS at 250k on production-class hardware) and say what absolute TPS this slice commits to on the dev box.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#success-criteria"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Slice 150 is described as shipped but isn't complete",
+   "description": "Line 81 says \"Slice 150 is shipped on `main` as of 2026-05-05\". Slice 150's frontmatter says `status: in_progress`, and the plan shows `[ ] (150)` (plan line 52). Separately, the 213.9 TPS baseline (lines 357, 387, 424) is the slice 149 first-k-found number, per the 150 doc lines 77 and 201. The design should acknowledge that this dependency is still open, or wait until 150 is closed.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Overweight narrative and optional measurement scope",
+   "description": "Content that could be cut:\n- \"Reference points\" (lines 36-44), parts of \"Value\" (lines 46-55) and the FRNN rationale (lines 187-193) repeat the 16M-boids comparison three or four times. None of it bears on the gate.\n- The 500k/1M headroom probe (lines 397-402) is \"not a hard gate\" but needs two workloads nothing else uses. Defer it to the FRNN slice it is meant to justify.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Wrong claim that spawn/despawn re-runs `setup()`",
+   "description": "`GpuSimulationDriver.sync_from_entity_manager` (`gpu_driver.py:180-210`) re-uploads into the existing fields; it doesn't call `setup()` or reallocate. The outcome is harmless for coherent fields, which are rebuilt every tick at the same `n`, but the reasoning is wrong.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:451"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Future Work contradicts the writeback claim",
+   "description": "Line 461 says \"Currently writebacks scatter to `_px[i]`\", but line 331 says those writebacks are \"sequential in `i`, already coalesced\".",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:461"
+  }
+ ]
+}

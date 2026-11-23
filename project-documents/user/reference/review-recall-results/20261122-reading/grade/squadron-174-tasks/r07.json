@@ -1,0 +1,117 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 13 wires `RunHeartbeat`, owner and `init_run` into the wrong function",
+   "description": "The design (line 88) and Task 13 treat `_run_pipeline_sdk` as the single `execute_pipeline` call site. It isn't.\n- `_run_pipeline_sdk` (`run.py:299`) calls `_run_pipeline` (`run.py:373`).\n- `_run_pipeline` calls `init_run` (`:227`), `execute_pipeline` (`:241`) and `finalize` (`:264/267`).\n- `_run_pipeline_sdk` never sees the new run's `run_id`, because `run_id=None` goes in and `init_run` mints it inside `_run_pipeline`.\n- \"Build `RunOwner` before `init_run(owner=...)` in `_run_pipeline_sdk`\" cannot be done as written. Either `owner` is threaded through `_run_pipeline`, or `init_run` moves up.\n- Wrapping the `_run_pipeline` call in `RunHeartbeat` puts `finalize` inside the context. That contradicts design step 4 (\"heartbeat cancelled, then finalize\").\n- `_run_pipeline` is also the prompt-only resume path (`run.py:1201`, `:1259`). Those paths must get neither claim nor heartbeat.\n- Tests call `_run_pipeline` directly (13 call sites in `tests/cli/commands` and `tests/pipeline/test_cli_integration.py`).\n\nTask 13 needs to name where owner, `init_run`, heartbeat enter and exit, and `finalize` go. Task 11's \"success\" (\"executor call sits inside the context manager\") also has to be restated.",
+   "location": "src/squadron/cli/commands/run.py:188-268"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 22 commit leaves `sq runs list` and pyright broken",
+   "description": "Task 21 changes `list_run_summaries` to return `RunListing`. `runs.py:27-28` passes the result straight to `render_run_listing(summaries: list[RunSummary])`. Neither `runs.py` nor `run_views.py` changes until Task 25.\n- The Task 22 commit therefore fails the plan's own \"pyright zero errors\" gate and breaks `sq runs list` at runtime.\n- The existing `_list` helper in `tests/pipeline/test_run_listing.py:65-80` is typed `-> list[RunSummary]`, and `_only` and many other 199 tests index the result as a list. Task 22 only mentions updating tests \"that assert running runs are hidden\".\n- Fix: Task 21 adapts the caller minimally, or Tasks 21\u201326 become one commit. Task 22 should also list the `_list`/`_only` update and every other 199 test that uses the list return.",
+   "location": "src/squadron/cli/commands/runs.py:27-28"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 22's I/O-bounds assertion needs injection that Task 21 doesn't add",
+   "description": "Task 22 asserts `process_alive` is \"called exactly 20 times\". `list_run_summaries` currently takes only `load_definition` and `load_report`. Task 21 adds no `now`, `hostname` or `process_alive` parameters. Without them the count can't be observed, and stale versus live can't be deterministic. The plan also never says how the seed helpers in `tests/pipeline/run_listing_support.py` gain owner or dead-PID seeding.",
+   "location": "tests/pipeline/test_run_listing.py:373-381"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Existing tests that Task 8, 15 and 17 break are not listed",
+   "description": "Task 8 bumps `_SCHEMA_VERSION` to 5 and `_SUPPORTED_SCHEMA_VERSIONS` to `{3,4,5}`. Two existing tests then fail:\n- `test_schema_v4_round_trips` asserts `schema_version == 4` after `init_run` (`:1213`).\n- `test_unsupported_schema_raises` uses `(2, 5)` as the bad versions (`:1217-1219`). Version 5 is now supported.\n\nTask 8 names neither.\n\nTask 15 and 17 have the same problem in `tests/pipeline/test_sdk_session.py`:\n- `test_slow_foreground_turn_has_no_timer` (`:1084-1094`) asserts `get_typed_config` is not called and no timer exists for a foreground turn. It becomes wrong, but Task 17 says only \"932 background-wait tests unchanged\".\n- Other 932 tests patch `get_typed_config` with a blanket `return_value=0.05` (`:1044`, `:1074`, `:1088`). Once foreground reads call `get_typed_config`, foreground reads in those tests get a 0.05 s idle bound and can stall spuriously. Task 17 needs to cover these.\n\nThe `pipeline.background_idle_timeout_s` description at `config/keys.py:122-126` ends with \"Foreground turns get no timer.\" That becomes false and should be updated.",
+   "location": "tests/pipeline/test_state.py:1206-1219"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Import cycles from where `ActiveItem` and the liveness calls live",
+   "description": "`state.py` imports `executor` at module level (`:25`). The executor imports `state` only lazily inside functions (`executor.py:661`, `:828`, `:1456`), which avoids that cycle.\n- Task 4 defines `ActiveItem` in `state.py`, and Task 5 has `executor.py` use it. A module-level import in the executor creates a cycle.\n- `StateManager.observer()` returning `RunStateRecorder` from `run_observer.py`, which imports `ActiveItem` from `state.py`, is another cycle.\n- Task 11's `claim` calls `assess_liveness`, but `run_liveness.py` imports `RunState` and `RUNNING_STATUS` from `state.py`.\n\nTask 4's success check (\"no import of `executor`\") only covers one direction. The plan should place `ActiveItem` and `RunOwner` in a leaf module, or direct `TYPE_CHECKING` and lazy imports.",
+   "location": "src/squadron/pipeline/state.py:25"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 5 omits threading the observer to the `each` loop",
+   "description": "`_execute_each_step` is reached through `_execute_step`, whose `common` dict is splatted into every step shape (each, fan-out, loop body, once). It is also reached through `_run_each_item`. Task 5 says \"call `observer.item_started` at each `each` item start\" but never says `observer` must be added to those signatures and to `common`. It also doesn't say whether pre-flagged items (`reason is not None`, `:1560`) fire `item_started`. `item.get(\"index\")` may be an int or a string (`:1585` uses `str(item.get(\"index\",\"\"))`), and `ActiveItem.index` is `str | None`. Without `str()`, pydantic raises `ValidationError` in the executor. That would fail the run, since D6 lets non-I/O errors propagate.",
+   "location": "src/squadron/pipeline/executor.py:704-753, 1511-1597"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 15 and 16 don't match how `_read_turn` works",
+   "description": "- `_read_turn` raises `_BackgroundIdleTimeout` on any idle expiry (`:305-306`). Task 15 adds `_ForegroundIdleTimeout` but never says the read must be told which kind to raise.\n- `_read_turn` raises `ProviderAPIError` on `ResultMessage.is_error` (`:315-319`) before it returns. Task 16 says \"an `is_error` result is not re-raised\" without naming the parameter or flag that makes the drain tolerant.\n- `_read_turn` returns on any `ResultMessage`. \"Drain until the dispatch's own result\" needs a loop over `is_own_result`, plus handling of `None` (stream ended).\n\nA junior implementer would have to rediscover each of these.",
+   "location": "src/squadron/pipeline/sdk_session.py:288-325"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`init_run(owner=)` signature would break every existing caller",
+   "description": "Task 11 writes `init_run(..., owner: RunOwner | None)` without a default. Current callers pass no owner:\n- `run.py:227`\n- `run.py:653`, the prompt-only path\n- Many test calls such as `mgr.init_run(\"test-pipe\", {})`\n\nIt must default to `None`. Task 11 should say so, and say that `run.py:653` stays `owner=None` explicitly.",
+   "location": "src/squadron/pipeline/state.py:236-265"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`claim` failure and item-resume status handling are unspecified",
+   "description": "- Task 11 says `claim` \"raises\" for a live-owned running run but names no exception type. Nothing catches it on the `--resume`, implicit-resume or item-resume paths. `handle_item_resume` catches only `typer.Exit`, so the user sees a traceback.\n- If `claim` runs inside `_run_pipeline`'s `BaseException` handler, it would finalize another process's live run as `failed`. The plan must place `claim` outside that handler, and say which.\n- Item resume operates on `completed` runs (`item_resume.py:186-204` doesn't check status). Task 12 tests claim only from `paused` and `failed`. Add `completed`.",
+   "location": "src/squadron/cli/commands/run_item.py:79-108"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 19 and the existing wait CLI/logging overlap",
+   "description": "- `runs.py:61` already prints `sq runs wait: run {run_id} {outcome}` for any non-zero code. Task 19's stderr line `sq runs wait: run <id> orphaned (process <pid> gone)` duplicates it. The plan doesn't say which one stays.\n- `wait_for_run` already logs a WARNING for every non-COMPLETED outcome (`run_wait.py:76-78`). Task 19's \"ends with a WARNING\" would log twice.\n- `_STATUS_PANEL_OUTCOMES` (`runs.py:32`) doesn't say whether `ORPHANED` prints the panel.\n- Stale text: the `--timeout` help says \"A crashed run stays 'running' forever, so this is the only bound\" (`runs.py:50-51`), and the `run_wait.py` docstring says the same. Neither is in Task 19 or 40.",
+   "location": "src/squadron/cli/commands/runs.py:42-62"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 25 column order contradicts the UI spec",
+   "description": "The UI spec (slice lines 428-433) orders columns as Run ID, Pipeline, Target, Status, At, Started, Activity. Task 25 lists Run ID, Status, Pipeline, Target, At, Started, Activity. The task also doesn't say what happens to the existing `render_run_listing` pieces:\n- The \"No resumable runs.\" message and its `--all` hint (`:148`).\n- `_RESUME_HINTS` (`:46-50`).\n- The `list --all` help text, which says \"(completed, running)\" (`runs.py:21-23`).\n\nExisting 199 view tests assert these.",
+   "location": "src/squadron/cli/run_views.py:117-163"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 29 leaves `resolve_pipeline` under-specified against `load_pipeline`",
+   "description": "- `load_pipeline` first accepts an existing file path (`candidate.is_file()`, `:107-109`) before the name search. \"Refactor `load_pipeline` to call `resolve_pipeline`\" while \"a path argument is reported as not found\" would remove path loading unless the path branch stays in `load_pipeline` ahead of the call. The task only says \"behaviour unchanged\".\n- `PipelineInfo` requires `description` (`:52-58`), but resolution doesn't parse YAML. `_search_dirs` returns bare `Path`s with no `PipelineSource` label, so the source must be derived. The plan says neither.\n- `load_pipeline`'s `project_dir` and `user_dir` kwargs must reach `resolve_pipeline`.\n- `PipelineInfo.params` (Task 27) must have a default, or the only constructor (`loader.py:177`) and any test constructor breaks.",
+   "location": "src/squadron/pipeline/loader.py:93-124"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 6 scope omits the test-support module and is large",
+   "description": "`tests/pipeline/run_listing_support.py` (a non-test helper) calls `make_step_callback` three times. `test_state.py` calls it about 30 times, and about 10 other files do too. Task 6 says \"every test\", and the grep gate sits in Task 5's success line, which says it is checked \"after Task 6\". Name `run_listing_support.py` explicitly. Consider splitting Task 6 by file group, since it is the largest mechanical edit in Part A.",
+   "location": "tests/pipeline/run_listing_support.py:93-108"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Task 22a asserts wall-clock time that the design says tests don't assert",
+   "description": "Slice line 648 says \"There is still no assertion on time in tests\". Task 22a asserts `MAX_LISTING_S = 1.0`. The slice's NFR (line 505) does call for a load test under `tests/load/`, so the task is justified. One of the two documents should be corrected. The CI claim holds: `pyproject.toml:82` has `testpaths = [\"tests\"]` and `ci.yml:38` runs `uv run pytest`, so no wiring task is needed.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Prune's report glob and stray `.tmp` files",
+   "description": "The heartbeat now writes every 30 s through `_write_atomic`, which writes `{run_id}.tmp` and then renames. A `kill -9` mid-write (exactly the crash this slice targets) leaves a `{run_id}.tmp` that nothing removes. Prune deletes only `{run_id}.json` and report siblings (Task 36). A pruned or orphaned run can leave this file behind indefinitely. Task 36 should also remove `{run_id}.tmp`. Also, `batch_report.py:313` already builds `.report.md` as an f-string, so Task 32's check `grep \"report\\.md\" src` showing one definition only passes if that line is rewritten to use the new shared pattern.",
+   "location": "src/squadron/pipeline/state.py:218-222"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Orphaned status after a killed resume",
+   "description": "Once `claim` flips a `paused` or `failed` run to `running`, a crash during the resume leaves it `orphaned`. `RESUMABLE_STATUSES` excludes it, so only prune can act on it. The design accepts this and Task 41 opens the issue. No change is needed, but the docs task could mention it.",
+   "location": "src/squadron/pipeline/state.py:51"
+  }
+ ]
+}

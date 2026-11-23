@@ -1,0 +1,117 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"two questions plus one confirmation\" inventory is contradicted by prompts the plan keeps and authors",
+   "description": "Preflight asks the Project Manager \"proceed with the stale graph or stop\" on any drift. Task 1.1 (task lines 86\u201388) mandates preflight runs in full, unchanged.\n\n- **Drift is certain on this repo.** `.understand-anything/meta.json:3` carries `1bfbca1\u2026`, and the slice branch HEAD will be the Task 1\u20137 commits, so every run in Task 8 hits the prompt.\n- **It fires before extraction.** That breaks SC2's \"extraction demonstrably precedes all interaction\" (design line 352) and Task 8.1's \"nothing else asked\" (task line 310).\n- **The PM notice is wrong.** Task lines 50\u201353 promise the PM exactly \"two engagement answers and one description confirmation\".\n- **Task 6.2 adds a fourth interaction.** \"Offer augment or stop\" (task lines 240\u2013241) is authored into the flow text after Task 5.3 has already certified the inventory as \"exactly two questions plus one confirmation\" (task lines 216\u2013220).\n\nThe file forbids resolving this by judgment (task lines 26\u201327, 197\u2013198), so the implementer has no sanctioned way through 8.1.\n\nFix: state in 5.1, 5.3 and the PM notice that the staleness proceed/stop and the augment-or-stop offer are contract prompts outside the engagement inventory. Move the 5.3 inventory check after 6.2 and have 8.1 expect the staleness prompt. If the staleness prompt must instead be suppressed for this flow, that contradicts \"preflight unchanged\" and needs a design change.",
+   "location": "commands/analysis/understand.md:180-182"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Selector task does not reconcile the existing argument-handling text; 7.4 is too narrow and too late",
+   "description": "Task 1.1 says \"extend the argument handling\" but does not say where it lives. It lives inside Flow: Comprehension Analysis:\n\n- Line 389: \"the default flow and the only one this skill implements\".\n- Line 392: \"Any argument other than the comprehension default is **unrecognized**. Say so and stop\".\n- Line 393: the \"slices 363 and 364\" sentence.\n\nTask 7.4 edits only line 393 and requires \"no other comprehension-flow text changed\" (task line 295). Two outcomes are possible, and both are wrong:\n\n- 1.1 edits lines 389\u2013392, and 7.4's success criterion is false.\n- 1.1 leaves them, and the shipped skill tells the executing model both that `concept` routes to a flow and that it is unrecognized.\n\nOther text is left stale by every task:\n\n- Lines 628\u2013629: \"Concept generation is slice 363 \u2026 neither is written here\".\n- Line 3: the frontmatter `description` still says the skill is for \"a codebase comprehension analysis\".\n\nSequencing compounds it: the contradiction is committed at Task 1 (task line 99) and stays until 7.4.\n\nFix: name lines 389\u2013393 and 628\u2013629 as the edit sites in 1.1, fold 7.4 into 1.1, and decide explicitly whether line 3 changes.",
+   "location": "commands/analysis/understand.md:389-393"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Shared \"Generated document conventions\" state an unconditional output path and frontmatter that Task 7.2 contradicts",
+   "description": "The shared Document Conventions section is declared \"shared by every capability-(a) flow\" (`commands/analysis/understand.md:637-639`). It gives one output path (`user/analysis/{index}-analysis.codebase-comprehension.md`), the \u2265940 index rule and `docType: analysis`, with no flow scoping. Task 7.2 authors a different path and `docType: concept` inside the concept flow and never says the shared subsection is comprehension-only. The provenance line at 329 has the same problem: it says section sourcing names \"the graph field it derives from\".\n\nFix: have 7.2 and 7.3 state that the concept flow's path, frontmatter and section-sourcing outcomes supersede lines 345\u2013370 and 329. Alternatively add one scoping sentence to the shared section; it is not comprehension-flow text, so the design's exclusion does not bar it.",
+   "location": "commands/analysis/understand.md:345-370"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 8.2's scratch copy will meet re-run semantics, not the decline path",
+   "description": "Task 8.1 writes `000-concept.squadron.md` into the real tree and it stays there. Task 8.2 then makes \"a scratch copy of the tree\", which contains that document. Task 6.2's rule is \"existing document \u2192 never overwrite \u2026 stop is the default\", so \"Document still written\" cannot be observed.\n\nThe copy method is also unspecified, and it changes the result:\n\n- `project-documents/ai-project-guide` is a git submodule (`.gitmodules:1-3`). A worktree or clone leaves it empty, as it is in this checkout, and precondition 2 terminal-stops.\n- A `cp -R` carries the 8.1 document and whatever cf registration the copy does or does not have.\n\nFix: state the copy command, remove `000-concept.squadron.md` from the copy (or take it before 8.1), confirm the guide tree and project-name resolution work there, and say when the scratch tree is deleted.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 8.3 has no way to \"point the check at\" a scratch guide",
+   "description": "Tasks 2.1 and 6.1 author a fixed guide path and nothing introduces an override. A flow run therefore cannot see a scratch copy of the guide alone. The \"loud stop names the guide and the expected title, and nothing is written\" can then only be shown by a hand-run `grep`, which does not test the flow. \"Nothing is written\" is also ambiguous in the real tree, where the 8.1 document already exists.\n\nSC7 names two further branches that no walkthrough step exercises: guide absent/unreadable, and whole tree absent (name the setup step). Precondition 3's no-registration stop is likewise unexercised.\n\nFix: run 8.3 in the 8.2 scratch tree with the heading renamed there. Add the guide-removed case in the same tree; it is one more run.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 8.4's byte-identity check uses `git diff` on an untracked file, and the augment is never undone",
+   "description": "The 8.1 document is not committed until the marker at task line 351, so at 8.4 it is untracked. `git diff` prints nothing for an untracked file, so \"populated sections stay byte-identical (`git diff`)\" passes vacuously.\n\nThe augment run also appends walkthrough answers under a dated subheading in the real document. The only commit that follows (line 351) ships that test content inside the concept SC12 is judged on, and no step restores the 8.1 version. Task 8.4 does not say who supplies the augment's answers either; the PM notice covers only 8.1.\n\nFix: commit the 8.1 document before 8.4, diff against that commit, then either keep the augment deliberately or `git checkout` the file back.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 8.5 writes two new comprehension analyses that no step removes",
+   "description": "\"Each run takes a new index \u2026 Never overwrite.\" `project-documents/user/analysis/` already holds 943 and 944. Running the no-argument and `comprehension` routes live produces 945 and 946. Nothing in 8.5 says to stop once routing is confirmed or to delete the outputs. They are untracked, so 8.6's `git diff --name-only main` will not show them, and 9.3's \"commit remaining changes, confirm clean tree\" will commit them.\n\nFix: stop each run once the comprehension flow is entered, or delete the outputs, and say which.",
+   "location": "commands/analysis/understand.md:353-356"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 8.6's changed-file check runs before the files it expects exist or are tracked",
+   "description": "At 8.6 the generated concept is untracked, because its commit is the last line of 8.6. The DEVLOG entry is not written until 9.2. `git diff --name-only main` lists tracked changes only, so the expected set (skill file, generated concept, slice documents, DEVLOG) cannot match. The check also cannot catch stray untracked output such as the 8.5 documents. It also precedes 9.1's edit to `360-slices.document-intelligence.md`.\n\nFix: move the scope check to 9.3 after the final commit as `git diff --name-only main...HEAD`, plus `git status --porcelain` empty. This is the SC11 evidence, so it needs to be real.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-347"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Terminal stops have no stated position relative to the interview",
+   "description": "Task 2.1 calls the guide and project-name checks \"preconditions\" but quotes the guide as \"read at write time\". Task 6.1's checks are \"before any write\". Task 6.2's existing-document check has no timing at all. As written, an implementer can place all three after the interview and confirmation.\n\nA terminal stop there, or the default stop on an existing document, discards the operator's two answers and the confirmation. Nothing in the flow resumes or recovers them. That defeats the design's bounded human cost (design line 39).\n\nFix: one line each in 2.1, 6.1 and 6.2 saying the checks run before extraction and before any question is asked. The write-time re-check can stay as a second guard.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:103-118"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "SC4 and half of SC10 are authored but never checked on the generated document",
+   "description": "- **SC4** (dropped topics appear nowhere, \"neither as content nor as gap markers\"): the only check is 4.1's skill-text rule. Task 8.1 never inspects the written concept for why-now, audience-evolution or methodology content or markers.\n- **SC10** (\"every `[INFERRED]` sentence satisfies the checkable rule\"): 8.1 only confirms the inferred-claims provenance line exists.\n\nFix: add two bullets to 8.1. No new task is needed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-316"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items, one per task group",
+   "description": "All eight markers are `- [ ] Commit: \u2026` sub-checkboxes (task lines 99, 125, 164, 185, 221, 254, 296, 351), not plain `**Commit**:` lines. They close every top-level task 1\u20138, giving seven commits to one markdown section before anything is run.\n\nTask 7's commit follows 7.4 with no verification task before it, unlike Tasks 1\u20136. The Task 1 commit is not a working point; see the selector finding.\n\nFix: convert them to plain lines and reduce them to about three: after the selector with the comprehension-text fix, after the flow text is complete and verified, and after the walkthrough.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Overweight for one section in one markdown file",
+   "description": "There are 28 subtasks for a design rated 3/5. Several verify tasks only re-run the preceding task's own Success line, or repeat Task 0.2:\n\n- **1.2** repeats 1.1's \"selector covers all four argument cases\". Merge.\n- **4.2** repeats 4.1's \"table matches the design row-for-row\". Merge.\n- **6.3** repeats 0.2's `grep -c` on the guide (task lines 68\u201369). Cut.\n- **2.2** repeats 0.2's `project.name` check. Its only new check, that `cf get` resolves `squadron`, is a premise and belongs in 0.2, before the precondition is authored rather than after.\n\nKeep 3.4 and 5.3; they test something the authoring tasks do not.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Two anchors and the commit references could not be verified in this checkout",
+   "description": "- **Concept guide.** `project-documents/ai-project-guide/` is an unpopulated submodule here, so `guide.ai-project.000-concept.md` and its `## User-Provided Concept` count are unverified. The same goes for `prompt.ai-project.system.md` \u2192 Session State Summary, which Task 9.2 cites. In a checkout like this one, Task 0.2's STOP would fire for an environment reason rather than a design-fact divergence; 0.2 should tell the two apart.\n- **Commits.** `998ab97` and `dfce803` (task lines 8, 32, 36) do not appear in the visible history, which shows only `68c4cb8`.\n- **cf registration.** `cf get` returning `squadron` was not checkable.",
+   "location": ".gitmodules:1-3"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Design line reference for the `[INFERRED]` rule is off by one",
+   "description": "Task 7.1 cites design lines 278\u2013280. The rule is the blockquote at 277\u2013279; line 277 holds its main clause and 280 is blank. All eleven other design line references in the task file were checked and are correct.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Only the \"corrected\" confirmation outcome is exercised",
+   "description": "Design lines 233\u2013237 define three outcomes. Task 8.1 takes \"corrected\"; \"confirmed\" and \"refused/unavailable\" (extracted-unconfirmed, \"never stalls\") are never run. Task 8.2 does not say how its confirmation is answered. Refusing it there would cover a second outcome at no extra cost.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:305-307"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Task 9.2 does not say which DEVLOG",
+   "description": "Both `DEVLOG.md` (current, already carrying the 363 entries) and `project-documents/DEVLOG.md` (last entry 20260819) exist. The root file is evidently the live one; name it.",
+   "location": "DEVLOG.md:15-17"
+  }
+ ]
+}

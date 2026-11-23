@@ -1,0 +1,110 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 7's inline check can make the retry budget unbounded under sustained throttling",
+   "description": "Task 7 (task file lines 70-71) puts the `RateLimitEvent` check \"before the existing `ResultMessage.is_error` check\". In `dispatch`, `progressed = True` (line 153) is the first statement in the loop body, ahead of that check. A rejected event raised after that line has already set `progressed`. The `except` branch then runs `if progressed: retries = 0` (lines 190-191), so the budget resets on every throttle. Under sustained throttling the stream's first message is a rejected event, so `dispatch` retries forever and never exhausts `MAX_RATE_LIMIT_RETRIES`. In the agent paths this can't happen, because `_skip_unparseable` raises before the consumer loop sets `progressed`. Nothing in the plan tests exhaustion in `dispatch`: Task 11 only has two rejections followed by success. The task must say the check goes before `progressed = True`. It also needs a `dispatch` test where every call yields `rejected` and the budget is exhausted.",
+   "location": "src/squadron/pipeline/sdk_session.py:150-156"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 8 fixes only one of four identical `sdk_type` filters, so rate-limit text can leak into review and audit prose",
+   "description": "Task 8 (lines 78-80) adds `\"rate_limit_event\"` only to `sdk_session.dispatch`. It tells the implementer to \"verify no other exclusion list exists\", but its Success line covers only `dispatch`. At least three more consumers of `ClaudeSDKAgent.handle_message` use the same tuple or the same shape:\n- `src/squadron/review/review_client.py:263` appends everything outside `(SDK_RESULT_TYPE, \"tool_use\", \"tool_result\")` to the review prose.\n- `src/squadron/pipeline/summary_oneshot.py:139` has the same tuple.\n- `src/squadron/metrology/audit.py:542-559` appends every other message to `parts`.\n\nIf informational events flow to translation (Task 4, and Task 6's \"let it flow to translation as normal\"), `review_client.py` would put the status text into the review artifact. Task 14 explicitly checks that this doesn't happen, and Task 14 only passes by luck. The plan also adds no test for these consumers. Either extend all four filters and add tests, or have `_skip_unparseable` drop informational events so only `dispatch` sees them. This also resolves the next finding.",
+   "location": "src/squadron/review/review_client.py:263"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 6 contradicts itself on whether informational events are yielded",
+   "description": "Line 61 says \"log at DEBUG and continue the loop without yielding it\", then \"let it flow to translation as normal\". These are opposite behaviours. The slice has the same split: D4 (line 265) says \"skip\u2026 must not reach translation\", while the Data Flow section (line 329) says the informational path \"continues to translation\". The choice decides whether Task 4's translation branch is reachable from the agent paths at all. It also decides what the Task 10 \"stream continues to yield subsequent messages\" test should assert about the informational message itself. It decides whether the filters in the previous finding matter. The task needs one explicit behaviour.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The exhaustion gate in `_handle_query_mode` is missed; `ProviderRateLimitError` and criterion 6 depend on it",
+   "description": "Task 6 replaces \"both\" `RATE_LIMIT_MARKER in str(exc)` gates (lines 167 and 216). There is a third use at `agent.py:180`: `if RATE_LIMIT_MARKER in str(exc): raise ProviderRateLimitError(...)`. `sdk_session.py:192` is the fourth. No task changes line 180 or specifies the `RateLimitRejected` message text. If the message lacks \"rate_limit\", exhaustion raises plain `ProviderError`. Then the rewritten `test_exhausted_rate_limit_raises_a_distinct_error` and `test_a_rejected_rate_limit_event_reaches_the_backoff` fail. In production `metrology/audit.py:693` would stop reporting `AuditRunFailure.RATE_LIMITED` (success criterion 6). Task 6 should convert line 180 to `_is_throttle(exc)`. Task 2 should require that the `RateLimitRejected` message contains `RATE_LIMIT_MARKER`.",
+   "location": "src/squadron/providers/sdk/agent.py:180"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`_is_throttle` is private but imported across modules under pyright strict",
+   "description": "`[tool.pyright]` sets `typeCheckingMode = \"strict\"`, so `reportPrivateUsage` is an error. `agent.py` already needs `# pyright: ignore[reportPrivateUsage]` at line 21 for its `_errors` import. Task 2 defines `_is_throttle` with a leading underscore. Tasks 3, 6 and 7 import it from other modules (the tests, `agent.py`, `sdk_session.py`). Task 13's \"zero pyright errors\" gate would then fail. Either name it `is_throttle` or add ignore comments. The task should say which.",
+   "location": "pyproject.toml:96"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commits land at red, untested points, and the commit markers are in the wrong format",
+   "description": "`Commit:` markers are written as checkbox items (`- [ ] Commit: \u2026`), not plain `**Commit**:` lines. They also follow 14 of 16 tasks, which is not a set of working points. Several of those commits leave the suite failing:\n- **Task 1 (line 28):** after the bump, `test_the_shim_absorbs_informational_events` (`test_agent.py:684`) and `test_the_shim_lets_a_rejected_event_raise` (`test_agent.py:715`) fail. The parser now returns `RateLimitEvent` natively. Task 1 also runs no tests.\n- **Task 6 (line 66):** removing the `is_rate_limit_event` special case breaks `test_a_rejected_rate_limit_event_reaches_the_backoff` (`test_agent.py:648`).\n- **Task 9 (line 89):** deleting the shim makes the four `test_the_shim_*` tests fail on import until Task 10.\n\nConsolidate to a few markers at green points. For example, put a marker after the Task 10-11 rewrite, once the suite is green, and another after Task 13.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Test-with ordering is broken for Tasks 6, 7, 8 and 9",
+   "description": "The behavioural changes in Tasks 6, 7 and 8 (the re-keying and the exclusion-set change) get their tests only in Tasks 10 and 11. Between them sit Task 9 and a window in which the old tests either fail or pass for the wrong reason. The old fabricated-exception tests still pass through the retained substring path, so a half-landed Task 6 or 7 stays green. That is the slice's own stated risk (slice lines 480-484). Fold the rewrite for each path into its implementation task, or merge Tasks 6/10 and 7/8/11.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-101"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 8 leaves a window where informational events leak into `dispatch` prose",
+   "description": "Task 4 makes informational events observable as `sdk_type: \"rate_limit_event\"` system messages. The exclusion in `dispatch` arrives four tasks later in Task 8. Every commit in between reintroduces the issue #23 defect. Merge Task 8 into Task 4 or run it directly after.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:46-81"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 6 skips docstrings and comments that the slice says to rewrite",
+   "description": "Slice Part B (lines 354-355) requires rewriting the stale docstrings in `_skip_unparseable` and both `dispatch` methods. The query-mode docstring (\"Retries the full query on a `rate_limit_event`\", line 145) and the client-mode docstring (\"the SDK raises `ClaudeSDKError`\", lines 187-188) are stale. The same goes for the `dispatch` docstring at `sdk_session.py:132-135`. Tasks 6 and 7 only cover `_skip_unparseable` and the `except` comment.",
+   "location": "src/squadron/providers/sdk/agent.py:145-149"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Success checks and test coverage are weaker than the success criteria require",
+   "description": "Several verification gaps:\n- Task 10's grep (line 99) matches `MessageParseError.*rate_limit` on a single line. The real fabrication at `test_agent.py:666-668` spans lines, so the check can't detect it. Criterion 2 also covers `tests/`, but Tasks 9 and 10 grep only `src` for `install_rate_limit_parser_shim`.\n- Criterion 7 (a plain `ClaudeSDKError` with `rate_limit` still backs off) gets only a helper-level assertion in Task 3. No retry-loop test covers it. Task 10's grep also forbids the `ClaudeSDKError(\"rate_limit_event` text such a test would naturally use.\n- Criterion 3 requires a WARNING naming the attempt number, but no test asserts it (for example with `caplog`).\n- Task 9's `provider.py` and `sdk_session.py` import cleanup is not checked by test.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:99"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The forced-throttle step is ambiguous on the pipeline path, and the temporary patch has no safeguard",
+   "description": "Task 15 injects an event \"in one dispatch path\" and confirms that `RateLimitStats.throttles` increments. `sdk_session.dispatch` has no `RateLimitStats` at all, so that check is impossible there. Tasks 14 and 15 also exercise the agent path, not the pipeline path, so the asymmetric path flagged as highest risk is never observed live. The task should name the agent path for the forced observation. It should also state that the pipeline path is covered only by Task 11 unit tests. The uncommitted source patch is reverted only by a person's say-so. If the run is killed, or Task 16 commits first, the injection can land. Add a `git status`/`git diff --stat src` check before Task 16's commit.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:137"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The abandoned live stream in query mode is not closed",
+   "description": "Previously a rejection killed the SDK generator. Now `_skip_unparseable` raises `RateLimitRejected` while the `sdk_query` stream is still alive, and the retry starts a fresh `sdk_query`. The old CLI subprocess keeps running until GC finalizes the generator. That adds load against a limiter that is already rejecting requests. D4 treats restarting a healthy stream as safe without addressing this. A `finally`/`aclose()` on the stream in `_skip_unparseable` would avoid it, and no task covers it.",
+   "location": "src/squadron/providers/sdk/agent.py:154-157"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Task 12 is verification-only and Tasks 3/5 are loosely scoped",
+   "description": "Task 12 changes no files. It confirms that two test files still pass, and it has no commit. Fold it into Task 13's regression sweep. Its claim that `test_provider.py` never asserted the shim holds (no match in grep). Task 5 says to create `test_translation.py` \"if it does not exist\"; the file already exists (`tests/providers/sdk/test_translation.py`), so this is a harmless but incorrect hedge. Task 3 also leaves the test location open (\"or a new focused test module if preferred\"). Name one file.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-115"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The slice's `ClaudeSDKError` catch structure still holds with `RateLimitRejected`",
+   "description": "`ClaudeSDKError` is already caught at all three backoff sites and by the outer `ProviderError` conversions. The `RateLimitRejected` subclass design (Task 2) therefore needs no restructuring. The Task 6 and 7 claims about which files import `is_rate_limit_event` and the shim are accurate against the code. The only call sites are `agent.py:38/128`, `provider.py:12/43` and `sdk_session.py:36/100`.",
+   "location": "src/squadron/providers/sdk/agent.py:166"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Task 1 is accurate but uses a possibly different interpreter",
+   "description": "`pyproject.toml:30` carries the `>=0.1.38` pin that Task 1 edits, and `uv.lock` exists. Task 1's version check uses bare `python -c`. `uv run python -c` is safer, since the system interpreter may not be the project venv.",
+   "location": "pyproject.toml:30"
+  }
+ ]
+}

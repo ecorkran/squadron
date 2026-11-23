@@ -1,0 +1,103 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2 \"full tests/metrology/ suite passes unchanged\" is false; adding enum members breaks existing tests",
+   "description": "`LanguageSnapshot` validates that every `SnapshotMetric` is present (`snapshot_models.py:190`). Three existing tests would fail once Task 2 adds four members:\n- `test_render.py#python_snapshot` builds a Python section with only the four 400 metrics, so every render test breaks.\n- `test_snapshot_models.py:225-253` (`test_json_round_trip_is_lossless`) does the same.\n- `test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 replaces `PythonAdapter.metrics` with an explicit four-metric set, so this fails until Task 25.\n\nTask 2's success line and its commit would be red as written. Task 2 should list these test edits. They could pad the missing metrics as absent, and the metrics assertion could pin the 400 set until Task 25 restores equality.",
+   "location": "tests/metrology/snapshot/test_render.py:31-65"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 7 says 400's length tests are \"edited only for the rename\", but a required `complexity` field breaks their constructors",
+   "description": "`FunctionLength(\"b.py\", \"g\", 9, 70)` is built positionally in `test_lengths.py:104-106` and `test_render.py:36`. Adding a required `complexity: int` makes those calls fail. Success Criterion 12 and the Technical Requirement allow only rename edits. Task 7 should either say these call sites get a `complexity` argument or give the field a default. It should also say whether the criterion-12 wording is relaxed to allow this.",
+   "location": "tests/metrology/snapshot/test_lengths.py:104-106"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 7's \"read-and-decode helper\" has no contract, and the two callers need different behavior",
+   "description": "`_measure_source` handles three cases differently:\n- On `OSError` it logs \"for length\" and marks the file unparsed.\n- On `UnicodeDecodeError` it still computes file length from a replacement-decoded copy of the raw bytes, then marks the file unparsed.\n- Its warnings say \"no functions measured\".\n\nTask 10 says to reuse the helper \"never a copy\" and also demands a per-file WARNING with its own meaning. Task 7 doesn't say what the helper returns (text, raw bytes or an error) or who logs. A junior could change length's log text or lose the replacement-decode file-length behavior. Task 7 should state the helper's signature and return shape.",
+   "location": "src/squadron/metrology/snapshot/lengths.py:156-179"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "MemoryError handling contradicts itself between Task 10/11 and Task 14",
+   "description": "Task 10 and Task 11 say a `MemoryError` during the pass gives `tool_failed` for the whole language. The slice's failure-mode table says the same. Task 14 puts `MemoryError` in the TypeScript `token_errors`, and Task 10 says a `token_errors` member puts the file in `unparsed_files`. Which rule wins for TypeScript is undefined. Task 14 and Task 15 give no `MemoryError` test. Task 14 should drop `MemoryError` from `token_errors`, or Task 10 should state that its `MemoryError` rule takes precedence.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 10 doesn't define which lines count as duplicated, so the \"non-blank lines\" definition and Task 13's check are ambiguous",
+   "description": "D3 says `per_file` holds duplicated non-blank lines, with file length as the denominator. Task 10 says \"marks every line under both windows\" and `per_file` is \"distinct duplicated lines\". It doesn't say whether that means lines that carry a window token or the span from first to last token. A span would include blank and comment-only lines, which breaks the denominator. Multi-line tokens, such as triple-quoted strings, record only their start line. Task 13's check (\"report the function's lines in both\", with different comments and blank lines) asserts no concrete count. Task 10 should define the line set, and Task 11 and Task 13 should assert exact counts.",
+   "location": "unverified"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 10 is oversized and mixes two separable concerns",
+   "description": "Task 10 combines ingestion and the window algorithm, and is rated Effort 4:\n- ingestion: reads, error handling, token-id mapping and the ceiling;\n- the window algorithm: rolling hash, collision check, overlap rule, line marking and the `counting` text.\n\nTask 11 then tests everything at once with eight behaviors. Splitting into \"ingest and ceiling\" with tests, then \"window pass\" with tests, would let each commit sit at a tested point. This is a CONCERN, not a blocker.",
+   "location": "unverified"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`read_coverage` \"raises only `SnapshotIntegrityError`\" conflicts with how it must obtain the report path",
+   "description": "Task 21 needs the repo-relative report path, from `get_config` plus the Task 16 parser. That parser raises `SnapshotPreflightError` on an invalid value, and non-string TOML values (an int or bool) aren't addressed anywhere. Preflight guards the CLI path. `read_coverage` is a public function that Task 22 and Task 26 call directly, and the task's own Success line says it raises only `SnapshotIntegrityError`. Task 21 should say how a bad value is handled inside the reader, either as `tool_failed` or by calling the parser un-raised. Task 16 and Task 17 should say what happens for a non-string value and for whitespace-only input.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Freshness stat has no rule for dangling symlinks, sparse checkouts or submodules",
+   "description": "Task 21 stats every `git ls-files` entry, and a stat `OSError` is \"a failure \u2026 never fresh, never skipped\". Clean-tree preflight passes for a tracked dangling symlink, a skip-worktree (sparse) file or a gitlink entry. For these, `stat` raises or follows to a missing target, so a snapshot of such a repo can never get coverage. Task 21 should say whether it uses `lstat` and how gitlinks are treated. Task 22 should then add a case for a dangling symlink.",
+   "location": "unverified"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Cobertura path mapping drops reports with relative `<source>` or `filename` values, silently",
+   "description": "Task 19 joins each `<source>` with `filename` and passes the result to `repo_relative`. `repo_relative` returns `None` for a relative path, and Task 19 drops such entries without a signal. A coverage.py report with `relative_files = true` writes `<source>.</source>` or a relative path, and so does a report produced in another checkout. Every measured file would then land in `tool_ignored_files` with no warning.\n\nJoining with several `<source>` roots also produces spurious candidate paths that aren't checked against the real file set. Task 19 should say how relative sources are resolved (against the repo root) and which join wins when several sources are listed. Task 20 should add a relative-source case. Task 18 only captures default-config reports.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:57-65"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 28 leaves existing docs stale and misses the absence-reason table",
+   "description": "`docs/COMMANDS.md:505` says \"Each language with an adapter gets four metrics \u2026 Python measures all four; TypeScript measures length and lint\". After this slice both adapters measure eight (TypeScript: all except type errors) and the sentence is false. The absence-reason table at lines 520-526 lacks `coverage_not_configured`, `report_missing` and `report_stale`. Task 28 lists neither fix. Line 528's \"Exit 1 on\u2026\" sentence should also be checked against the preflight error for a bad `metrology.coverage_report`.",
+   "location": "docs/COMMANDS.md:505"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Success Criterion 1 and Criterion 10's \"other metrics unchanged\" have no assertion",
+   "description": "Criterion 1 requires each new measurement to carry a `counting` text giving its definition. Task 9 checks that complexity's `counting` differs from function length's. Nothing asserts that duplication's `counting` contains the window size, the ceiling and the type-1 rule, or that coverage's `counting` names the freshness rule. Task 24 only checks Istanbul's provider limit. Criterion 10 says the failing language's other metrics are unchanged. Task 11 tests `measure_duplication` alone, and Tasks 13 and 15 never lower the ceiling through an adapter. Add a `counting` assertion to Task 11 and an adapter-level ceiling test to Task 13.",
+   "location": "unverified"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task 26 leans on a harness that doesn't exist and repeats an existing test",
+   "description": "`test_take.py` uses only `FakeAdapter`, and the real adapters are never run through `take_snapshot` anywhere in the tests. \"FakeToolRunner scripted as 400's tests do\" isn't a recipe for that. The real adapters will also invoke ruff, pyright, uv and ESLint, and Task 26 doesn't say whether they are scripted or left missing. The bullet \"every language section holds all eight metrics\" is already guaranteed by the `LanguageSnapshot` validator and by `test_every_snapshot_metric_appears_for_every_language_present`. Task 26 should name the scripted tool results, or accept `tool_missing` for lint and types. It should also drop or merge the eight-metric bullet.",
+   "location": "tests/metrology/snapshot/test_take.py:61-80"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 8 doesn't say that the Python call passes the complexity identity",
+   "description": "Task 8 names `measure_typescript_lengths` as the route for TypeScript. For Python it only defines the identity, and doesn't say that `measure_lengths` passes it to `measure_parse_metrics`. `measure_lengths` will now return three measurements, so its name is misleading. This is cosmetic and easy to infer.",
+   "location": "src/squadron/metrology/snapshot/python_adapter.py:88-98"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Task 5 edits the slice design mid-implementation",
+   "description": "Task 5 tells the implementer to record grammar-name differences in the slice's D2. That is reasonable. It should also say Task 6's fixtures and the `counting` text follow the grammar's actual names.",
+   "location": "unverified"
+  }
+ ]
+}

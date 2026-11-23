@@ -1,0 +1,138 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Review categorization changes a live gate's inputs and 300's judging path, undeclared",
+   "description": "Lines 73 and 91 propose changing review templates and output parsing so review findings emit the closed vocabulary. Three consequences go unaddressed:\n\n- **Gate input.** The findings-addressed gate matches a prior finding to a fresh one on exact `(location, category)` (`src/squadron/pipeline/actions/findings_addressed/screens.py:116-161`). Changing what the model emits for `category` changes those keys: matches become residue and go to the judge, and distinct findings that both normalize to `other` at one location can collide. The \"Measure, never gate\" principle (line 45) is scoped to snapshot and rollup data, so it does not cover this.\n- **Judging path.** 320's Non-Goals say parsing and judging are 300's and \"are done.\" 320's Technical Considerations treat a template change as a coordinated 300 write-path change, and 320 says judges run as review-action templates. This document's frontmatter lists `dependencies: [100, 320]` (line 8) and omits 300.\n- **Calibration.** If the instruction is added to prompt text judges run as, the content hash changes and every 322 graduation keyed on it lapses (`src/squadron/metrology/models.py:103-111`). That is the template-edit churn 320 warned about.\n\nEither drop the write-path change from this initiative, or declare 300 as a dependency, route the change through 320's coordination path, and keep the raw category as the gate's key, using the normalized value only in the store.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73-91"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\"Measure any commit\" has no mechanism and contradicts \"doesn't modify the repository\"",
+   "description": "Line 71 says \"A project can be measured at any commit\" and \"Taking a snapshot doesn't modify the measured repository.\" The tools analyze a working tree, so each way of materializing a commit breaks one claim:\n\n- Checking out the commit modifies the user's tree.\n- `git worktree add` writes admin state to `.git/worktrees`.\n- `git archive` into a temp directory leaves the repo untouched, but produces a tree with no installed dependencies, so type counts depend on the environment (see the determinism finding).\n\nTools also write into the tree by default. coverage.py writes `.coverage` into the working directory unless `COVERAGE_FILE` is set. 323's Verification Walkthrough (step 3) shows the failure mode: the audit's own output file made a dirty-tree refusal fire on itself, which required the `_is_audit_artifact` exemption. Line 49 leaves the dirty policy as an unresolved \"either refused or recorded with an explicit dirty marker.\" Refusing would hit the same trap unless the snapshot's own artifacts are exempted or redirected.\n\nPick the materialization mechanism, redirect every tool's output outside the tree, and make the dirty policy a single rule.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:49-71"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Project limits have no declared source, so the motivating case reports \"no limits set\"",
+   "description": "Line 18 says the project's size rules are \"checked by nothing\" and uses that as the motivation. Line 53 says limits come from \"the project's own config.\" Line 67 says they are \"stated in prose in CLAUDE.md.\" `CLAUDE.md:26` gives \"~300 lines\" and \"~50 lines (excluding whitespace),\" both qualified \"where practical.\" No config declares them: `pyproject.toml:73-74` selects no length or complexity rule. Applied to squadron, the design therefore reports \"no limits were set,\" which is the gap the Overview describes.\n\nThe doc also names no config key for the limits, and never fixes the counting rule (whitespace included or excluded). 323's precedent requires new keys registered in `config/keys.py`. The keystone should name the keys, fix the counting rule, and add the limits to squadron's config so the self-measurement tests something.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:53-67"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Brownfield identity can require writing project config, against Design Goal 5",
+   "description": "Line 41 promises a full baseline \"without editing the project's config files or code.\" Identity comes from the git remote. Without one, `derive_project_id` falls back to `metrology.project_id` in `.squadron.toml`, and otherwise raises `MetrologyIdentityError` naming `sq config set metrology.project_id <id> --project` (`src/squadron/metrology/identity.py:131-154`). A local-only brownfield repo cannot be baselined without writing to its config, and line 47's \"never on a filesystem path\" rules out the obvious workaround. The doc must choose: allow a recorded id stored outside the project, refuse no-remote repos with that remediation, or relax line 41.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:41"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Snapshot identity, comparability key and record shape are undefined",
+   "description": "Line 37 says snapshots \"can be compared or explicitly flagged as not comparable\" but never defines the key. 323 defines one: `(project_id, commit_sha, audit_prompt_hash)`. Three gaps follow.\n\n- **Uniqueness.** `ProjectId` is remote-derived, so every clone and worktree with the same remote shares it. This session is running in a `wt/` worktree. Two worktrees at one HEAD with different uncommitted changes produce two records under `(project, commit)`, and nothing says which is canonical.\n- **Language.** Line 37 says \"language\" (singular). Line 71 says one snapshot per commit covers each language present. A multi-language project, the brownfield case the doc targets, has no defined shape.\n- **Payload.** No shape is given for per-metric value, absent reason, tool and version, exclusions, dirty marker, or record type name. 320 and 323 define these as Pydantic models, and this document's principles depend on each field.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:37"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Deterministic\" is asserted for metrics that depend on environment, tests and parameters",
+   "description": "Line 33 promises the same value \"on the same commit with the same tool versions.\" Line 75 says deterministic numbers \"need none\" of a noise floor. Neither holds.\n\n- **Type counts** depend on the installed environment. Pyright reports unresolved imports when third-party packages are missing, so the same commit and pyright version give different counts on different machines. Line 83 also says type errors have no language-agnostic tool.\n- **Coverage** depends on test outcomes, including flaky and time- or network-dependent tests. It is nondeterministic by construction.\n- **Metric parameters** are missing from the key: duplication minimum size, the complexity counting rule, and the length counting rule. Line 85 keys only rule sets and line 89 keys only exclusions.\n\nRecord environment identity for type counts or label them environment-scoped, treat coverage as a separate noisy measure, and put every metric parameter in the record.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Coverage and dependency installation are deferred, but they set the trust boundary and the baseline's shape",
+   "description": "Line 87 defers whether snapshots \"ever install or run project dependencies,\" calling it \"a slice decision with real security and environment cost.\" The cost is arbitrary code execution from the measured repo: coverage runs its test code and `conftest.py`, and installing dependencies runs build backends and install hooks. Brownfield and third-party repos are the stated target.\n\nThe same choice decides whether the baseline is \"one command\" (lines 25, 77) and \"cheap\" (line 41). If the baseline runs tests, it needs the project's environment working on the user's machine. If it does not, coverage is absent for most brownfield projects, which is the case the design targets. State the default: static tools only, reading an existing coverage report if one exists, and running tests only as an explicit opt-in.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:87"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The adapter contract, tool choices and path for new metrics are missing",
+   "description": "Line 39 says \"each language is a pluggable adapter,\" but the doc gives no protocol. Missing: the metric list an adapter must produce, a way to declare which metrics it supports, the language-selection rule (\"selects a language adapter for each language present,\" line 71, by extension or by manifest), and handling for files whose language has no adapter (migratory's GPU sources, per 323).\n\nNo tool is chosen for any metric. Ruff is already in the stack, and its mccabe rule (C901) is not selected in `pyproject.toml:73-74`. Enabling it would give complexity without a new dependency. Lizard is a multi-language candidate for complexity and per-function length. Line 83 correctly notes that analyzers disagree, but a keystone cannot be built without choosing.\n\nLine 51's absent rule also needs a third state. A metric added later must not read as \"failed to measure\" across all earlier history. The record needs \"not defined at this schema version,\" distinct from \"failed\" and \"not configured.\"",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:39"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Fork-to-merge before/after attributes concurrent target commits to the slice",
+   "description": "Line 75 defines a slice's before/after as the snapshot at its fork point against the snapshot at its merge. Line 93 says fix commits land directly on the target. Anything merged to the target between fork and merge, including other slices and fixes, falls inside the \"slice\" delta, yet line 93 says unattributed commits roll up at project level.\n\nA merge commit's own change is `merge^1` against `merge`, where `merge^1` is the target just before the merge. That isolates the slice's change. Line 93 also assumes a merge commit exists, which a squash merge does not produce. State the merge-strategy assumption, or report fork-to-merge with an explicit count of the other commits it includes.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:75"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Review findings mix four origins and event-level units, yet are rolled up as standing counts",
+   "description": "\"Review findings\" come from four sources, all sharing the `category` field:\n\n1. Non-judge LLM reviews from `sq review code`.\n2. 300 judge results. 320 says judges run as review-action templates, and result provenance distinguishes judge-derived from review-produced.\n3. Non-LLM synthetic findings with fixed categories: `review-coverage` (`src/squadron/review/coverage.py:7`) and `merge-step` (`src/squadron/review/task_gate.py:25`).\n4. Findings-addressed round records.\n\nLine 33 calls review output \"LLM-derived,\" which is false for source 3. Line 35's \"error-handling findings: 4 from review, 2 from audit\" would pool all four.\n\nThe units also differ. Snapshots and audits are standing state at a commit. A review finding is an event from one review run, and `src/squadron/review/persistence.py:554` records `reviewedSha` as HEAD at authoring time, which attributes findings on uncommitted work to the last commit. The count per review depends on how often reviews ran.\n\nLine 75 says review numbers are \"shown against their noise floor,\" but no review floor is defined. 323's floor method is audit-only.\n\nRestrict normalization to non-judge LLM reviews, exclude synthetic categories explicitly, define the unit (per review or per slice), and either define a floor or drop the claim for reviews.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:65"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The category vocabulary is unvalidated for review output, and the current prompt example falls outside it",
+   "description": "The ten categories came from a codebase-debt audit. 323 validated them on audit output: `other` was 0/22 on the viewer and 2/49 on migratory. Nothing validates them on review output, which includes spec-fit and process findings with no obvious home in the list.\n\nThe current review prompt already asks for a category, with the example `category: error-handling` (`src/squadron/review/review_client.py:80`). That value is not in the vocabulary, which has `error-handling-observability`. Models copy examples, so the copied value would fall to `other` with a raw string, inflating `other` before any change lands. Validate the vocabulary against existing review output, measure the `other` share as 323 did, and fix the example.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:35"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The vocabulary's proposed location creates a review\u2194metrology package cycle and inverts the existing direction",
+   "description": "`AuditCategory` lives in `src/squadron/metrology/models.py:119-145`. Line 91 has review templates emit it, which makes the review package depend on metrology. Metrology already depends on review: `metrology/models.py:24` imports `Verdict` from `review.models`. The design creates a package-level cycle.\n\nThe repo already guards the opposite direction. `src/squadron/review/addressed/models.py:17-21` keeps the review package from importing pipeline at runtime, because doing so would \"invert the established direction (pipeline consumes review).\" Move the closed vocabulary into a neutral module both packages import, and keep metrology depending on review.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Review ingest lacks granularity, idempotency, a trigger, and a \"not ingested\" state",
+   "description": "Line 73 says ingest \"reads review files into the store as normalized finding records,\" but does not specify:\n\n- **Granularity.** One record per review or per finding? 323 chose one `AuditRun` with findings inline. Per-finding records on a file-per-record store mean thousands of files, and every rollup scans them. 323 says 321 declined SQLite with a measured trip-wire. This design adds per-commit snapshot records and possibly per-finding records without checking that trip-wire.\n- **Idempotency.** Review files are overwritten on re-run, after the prior content is archived (`src/squadron/review/persistence.py:766-795`). Re-ingest must not duplicate. A content hash, as 320's `JudgeResultRef` uses, is the precedent.\n- **Trigger.** Related Work (line 121) names an \"ingest\" CLI command. The body never defines it.\n- **Not ingested.** If ingest has not run, a rollup shows zero review findings for that slice. Line 51 says absent is not zero, so the rollup must distinguish \"not ingested\" from \"none found.\"",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The adoption baseline's 3-run floor is too coarse for the promise, and its fourth run is unexplained",
+   "description": "Line 25 promises that the baseline gives \"every later slice on that project\" a measured before and after. 323's own verification shows the 3-run floor on squadron spanning 17\u201379 total findings (sd 33.7), and on migratory 49\u201382. Per-category floors are equally wide: `architectural-decay` is 7\u20137 on the viewer and 8\u201311 on migratory, while `type-contract-debt` is 1\u20133 and 4\u201312. 323 concluded that totals are not gate-worthy on large repos and that specific categories may be.\n\nLine 97 counts \"three audit runs plus the baseline run.\" 323's variance series already persists three full `AuditRun` records, and `baseline_report` reads runs from the store, so the fourth run's cost is unexplained. \"Expected scope before spending\" (line 97) also has no mechanism. Reuse 323's `audit variance` rather than defining a second procedure, and tell 440 which categories it may present as measured deltas.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:97"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The static path has no failure table, and tool subprocesses have no timeout",
+   "description": "Line 95 requires a failed snapshot to be \"logged and recorded as absent,\" and line 51 lists three causes of absence. Not covered:\n\n- A tool that hangs or runs for hours. Pyright or coverage on a 64k-LOC repo is not a bounded operation, and the doc defines no timeout key.\n- A tool that crashes mid-output, or output that does not parse.\n- A commit SHA that does not exist, or a failed materialization.\n- A store write that fails inside a pipeline step.\n- Partial snapshots, and what the record says about them.\n\n323 enumerates these failure modes for its agent path and adds `audit_timeout_s`. The pipeline is async, and the review path this design would model on wraps its stream in `async for` (323, Failure modes section). The doc does not say whether tool subprocesses are awaited or run blocking. Write a failure table in 323's style, with per-tool timeout keys.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:95"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "No CLI surface, config keys, or 440/CF read contract is specified",
+   "description": "- **CLI.** No command is defined. Related Work (line 121) names snapshot, ingest, report and baseline commands, but the body names none. 323's Interface Specification shows the expected level of detail.\n- **Config.** The design needs keys for limits, rule-set selection, exclusions, coverage opt-in and timeouts. None are named, and 323 requires new keys registered in `config/keys.py`.\n- **Handoff.** Line 77 says CF \"offers this at handoff through 440's capability probe,\" and line 107 says the baseline is \"consumable by 440's capability probe.\" The initiative plan (`project-documents/user/project-guides/001-initiative-plan.squadron.md`, the 260 entry) requires 260's CF-format work to \"work without squadron installed.\" The doc does not say what CF reads, in what format, or what happens when squadron is absent.\n\nDefine the baseline command's output as a versioned JSON contract, and name the commands and keys.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:107"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Scope exceeds what the stated consumers need; cut list",
+   "description": "The consumers are 420 (normalized review findings and static metrics) and 440 (the baseline). The Overview's core claim, that \"the code got better\" can be checked, needs snapshots at two commits plus the audit baseline. Review normalization is the largest piece. It touches 300's path (finding above), adds a third vocabulary copy with a new sync test, needs a historical read-side mapping that line 91 says would require a lookup table or an LLM call (both rejected), and needs an ingest.\n\nCut or defer, in this order:\n\n1. Review normalization, ingest and historical mapping (lines 91, 105). Defer to 420's slice.\n2. Pipeline snapshot hooks at fork and merge (line 95). Line 71 says any commit can be measured, so before/after needs no hook.\n3. Coverage (see the coverage finding above).\n4. Duplication, until a tool and its parameters are chosen.\n5. The dual lint/type rule-set option (line 85). Pick one for v1.\n6. The three-source rollup (line 24). Ship per-project snapshot trend and the audit baseline first. The cross-source breakdown has no consumer yet.\n\nWhat remains is the keystone (snapshot plus Python adapter), the baseline command, and per-project trend. That meets 440's need and the checkable claim.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:105"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Attribution and dependency list omit 323 and 300",
+   "description": "The frontmatter lists `dependencies: [100, 320]`. Line 27 says \"the audit harness and noise-floor method are 320's.\" They belong to 323, which the doc never names. 323 supplies the audit records, the sync test and `AuditCategory`, so it is a real dependency. The write-path change (first finding) also needs 300. Line 97's \"320's existing audit profile and model config\" are keys 323 added (`metrology.audit_profile`, `metrology.audit_model`). The plan's entry for 400 lists the same dependencies, so the plan needs the same correction.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Smaller factual and terminology issues",
+   "description": "- Line 65 says review findings are \"never ingested or counted anywhere.\" The findings-addressed gate reads every finding's `category` on every round and matches on it (`src/squadron/pipeline/actions/findings_addressed/screens.py:116-124`). The accurate claim is that findings are never persisted to the metrology store or rolled up across reviews.\n- \"CF\" (line 77) and \"cf\" (line 93) are never expanded. Context-forge is inferable only from Related Work.\n- Overview line 23 says review findings \"carry\" a category from the audit vocabulary. That is a future state written in present tense.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:65"
+  }
+ ]
+}

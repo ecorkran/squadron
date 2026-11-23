@@ -1,0 +1,432 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`_measure_all` cannot be shared with an export as written",
+      "description": "The component table says `take_snapshot_at` shares `_measure_all` with `take_snapshot`. In `src/squadron/metrology/snapshot/take.py:93-111`, `_measure_all` does three things that don't fit an export.\n- It calls `resolve_files(repo_root, exclusions)`, which runs `git ls-files` (`files.py:42`). The export directory is not a git repository, so this fails, or reads the wrong repo. The design instead says the file list is the archive's member names, and `export_commit` yields it. `_measure_all` has no parameter for a file list.\n- It takes a `PreflightResult` (`take.py:97`), which requires `head_sha` and comes only from the clean-tree `preflight`. The design gives `read_snapshot_config` no return type, and says nothing about how `_measure_all` receives limits and timeout without a `PreflightResult`.\n- It builds `AdapterContext` without `environment_root` (`take.py:101-106`).\n\nSpecify the refactored `_measure_all` signature: a file list in, a config object that is not `PreflightResult`, and both roots. Say which of `take_snapshot` and `take_snapshot_at` calls `resolve_files`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renaming the `git_utils` helpers breaks existing tests, but the design says they pass unchanged",
+      "description": "Line 77 renames `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit` to public names. Line 351 says \"`sq review code`'s range-resolution tests pass unchanged.\"\n- `tests/review/test_git_utils.py:26-28` imports `_find_merge_commit`, `_find_slice_branch` and `_resolve_fork_point`.\n- `tests/review/test_git_utils.py:217` patches `squadron.review.git_utils._find_slice_branch` by string.\n- `tests/pipeline/test_code_pipelines_branching.py:17` imports `_find_slice_branch`.\n- `src/squadron/pr/branch.py:3` refers to it in a comment.\n- `resolve_slice_diff_range` calls them at `git_utils.py:596, 625, 640`.\n\nA rename without compatibility aliases fails those tests and the patch target. The design must either keep the private names (adding public wrappers) or list the test edits. As it stands, the claim at line 351 is wrong.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`first_parent` on `_search_merge_commit` has no caller, and the merge search can't return what the resolver needs",
+      "description": "`_search_merge_commit` (`git_utils.py:221-242`) runs `git log --merges --oneline ... -1`, so it returns only the newest match. The resolver needs every landing, oldest first, so its Data Flow (lines 111-112) issues its own `git log --merges --first-parent --reverse --format=%H` call. The `first_parent: bool` argument therefore has no caller. `sq review code` is explicitly unchanged, and the new resolver doesn't use the helper.\n- The helper's grep behaviour also differs from the Data Flow: `--oneline` versus `--format=%H`, and a single result versus a list.\n- Line 346 says `git_utils.py` \"doesn't grow beyond the rename, the pattern function and the `first_parent` argument.\" It will need a list-returning search, or the resolver needs its own git call. Pick one.\n\nCut the `first_parent` argument. Only `slice_merge_grep_pattern` is shared, and the resolver owns its `git log`.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:195"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The resolver has no outcome for git failing, and it can't tell \"not found\" from \"git failed\"",
+      "description": "The failure table says a `None` from a reflog read or merge search is \"treated as 'this path can't answer', and the next path is tried. Every path failing gives an unresolved reason.\"\n- `RangeUnresolvedReason` is only `NO_LANDING`, `NOT_LANDED`, `LANDED_ELSEWHERE`, `REFLOG_UNAVAILABLE`, `EMPTY_BRANCH` and `FORK_NOT_ANCESTOR` (Data Flow lines 115-120). None says \"git could not answer\".\n- The existing helpers collapse \"git ran and found nothing\" and \"git failed\" into the same `None`. `_search_merge_commit` returns `None` on a non-zero return code, an empty result, or `run_git` returning `None`. `_find_slice_branch` and `_resolve_fork_point` do the same.\n- If git fails or times out, the resolver mislabels the slice `NO_LANDING` or `REFLOG_UNAVAILABLE`.\n- The target is a bare `main` or the integration branch. A clone checked out on another branch has only `origin/main`, so `git log ... main` fails and nothing says why.\n- The \"Checked with `git cat-file -e`\" row (line 165) has the same gap when git cannot answer.\n\nAdd a `GIT_UNAVAILABLE` or `TARGET_NOT_FOUND` reason and have the resolver distinguish returncode from `None`. Verify the target ref up front. Say how this surfaces, and whether it exits 1.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A wrongly resolved landing is permanent, and only hand-editing the store can undo it",
+      "description": "Landings are append-only and \"never edited or removed\" (line 173, D1 lines 186). The only remedy named is \"The project's record can be deleted by hand ... Deleting it also drops fast-forward landings whose reflog has since expired.\"\n- `--grep` matches the whole message, not just the subject. A `--no-ff` merge with `merge.log` enabled lists merged commit subjects. A first-parent merge for slice 947 whose message mentions \"slice 940\" becomes a permanent, wrong landing for 940.\n- D9 says commit messages are never used to attribute a commit beyond the merge convention, and the grep is that exception.\n- Ending the state requires editing or deleting a JSON file. Deleting also loses the unrecoverable fast-forward landings.\n\nGive the CLI a way out: a `--forget INDEX` or `--refresh` option that replaces only merge-commit landings. Also post-filter the match on the subject line (`%s`).",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:381"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fast-forward follow-up landings overlap earlier ones, and the fast-forward path is skipped when a merge landing exists",
+      "description": "For a fast-forward the design sets `before = reflog fork` and `after = tip`. If a slice branch is fast-forwarded, gets more commits, and is fast-forwarded again, the second landing's `before` is the original fork. That range contains the first landing's changes.\n- D1 says \"Nothing sums them: the commits between two landings belong to other work,\" but the two landings overlap and the report shows both.\n- The path is only tried when \"none found\" for merge commits (line 113). A slice that was fast-forwarded and then landed a follow-up by merge commit never gets its fast-forward landing recorded unless `slice-ranges` ran earlier.\n\nEither set `before` to the previous stored `after_sha` when it is an ancestor of the new tip, or mark the overlap on the landing. State that fast-forward and merge-commit landings are both resolved for one slice.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:116-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`take_snapshot_at` omits the repository-root check, so `--cwd` on a subdirectory gives a silently partial snapshot",
+      "description": "In place, `preflight` requires `repo_root` to be the repository toplevel (`_head_sha`, `preflight.py:127-144`). The export path skips `preflight`. Its flow is `rev-parse --verify`, `read_snapshot_config`, `git archive ... -- .`.\n- `git archive <sha> -- .` run with `cwd=` a subdirectory archives only that subtree.\n- The result would be written as the commit's snapshot, keyed on the full `commit_sha`. A later `report slice` would read it as the whole repo, using `file_count` and per-file values from the subtree.\n- `report` commands also take `--cwd`.\n\nAdd the toplevel check to `read_snapshot_config` or `export_commit`, and reuse `_head_sha`'s error.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:127-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`AdapterContext.environment_root` is a required field, which breaks the 400 test builders despite \"400 tests pass unchanged\"",
+      "description": "Line 211 makes the field \"required, with no default.\" Step 4 (line 389) says \"in place: `environment_root == repo_root`, and the 400 tests pass unchanged.\" `AdapterContext(` is constructed in `tests/metrology/snapshot/builders.py:80` and `tests/metrology/snapshot/test_python_length.py:25`. Neither passes `environment_root`, so both fail at construction.\n- Those are two edit sites, not a hidden problem, but the design should say so.\n- Also decide whether a default `None` (meaning `repo_root`) is simpler than updating the builders. It would remove the \"required\" rule that nothing else forces.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:389"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `uv sync --check` working directory and `tool_support.py` are not accounted for",
+      "description": "D5 says tools run with `cwd=repo_root` and that \"the uv check\" resolves from `environment_root`. `uv sync --check` acts on the project in its cwd (`python_types.py:93` uses `cwd=ctx.repo_root`). At an export, cwd is the temp tree with no `.venv`, so uv reports out of sync, or targets the wrong project. It must run against `environment_root`.\n- `tool_support.py` hardcodes `cwd=ctx.repo_root` in `run_chunked` (line 103) and `probe_or_failure` (line 72). It isn't in the module table at line 94.\n- `python_types.py:198` passes `--pythonpath` as the relative `.venv/bin/python`, which resolves against `cwd`. It must become `<environment_root>/.venv/bin/python`. Line 223 says this in D6 but not in the component table.\n\nName the uv cwd rule explicitly, and add `tool_support.py` to the module table.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report project` and `report history` have no data flow or failure modes, and the review placement is ambiguous",
+      "description": "Data Flow documents range resolution, export and `report slice`. It doesn't cover `report project` or `report history`.\n- `report history` orders snapshots \"by the target's first-parent history\" and counts off-line snapshots. That needs `git rev-list --first-parent <target>`. Line 99 says the assembly modules have \"no git,\" and the failure table has no row for this call failing or the target not resolving.\n- \"Review findings ... appear on the row of the landing's `after_sha`\" is undefined for a slice with two landings (which row?) and for an `after_sha` with no stored snapshot (no row exists).\n- `read_snapshot_config` and `derive_project_id` errors (`SnapshotPreflightError`, `MetrologyIdentityError`) aren't mapped to exit codes for the report commands. `metrology_snapshot.py:29-34` has a `_FAILURES` tuple that `SnapshotExportError` must join.\n\nAdd flows for both reports. Say who runs the first-parent listing and what happens when it fails. State where multi-landing reviews go.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exported and in-place snapshots share one record id, with no provenance and unequal file sets",
+      "description": "`write_snapshot` replaces the record for a (project, commit) pair (`store.py:422-444`). `snapshot --commit HEAD` on a clean HEAD overwrites a richer in-place snapshot, for example with type errors present, with an export-measured one where they may be absent. `CodeSnapshot` has no field recording how it was measured.\n- \"Gives the same JSON as one taken in place\" (line 216) is not guaranteed. The export's file set is \"the archive's regular-file members.\" `git ls-files` includes tracked symlinks and gitlinks, which have different archive members, and `export-ignore` is acknowledged. The equality test only covers squadron, where none of these may apply.\n- Reports can't tell whether a boundary was exported or measured in place when explaining a difference in `file_count`.\n\nAdd an `exported: bool` or similar provenance field, or have `ensure_snapshot` refuse to overwrite a stored snapshot with one that has more absent measurements. Specify how symlinks and submodules are handled.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The coverage claim at exports is not established by 401",
+      "description": "Lines 74 and 224 state that coverage is absent at an export \"as 401 states.\" 401's Data Flow (`401-slice...md:97-101`) reads the config key and report from `ctx.repo_root` and runs `git ls-files` for freshness.\n- At an export there is no `.squadron.toml`, because it is gitignored, so config reads give `coverage_not_configured` rather than `report_missing`.\n- If a project commits its coverage XML, the export contains it, the freshness check runs `git ls-files` in a non-git directory, and 401 says that \"raises `SnapshotIntegrityError`\" (401 line 115). That fails the whole export snapshot rather than leaving coverage absent.\n- 401 says `AdapterContext` is unchanged (401 lines 35, 86). 403 changes it. That conflict is acknowledged in Prerequisites but 401's text will be wrong.\n\nDefine how 401's reader behaves for an export, either by reading config from the live root or by skipping the freshness check there.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 2 does not test the durability criterion, and no step covers the branch-deleted, reflog-expired case",
+      "description": "Criterion 2 says a fast-forward slice \"still resolves with the branch deleted and the reflog expired\" after `slice-ranges` has persisted it. Step 2 clones with `git clone .`, which sets `origin` to the local path. `derive_project_id` (`identity.py:131-145`) then gives a different `ProjectId` from the original's GitHub remote. The clone therefore doesn't read step 1's stored record. It resolves a merge-commit slice from topology, so the same SHAs appear trivially.\n- The clone's local branch is whatever HEAD was, so `main` is absent as a local ref unless HEAD was `main`. The resolver would then hit the `GIT_UNAVAILABLE` gap above.\n- No step deletes a slice branch and expires its reflog, which is the case 400's keystone and the slice plan call out.\n\nAdd a step that persists a fast-forward slice's range, runs `git branch -D` and `git reflog expire --expire=now --all`, and resolves again.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Length comparability breaks on every squadron release",
+      "description": "D7 diffs only when the tool's name, version and counting are equal. `ast_tool_identity()` (`python_adapter.py:42-48`) builds the version as `{squadron __version__}+python{platform.python_version()}`. Any squadron bump or Python patch upgrade between two boundary measurements makes every length row `tool_changed`, even though the counting is unchanged. \"Re-measure both\" fixes it only while the commits can still be exported. This follows from 400's design, but it affects the headline comparison.",
+      "file_ref": null,
+      "category": "usability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:228"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The sample report shows a state D6 makes unreachable",
+      "description": "The sample shows `type_errors not compared: environment_changed (uv.lock 3f9a\u2026 \u2192 77c1\u2026)`. At an export, D6 measures type errors only when the lock hash equals the live one. Two exported boundaries with different locks give one `absent environment_unresolved` row, which reports as `absent_before` or `absent_after`, never `environment_changed`. The latter only arises between two in-place snapshots. The doc marks the figures as illustrative, but the sample should match the expected common case.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:285"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries and dependency directions",
+      "description": "`metrology/` already imports `review.git_utils` (`preflight.py:21`, `files.py:18`), so the resolver's dependency direction is established. Report modules take the store, resolver and `ensure_snapshot` as arguments, so no report module imports an adapter. `ReviewCategory` comes from the leaf module that 402 defines. Reviews attribute by `slice_index` only through resolved landings. Both match the slice plan's \"never under a guessed slice.\"",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:81-103"
+    },
+    {
+      "severity": "PASS",
+      "title": "Export failure modes",
+      "description": "The export path's failure modes (archive hang, extraction `OSError`, symlink creation, the `data` filter refusing a member, unknown revision) each have a handling strategy and a signal. The 30 s `GIT_COMMAND_TIMEOUT_SECONDS` bound matches `git_utils.py:25`. `tarfile filter=\"data\"` is supported, since `requires-python` is `>=3.12` (`pyproject.toml:7`). Concurrent writes are stated as unsupported, as in 400.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`_measure_all` cannot be shared with an export as written",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Renaming the `git_utils` helpers breaks existing tests, but the design says they pass unchanged",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`first_parent` on `_search_merge_commit` has no caller, and the merge search can't return what the resolver needs",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:195",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The resolver has no outcome for git failing, and it can't tell \"not found\" from \"git failed\"",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "A wrongly resolved landing is permanent, and only hand-editing the store can undo it",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:381",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fast-forward follow-up landings overlap earlier ones, and the fast-forward path is skipped when a merge landing exists",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:116-121",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`take_snapshot_at` omits the repository-root check, so `--cwd` on a subdirectory gives a silently partial snapshot",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:127-140",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`AdapterContext.environment_root` is a required field, which breaks the 400 test builders despite \"400 tests pass unchanged\"",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:389",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The `uv sync --check` working directory and `tool_support.py` are not accounted for",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:212",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`report project` and `report history` have no data flow or failure modes, and the review placement is ambiguous",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "Exported and in-place snapshots share one record id, with no provenance and unequal file sets",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The coverage claim at exports is not established by 401",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 2 does not test the durability criterion, and no step covers the branch-deleted, reflog-expired case",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "usability",
+      "raw_category": null,
+      "summary": "Length comparability breaks on every squadron release",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:228",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The sample report shows a state D6 makes unreachable",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:285",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layer boundaries and dependency directions",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:81-103",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Export failure modes",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-22T23:43:13.582058",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "chars": 37735,
+      "sha256": "477b294c1c53b69f7e05963600b57ccd92b5ea49108298d1cb923f4906b49127",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+      "chars": 9887,
+      "sha256": "430f139babc62db413f67f5c9c54b7a44985c2f8577c72d55d61960d3a599f29",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/git_utils.py",
+    "src/squadron/metrology/snapshot/take.py",
+    "src/squadron/metrology/snapshot/preflight.py",
+    "src/squadron/metrology/snapshot/contract.py",
+    "src/squadron/metrology/snapshot/files.py",
+    "src/squadron/metrology/snapshot/python_types.py",
+    "src/squadron/metrology/snapshot/python_lint.py",
+    "src/squadron/metrology/snapshot/typescript_lint.py",
+    "src/squadron/metrology/snapshot/tool_support.py",
+    "src/squadron/metrology/snapshot/runner.py",
+    "tests/metrology/snapshot/builders.py",
+    "src/squadron/metrology/snapshot/python_adapter.py",
+    "src/squadron/metrology/store.py",
+    "src/squadron/metrology/audit_delta.py",
+    "src/squadron/metrology/audit_report.py",
+    "src/squadron/metrology/snapshot_models.py",
+    "src/squadron/cli/commands/metrology_snapshot.py",
+    "src/squadron/cli/commands/metrology.py",
+    "project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md",
+    "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "tests/review/test_git_utils.py",
+    "src/squadron/metrology/models.py",
+    "src/squadron/metrology/identity.py"
+  ],
+  "searches": [
+    "grep def (_find_slice_branch|_resolve_fork_point|_search_merge_commit|_find_merge_commit|resolve_diff_base|run_git|resolve_slice_range|_resolve_slice)|GIT_COMMAND_TIMEOUT_SECONDS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src",
+    "list_files src/squadron/metrology/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "list_files project-documents/user/slices/40[0-4]-* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep AdapterContext\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep RECORD_TYPE_|class MetrologyRecord|model_validator|code_snapshot|class ProjectId in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/models.py",
+    "grep class CodeSnapshot|class Measurement|class SnapshotMetric|class AbsenceReason|class LengthLimits|class RuleSetIdentity|class EnvironmentIdentity|class ToolIdentity|class LanguageSnapshot in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/snapshot_models.py",
+    "grep def (baseline_report|compute_delta|is_within_floor) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src",
+    "grep report_app|metrology_app\\.command|add_typer|def (baseline|trend) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/cli",
+    "grep register_|metrology_snapshot|metrology_ingest|metrology_quality in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/cli",
+    "grep _find_slice_branch|_resolve_fork_point|_search_merge_commit|_find_merge_commit in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep resolve_diff_base\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src",
+    "grep node_modules|\\.venv|VENV|ctx\\.repo_root in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/src/squadron/metrology/snapshot",
+    "grep AdapterContext|environment_root|repo_root in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/tests/metrology",
+    "grep preflight|_measure_all|PreflightResult in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "list_files docs/COMMANDS.md in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design",
+    "grep metrology\\.|snapshot_exclude|max_function_lines in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/.squadron.toml",
+    "grep requires-python in /Users/manta/.config/squadron/reading-20261122/wt/squadron-403-design/pyproject.toml"
+  ],
+  "sections_in_document": 40,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 43,
+  "prompt_tokens": 1152457,
+  "cached_tokens": 1024566,
+  "cache_write_tokens": 127863,
+  "completion_tokens": 34363,
+  "reasoning_tokens": null,
+  "duration_seconds": 258.0610180408694,
+  "cost_usd": 0.9595951,
+  "cost_basis": "provider"
+}

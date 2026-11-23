@@ -1,0 +1,644 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "D4's failed-call subtraction is unreachable on the SDK path, so SC4's `== failed_tool_calls` case cannot hold",
+      "description": "D4 computes `successful = tool_calls_made \u2212 failed_tool_calls` (design line 131), and SC4 (line 289) requires that the all-calls-failed case yields CONCERNS. On the SDK path, `failed_tool_calls` is only incremented inside `elif isinstance(sdk_msg, ToolResultBlock)`. The stream the SDK yields has the union `UserMessage | AssistantMessage | SystemMessage | ResultMessage | StreamEvent | RateLimitEvent` (claude_agent_sdk `types.py:1499-1505`), so tool results arrive inside `UserMessage.content`. Neither `_translate_and_track` nor `translate_sdk_message` (`translation.py:26-42`) handles `UserMessage`. The counter stays at 0, a review whose every tool call errored counts as having read the omitted diff, and the cap does not fire. The `sdk` profile is the one the walkthrough's own commands use. The existing tests (`tests/providers/sdk/test_agent.py:900`, `:919`) pass a bare `ToolResultBlock` into the stream, a shape the SDK does not produce, so they stay green. The OpenAI path counts correctly (`providers/openai/agent.py:479-481`). Required before implementation: count failed results inside `UserMessage` content, add a test on that shape, and list the change in the Component Structure table. The sandbox SDK copy I read has no confirmed version; `uv.lock` pins 0.2.152, and the shape should be checked against that version.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:178-180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D6's motivating case cannot occur, and the render change would mislabel derived verdicts",
+      "description": "D6 (line 160) says \"A PASS parsed with `fallback_used=True` (verdict read, findings not)\". The parser sets `fallback_used` for a stated verdict with no findings only in the `mismatch` branch, which is limited to CONCERNS/FAIL (line 1023). The only PASS with `fallback_used=True` is a derived PASS (lines 972-993), and that one has findings. So:\n- SC7 (line 292) tests a state the parser cannot produce.\n- For the state that can occur, the findings branch already hides the notice before the cap (`persistence.py:517-528`). Rendering the notice \"whenever `fallback_used` is set\" would print \"no findings could be extracted\" (`persistence.py:533-540`) and the terminal's \"findings did not\" (`cli/commands/review.py:188-189`) beneath findings that were extracted.\n- The change also alters every existing derived-verdict artifact and terminal, not only capped ones, and the design does not say so.\n\nKey the notice on the actual condition, render text that matches it, and test a derived PASS with findings.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/parsers.py:1023-1025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"pipeline stops for a human either way\" rationale is false for on-fail pipelines",
+      "description": "D4's justification (line 137) says CONCERNS \"is already what `CheckpointTrigger.ON_CONCERNS` pauses on, so a pipeline stops for a human either way.\" Only `on-concerns` steps pause on CONCERNS (`checkpoint.py:22`). `P4.yaml:16`, `P5.yaml:16`, `P6.yaml:16`, and `implement.yaml:13` use `checkpoint: on-fail`, which pauses only on FAIL/UNKNOWN (`checkpoint.py:23`). In those pipelines an imposed CONCERNS lets the run continue, and the artifact is the only signal. Walkthrough step 4 covers only `review.yaml` (`on-concerns`). Either correct the rationale and state that on-fail pipelines continue, or justify why the gate-only signal is enough there.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "src/squadron/data/pipelines/P6.yaml:16"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The synthetic finding omits `location`, which breaks the 904 contract",
+      "description": "Design line 152 says the finding \"has no `location` because it cites no file.\" Slice 904 (plan entry 3, architecture doc lines 65-76) requires `location:` on every finding, PASS included, with `unverified` as the explicit \"I don't know\" token. The parser already enforces that for model findings: `global` and empty values normalize to `unverified` (`parsers.py:31`, `232-245`). The synthetic finding therefore lands in frontmatter with `location: null`, which 904's merged-finding dedupe was built to avoid. Use `unverified`, or amend 904's contract explicitly.",
+      "file_ref": null,
+      "category": "contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The synthetic finding enters the next dispatch's fix prompt and can block `review.pass` loops",
+      "description": "`ActionResult.findings` carries every structured finding (`pipeline/actions/review.py:414`). `_resolve_prompt_from_prior_review` turns each one into \"Address the following findings from the prior review\" (`dispatch.py:391-400`). The imposed \"Diff truncated; the omitted part was never read\" therefore becomes a defect the implementer is asked to fix, and an implementer cannot fix it except by changing config. Two consequences follow:\n- `LoopCondition.REVIEW_PASS` (`executor.py:230`, `244`) cannot be satisfied while the diff stays over the limit, so `until: review.pass` loops run to exhaustion.\n- Loops that use `checkpoint: on-concerns` (for example `findings-addressed-cycle.yaml:38`) pause every round.\n\nThe design does not mention loops or the prompt feed. It needs to state the intended behavior, for example by excluding the synthetic finding from the feedback path or documenting the loop outcome.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:382-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One synthetic-finding template covers two causes, and the total-limit case gets the wrong cause and remedy",
+      "description": "The template says \"the first 256000 reached the model (review.max_file_size_bytes)\" and advises raising `review.max_file_size_bytes`. D3 (line 125) makes a diff skipped by the total budget a truncation to zero, and that cause is `review.max_total_injection_bytes` (`review_client.py:378-384`). SC2 (line 287) requires the same CONCERNS outcome. For that case the text would say \"0 reached the model\" under the per-file key and give the wrong remedy. Parameterize the cause or use a second template.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:141-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D4 uses `or 0`, which the design's own convention forbids",
+      "description": "Line 131 writes `(tool_calls_made or 0) - (failed_tool_calls or 0)`. The Patterns section (line 216) says \"`is None` checks, never `or 0`, for counts.\" The result is numerically the same today, but this expression gates the verdict, and the spec as written invites copying the idiom elsewhere.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Value claim overstates what the rule checks",
+      "description": "Line 27 says a PASS \"means the model either saw the whole diff or read files with its tools.\" D4 is satisfied by any successful tool call. Code review templates allow `read_file`, `list_files`, and `grep` (`code.yaml:57`), so a directory listing counts as a read. Plan entry 25 (architecture doc line 442) says \"a truncated diff where the model did read files stays a normal verdict,\" which is narrower than the rule. Either state \"made at least one successful tool call\" in the gate-facing text, or decide that listing does not count.",
+      "file_ref": null,
+      "category": "contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No existing key changes meaning except `aiModel`\" is wrong",
+      "description": "Several existing keys change meaning:\n- JSON `model` is `self.model` (`review/models.py:219`), which becomes the answering model.\n- `ActionResult.metadata[\"model\"]` (`pipeline/actions/review.py:420`) feeds the executor's step display (`executor.py:101`).\n- The PR comment's `**Model:**` line (see the `pr_comment.py` finding below).\n\nThe Integration section names only `aiModel`. List all of these, and state whether each is intended.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The PR comment is posted to GitHub with the answering model and no substitution note",
+      "description": "`_model_line` posts `result.model` as `**Model:** \\`X\\` \u00b7 **Reviewed:** ...`. After this slice, a substitution appears in the artifact header (`**Model:** X (requested Y)`) but not in the comment on GitHub, which is outward-facing. The component table omits this module, and the walkthrough never reviews a PR. Decide whether the comment shows the requested id too.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "src/squadron/review/pr_comment.py:61-64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Consumers that record the requested id are outside the design's inventory",
+      "description": "The findings-addressed judge leg calls `run_review_with_profile` (`addressed/judge.py:107-112`) and records `model=model_id`, the requested id, in `JudgeLegResult` (lines 120, 130, 134). `metrology/audit.py:675` creates a provider agent directly, so it never reaches `run_review_with_profile` or `collect_turn`, and it gets no answering-model stamp. Design line 101 claims parity is structural, which holds only for the artifact path. `sq review pr` (`review_pr.py:461`, via `_run_review_command`) inherits the change but is not named. State whether each of these keeps the requested id and why, or thread the answering model through.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/review/addressed/judge.py:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renaming the judge model identity orphans accumulated metrology evidence with no stated policy",
+      "description": "Line 196 accepts that OpenAI-direct judges move from `gpt-5` to `gpt-5-2025-08-07` as \"the correct calibration identity.\" Metrology matches on exact model (`store.py:97-101`, `graduation.py:44`), so records under the old id silently stop matching, and graduation restarts. `metrology/identity.py` names resetting accumulated evidence as the failure mode it guards against for thresholds. The design should state whether old evidence is kept under the old key, migrated, or deliberately orphaned. The consequence also omits OpenRouter, whose dated forms (D9, line 181) change the same way.",
+      "file_ref": null,
+      "category": "state",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D9 defers the OpenRouter \"differs\" decision that the plan requires the design to make",
+      "description": "Plan entry 25 (architecture doc line 443) says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter).\" D9 decides the dated-suffix form and asserts without evidence that OpenRouter's dated forms fit it. Routed variants (a dropped `vendor/` prefix, a `:free` suffix, a local server's `:latest` tag) are deferred to Phase 6 captures. Under \"when unsure, the rule reports a substitution\" (line 183), each one produces a WARNING and `requestedModel` on every run for that profile, which the Risk section (line 359) acknowledges. Decide the accepted forms now, or name the captures that would block merge.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D11's \"not reported\" signal depends on a default the design does not specify",
+      "description": "D11 keys the digest line on `answering_models == []` and reserves `None` for hand-built results. But `TurnCapture` documents `None` as \"not reported\" and survives to `ReviewResult` as such (`review/turn_capture.py:44-45`), and every other telemetry field there defaults to `None`. If `TurnCapture.answering_models` follows that convention, Codex (which emits no metadata, `providers/codex/agent.py`) produces `None`, the digest line is suppressed, and Codex artifacts lose the signal D11 exists to add. The design must state that the default is `[]`, and that `run_review_with_profile` assigns the list.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D12's \"last model reported\" cannot be recovered from a deduplicated, first-seen list",
+      "description": "Line 206 defines `aiModel` as \"the last model reported, the one that wrote the review.\" Lines 105 and 205 say the list is distinct, first-seen, and deduplicated on append. A sequence A, B, A leaves `[A, B]`, so `answering_models[-1]` is B although A wrote the review. The OpenAI agentic loop can produce that sequence when a router changes model between requests. Track last-occurrence separately from the distinct list.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SDK per-message state resets the tool counters but not `_reasoning_chars`, so the recovery turn double-counts",
+      "description": "State Management (line 105) says the new per-message list resets \"like `_tool_calls_made`.\" `handle_message` resets `_tool_calls_made` and `_failed_tool_calls` (lines 108-109) but not `_reasoning_chars` (initialized at line 81, accumulated at line 177, stamped at line 186). On the #92 recovery turn, a second `handle_message` on the same agent stamps a cumulative count, and `collect_turn` sums it (`turn_capture.py:118`), so the first turn's reasoning is counted twice. The Run Digest reports the wrong number (`persistence.py:237`). This predates the slice, but the slice's per-message state and its recovery-turn test sit on the same path. Fix it here or name it as a dependency.",
+      "file_ref": null,
+      "category": "state",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:108-109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subagent tool calls count toward D4 while D8 excludes subagent messages from identity",
+      "description": "D8 (line 170) excludes messages with `parent_tool_use_id` from the answering model because subagent messages \"did not write the review.\" The tool counter D4 consumes counts `ToolUseBlock`s in every `AssistantMessage` with no parent filter (lines 172-175), so a subagent's read satisfies \"a successful tool call.\" Plan 916 Part E (architecture doc, slice 916 entry) notes that SDK reviewers keep the full default tool set, so subagent tools are reachable there. Either filter the counter the same way, or state that subagent reads count as the review's reads.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:172-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 6 cannot run as written",
+      "description": "The step says to run once per profile (sdk, openai, openrouter, local), but the command is `sq review slice 927 --model sonnet -v` with no `--profile`. `--model` resolves the alias to its own profile (`cli/commands/review.py:590-598`), so every iteration runs the SDK profile. `--profile` alone would send an SDK alias to a different provider. The step also omits `--output json`, which the expectation says it records in the DEVLOG. Give each profile a command with a model id that profile accepts.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 1 leaves a persistent project override with no undo if the run stops early",
+      "description": "Step 1 writes `review.max_file_size_bytes 20000 --project`, and only step 5 removes it. If the operator stops after step 1 or a step fails, every later code review in that project truncates at 20000 and is imposed to CONCERNS. Wrap the set/unset pair with a restore-on-exit instruction, or use a per-invocation override. Step 3 also says \"Record which occurred\" without naming where.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:317"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D2 cannot be implemented as written for an empty diff",
+      "description": "D2 says the key is always written when a diff was part of the review. `_inject_file_contents` calls `_add_injection` only when `diff_content` is truthy (`review_client.py:421-424`), and D3 covers only a `False` return. An empty diff under a present `diff` key therefore produces no `DiffInjection`, which is the state D2 reserves for non-diff reviews and pre-927 artifacts. Specify `DiffInjection(total_chars=0, injected_chars=0)`, and how the function returns it on the early `return prompt` path (`review_client.py:447-448`).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The OpenAI `chunk.model` read has no absence handling, and the design's `continue` placement is unstated",
+      "description": "D8 says the last non-empty `chunk.model` is read \"from every chunk, including choice-less ones.\" Today `_stream_turn` skips choice-less chunks before reading anything (`providers/openai/agent.py:287-288`), so the read has to move above that `continue`, and the design does not say so. The design also does not handle a chunk without `model`. The SDK type declares it required, but OpenAI-compatible servers are not all conformant, and the access would surface as an attribute error rather than the \"not reported\" degradation D11 promises. State the absence-tolerant read, and test a model-less stream.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`verdictSource`'s closed contract is extended on the basis of a no-reader grep",
+      "description": "Slice 919 defined `verdictSource` as a closed `stated | derived` contract for context-forge's review gate and Amoeba (`project-documents/user/slices/919-slice.verification-that-verified-nothing.md:333-334`), and it made cross-repo coordination a success criterion (lines 535-538). `review/models.py:29-31` documents it as \"A closed two-value vocabulary.\" D5 adds `imposed` on the strength of a grep that found no reader (line 156), while the Integration section (line 273) lists the gates as consumers of `verdictSource: imposed`. The design contradicts itself on whether consumers exist, and it changes the contract without the coordination 919 required. It also drops `derived` when a derived PASS is capped, so the derivation record is lost. Either coordinate and state the consumer contract for `imposed`, or record the cap in a different field.",
+      "file_ref": null,
+      "category": "contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `_inject_file_contents` call-site inventory is wrong, and the tuple return rewrites about 22 test call sites",
+      "description": "Line 370 says \"its two `review_client` call sites.\" There is one (`review_client.py:154`). It lists `test_injection_decision.py` as a direct caller, but the only mention is a comment (`tests/review/test_injection_decision.py:283`). Changing the return to a tuple breaks 22 direct assertions (19 in `test_content_injection.py`, 3 in `test_convention_root.py`) and the `side_effect=lambda p, *a, **k: p` mock (`tests/review/test_review_client.py:224`). A lighter option is to leave `_inject_file_contents` returning a string and expose the facts through a sibling function or keyword-only recorder that only `run_review_with_profile` uses. That leaves the existing tests unchanged.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design carries scope it can cut or defer",
+      "description": "- **D12's multi-model machinery** (distinct list, digest enumeration, multi-model WARNING) handles a case no profile is shown to produce. The recovery turn reuses the same agent and model. Keep last-reported plus one WARNING, and defer the digest enumeration until a capture shows the case. The JSON list (line 263) is in the contract already.\n- **Restated conventions:** Prerequisites (line 53), Patterns and Conventions (lines 212-217), and Consumes (lines 277-280) restate other slices' rules. One line each is enough.\n- **Footprint:** the design touches 11 existing modules, adds 2, edits 4 test files, adds 6 JSON keys, and needs live captures for 4 profiles. Plan entry 25 rates it 3/5 (architecture doc line 444). The call-site rewrite above is the largest avoidable part.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`impose_diff_coverage` is described as pure but mutates the result",
+      "description": "Line 69 calls it \"pure and unit-testable,\" but it sets `verdict`, `verdict_source`, and prepends to `findings` on the passed `ReviewResult` (a mutable dataclass, `review/models.py:105`). Describe it as a deterministic mutation, or return a new result if purity matters.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan's entry 25 and its exclusions",
+      "description": "Parts A, B, and C, the terminal and pipeline-metadata items, and the exclusions (max defaults, #114, #137, #138, the judge `round_diff`, provider-failure artifacts) match plan entry 25 (architecture doc lines 440-444). Choosing CONCERNS over failing the run is one of the two outcomes the plan allows. Dependency direction holds: `models/snapshot.py` and `review/coverage.py` depend only on models, and providers stamp a generic metadata key that `TurnCapture` reads, the same pattern as `stop_reason`.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:33-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Code claims that verify",
+      "description": "Verified against the code: `review_client.py` is 588 lines; `_truncate` measures `len(str)` (`review_client.py:325-333`), so D1's \"characters\" is right; `builders/code.py:58` imports `_truncate` lazily; `ReviewResult` carries `tool_calls_made`, `failed_tool_calls`, `fallback_used`, and `to_dict()` (`review/models.py:106-247`); `location_verified` is tri-state (`models.py:70-82`); `VerdictSource` has `STATED`/`DERIVED` (`models.py:41-42`); `stop_reason` is stamped on the final message in both providers (`sdk/agent.py:185`, `openai/agent.py:560`); `_stamp_tool_telemetry` returns early on empty messages and on empty `tools_given` (`openai/agent.py:558-566`); the pipeline review action calls `run_review_with_profile` and reads the verdict afterward (`pipeline/actions/review.py:274-281`, `338`); the CLI flags and `config unset --project` in the walkthrough exist (`cli/commands/review.py:791`, `803`; `cli/commands/config.py:29`, `43`); `save_review_result` never passes `model=`, so `result.model` reaches the artifact (`persistence.py:780-791`); the OpenAI text-message `metadata[\"model\"]` is the requested id (`openai/translation.py:31`); the SDK's `ResultMessage` translation always yields one message (`sdk/translation.py:38-39`), so its stamp is not dropped; `on-concerns` and `on-fail` triggers match (`checkpoint.py:22-23`). The interface claims match the sandbox copies of `openai` (`ChatCompletionChunk.model: str`, `choices` required) and `claude_agent_sdk` (`AssistantMessage.model: str`, `parent_tool_use_id`); their versions are unconfirmed, and the lock pins `openai` 2.24.0 and `claude-agent-sdk` 0.2.152.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:61-76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D4's failed-call subtraction is unreachable on the SDK path, so SC4's `== failed_tool_calls` case cannot hold",
+      "location": "src/squadron/providers/sdk/agent.py:178-180",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D6's motivating case cannot occur, and the render change would mislabel derived verdicts",
+      "location": "src/squadron/review/parsers.py:1023-1025",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The \"pipeline stops for a human either way\" rationale is false for on-fail pipelines",
+      "location": "src/squadron/data/pipelines/P6.yaml:16",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "contract",
+      "raw_category": null,
+      "summary": "The synthetic finding omits `location`, which breaks the 904 contract",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The synthetic finding enters the next dispatch's fix prompt and can block `review.pass` loops",
+      "location": "src/squadron/pipeline/actions/dispatch.py:382-400",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "One synthetic-finding template covers two causes, and the total-limit case gets the wrong cause and remedy",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:141-150",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "D4 uses `or 0`, which the design's own convention forbids",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "contract",
+      "raw_category": null,
+      "summary": "The Value claim overstates what the rule checks",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"No existing key changes meaning except `aiModel`\" is wrong",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The PR comment is posted to GitHub with the answering model and no substitution note",
+      "location": "src/squadron/review/pr_comment.py:61-64",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Consumers that record the requested id are outside the design's inventory",
+      "location": "src/squadron/review/addressed/judge.py:134",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "state",
+      "raw_category": null,
+      "summary": "Renaming the judge model identity orphans accumulated metrology evidence with no stated policy",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D9 defers the OpenRouter \"differs\" decision that the plan requires the design to make",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D11's \"not reported\" signal depends on a default the design does not specify",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:202",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D12's \"last model reported\" cannot be recovered from a deduplicated, first-seen list",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:206",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "state",
+      "raw_category": null,
+      "summary": "SDK per-message state resets the tool counters but not `_reasoning_chars`, so the recovery turn double-counts",
+      "location": "src/squadron/providers/sdk/agent.py:108-109",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Subagent tool calls count toward D4 while D8 excludes subagent messages from identity",
+      "location": "src/squadron/providers/sdk/agent.py:172-175",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "Walkthrough step 6 cannot run as written",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "Walkthrough step 1 leaves a persistent project override with no undo if the run stops early",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:317",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D2 cannot be implemented as written for an empty diff",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "The OpenAI `chunk.model` read has no absence handling, and the design's `continue` placement is unstated",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:171",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "contract",
+      "raw_category": null,
+      "summary": "`verdictSource`'s closed contract is extended on the basis of a no-reader grep",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:156",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The `_inject_file_contents` call-site inventory is wrong, and the tuple return rewrites about 22 test call sites",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design carries scope it can cut or defer",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`impose_diff_coverage` is described as pure but mutates the result",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan's entry 25 and its exclusions",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:33-47",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Code claims that verify",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:61-76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-22T20:56:07.054263",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 79,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "chars": 28759,
+      "sha256": "7ae811d9eb376c68c9f107619922a9a5c5db7a1fa0f8debc38f70ba776da891b",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+      "chars": 115112,
+      "sha256": "9d434475b5a0836d60a8273ddb3490fddefc08a1fb91fc29769073f8fb601e9f",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/models.py",
+    "src/squadron/review/review_client.py",
+    "src/squadron/providers/openai/agent.py",
+    "src/squadron/review/turn_capture.py",
+    "src/squadron/providers/sdk/agent.py",
+    "src/squadron/providers/sdk/translation.py",
+    "src/squadron/review/persistence.py",
+    "src/squadron/pipeline/actions/review.py",
+    "src/squadron/cli/commands/review.py",
+    "src/squadron/metrology/identity.py",
+    "src/squadron/config/keys.py",
+    "src/squadron/review/parsers.py",
+    "tests/review/test_persistence.py",
+    "tests/cli/test_review_format.py",
+    "src/squadron/review/addressed/judge.py",
+    "src/squadron/data/pipelines/review.yaml",
+    "src/squadron/metrology/store.py",
+    "tests/pipeline/actions/test_review_action.py",
+    "project-documents/user/slices/919-slice.verification-that-verified-nothing.md",
+    "src/squadron/pipeline/actions/dispatch.py",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/openai/types/chat/chat_completion_chunk.py",
+    "/Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/claude_agent_sdk/types.py"
+  ],
+  "searches": [
+    "grep _inject_file_contents|_add_injection|def _truncate|_truncate\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design",
+    "grep class VerdictSource|class ReviewResult|class ReviewFinding|class Verdict\\b|location_verified|tool_calls_made|failed_tool_calls|fallback_used|def to_dict|def model_substituted|frozen in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/review/models.py",
+    "list_files src/squadron/{review,models,providers/openai,providers/sdk,metrology,pipeline/actions}/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design",
+    "grep def _stamp_tool_telemetry|def _require_final_content|class TurnResult|model|stop_reason|_tool_calls_made|def handle_message|tools_given|answering|def is_empty|finish_reason in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/openai/agent.py",
+    "grep model|stop_reason|_tool_calls_made|def handle_message|tools_given|AssistantMessage|ResultMessage|synthetic|parent_tool_use_id|_skip_unparseable in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk/agent.py",
+    "grep metadata\\[[\"']model[\"']\\]|\"model\"|'model'|requested_model|answering|\\bmodel= in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep aiModel|_FM_MODEL|verdictSource|toolsGiven|toolCallsMade|fallback_used|Findings Not Parsed|Run Digest|\\*\\*Model:\\*\\*|def format_review_markdown|def _review_frontmatter_lines|def _display_terminal|def save_provider_failure|def format_provider_failure_markdown|def _run_digest|Answering|Stop reason in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep format_review_markdown\\(|save_review_result\\(|save_provider_failure\\(|format_provider_failure_markdown\\(|run_review_with_profile\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src",
+    "grep ON_CONCERNS|ON_FAIL|on-concerns|on-fail|class CheckpointTrigger|checkpoint.*on_fail|default.*checkpoint in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "list_files **/claude_agent_sdk/types.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design",
+    "grep claude-agent-sdk|\"openai|openai>=|openai== in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/pyproject.toml",
+    "grep review\\.max_file_size_bytes|review\\.max_total_injection_bytes in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep \"--no-tools\"|\"--output\"|\"--no-save\"|\"--project\"|def unset|\"unset\"|\"--model\"|\"--ide\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli",
+    "grep --profile|def _resolve_profile|profile_for_alias|alias.*profile|_MODEL_OPTION_HELP = in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli/commands/review.py",
+    "list_files **/site-packages/claude_agent_sdk/types.py in /Users/manta/.config/squadron/reading-20261122",
+    "grep to_dict\\(\\)\\.keys|set\\(.*to_dict|VerdictSource\\)|list\\(VerdictSource|Run Digest|### Run Digest|Recovery turn used|Stop reason|tool_calls_made.*or 0|metadata\\[\"model\"\\]|metadata\\.get\\(\"model\"\\)|_inject_file_contents\\\"|_inject_file_contents\\',|clean_pass_artifact in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep aiModel in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep model=MagicMock|AssistantMessage\\(|\\.model = |model= in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/providers/sdk",
+    "grep Findings Not Parsed|fallback_used=True|fallback_used is True|assert .*fallback_used|Review degraded in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep def test_.*(degraded|derived).*|fallback_used=True,?$ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/review/test_persistence.py",
+    "grep UNVERIFIED_LOCATION\\s*=|\"global\"|'global'|VALID_CATEGORIES|CATEGORIES\\s*=|_CATEGORY_RE\\s*=|def _normalize_location|location_verified\\s*= in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep Verdict\\.|verdict_source|VerdictSource|CONCERNS|verdictSource in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/events",
+    "grep import|_truncate in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/review/builders/code.py",
+    "grep metadata ==|metadata\\) ==|\\.metadata == \\{ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests",
+    "grep collect_turn|run_review|review_client|create_agent\\(|result\\.model|\\.model\\b.*=|JudgeLegResult\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/metrology",
+    "grep metadata|answering|model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/codex/agent.py",
+    "grep aiModel|model|requested|answer in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/metrology/audit.py",
+    "grep ^model:|^  model: in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/templates",
+    "grep template\\.model|resolve_model_alias\\(|_resolve_model\\(|resolved_model\\s*=|model_id\\s*= in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep run_review_with_profile|ReviewResult\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/pipeline/actions/test_review_action.py",
+    "grep _reasoning_chars|def _make_review_result in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk/agent.py",
+    "grep def _make_review_result in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/pipeline/actions/test_review_action.py",
+    "grep from squadron|import |await _|_run_|run_review|def _review_pr_inner|execute_code_review|review_client in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/cli/commands/review_pr.py",
+    "grep diff|template in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/templates",
+    "grep compose_comment\\(|model=|def compose_comment|def _model_line|resolved_model|result\\.model in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron",
+    "grep verdictSource in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/project-documents/user",
+    "grep diff in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/templates/judge-slice-vs-arch.yaml",
+    "grep -\\s*(review|dispatch|phase|commit|checkpoint):|checkpoint:|template: in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/pipelines",
+    "grep class LoopCondition|REVIEW_PASS|REVIEW_CONCERNS_OR_BETTER|until|def _resolve_prompt_from_prior_review|Verdict\\.(CONCERNS|PASS) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/pipeline",
+    "grep name = \"(claude-agent-sdk|openai)\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/uv.lock",
+    "list_files **/openai/types/chat/chat_completion_chunk.py in /Users/manta/.config/squadron",
+    "list_files **/claude_agent_sdk/types.py in /Users/manta/.config/squadron/benchmark",
+    "grep class ChatCompletionChunk\\(|^    model: |^    choices: |^    usage:  in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/openai/types/chat/chat_completion_chunk.py",
+    "grep class AssistantMessage|class ResultMessage|^    model: |parent_tool_use_id|model_usage|stop_reason in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/claude_agent_sdk/types.py",
+    "grep UserMessage|ToolResultBlock in /Users/manta/.config/squadron/benchmark/sandbox-20261123-7633bb07/.venv/lib/python3.13/site-packages/claude_agent_sdk/types.py",
+    "grep UserMessage|ToolResultBlock|is_error|failed_tool_calls in /Users/manta/.config/squadron/src/squadron/providers/sdk",
+    "grep allowed_tools|^tools|Task in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/data/templates/code.yaml",
+    "grep UserMessage|ToolResultBlock|is_error|failed_tool_calls in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk",
+    "grep _translate_and_track\\(|isinstance\\(sdk_msg|isinstance\\(msg|isinstance\\(m,|if isinstance in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/src/squadron/providers/sdk/agent.py",
+    "grep ToolResultBlock\\(|failed_tool_calls in /Users/manta/.config/squadron/reading-20261122/wt/squadron-927-design/tests/providers/sdk"
+  ],
+  "sections_in_document": 41,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 27,
+    "in_fences": 0,
+    "in_section": 27,
+    "surviving": 27
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 80,
+  "prompt_tokens": 7372945,
+  "cached_tokens": 7110454,
+  "cache_write_tokens": 262415,
+  "completion_tokens": 153064,
+  "reasoning_tokens": null,
+  "duration_seconds": 684.7045473749749,
+  "cost_usd": 0.89366134,
+  "cost_basis": "provider"
+}

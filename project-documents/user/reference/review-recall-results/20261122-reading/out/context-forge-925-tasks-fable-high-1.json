@@ -1,0 +1,491 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`ensureCheckout()` via `detect()` adds an unbounded `git ls-remote` to every read command",
+      "description": "Task 17 (line 260) tells `ensureCheckout()` to use `detector.detect()`. `detect()` always calls `fetchLatestVersion()` (GuideDetector.ts:82 and :89), which runs `git ls-remote --tags` against the guide remote with no timeout.\n\n- **Effect:** after Tasks 19, 20 and 22, every `cf build`, `cf prompt list/get`, `context_build`, `prompt_list` and `prompt_get` makes that call, including for tarball installs and in-sync submodules. None of those paths touch the network today.\n- **Requirement broken:** the design (slice line 167) says a blackholed connection \"is not tolerable inside `cf build` or an MCP tool call\". Task 13/15 bound only the init fetch, so the hang D10 closes is reintroduced one call earlier.\n- **Test side effect:** real-fixture tests (Tasks 12, 18, 21, 23, 24) and the existing `mcpIntegration.test.ts` / `build.integration.test.ts` would hit github.com on each call unless `guide.source` points at the local bare repo. Task 9 does not set that.\n- **Fix:** `ensureCheckout()` should use a detection path that skips `fetchLatestVersion` (method plus `checkSyncStatus` only), with a test asserting no `ls-remote` is issued.",
+      "file_ref": null,
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideDetector.ts:164-175"
+    },
+    {
+      "severity": "FAIL",
+      "title": "CLI/MCP/core test tasks target files whose harness mocks the modules under test",
+      "description": "The named test files replace `@context-forge/core/node` (or `fs`/`gitExec`) with explicit mock factories, and vitest throws on any export missing from a factory. Two consequences the plan does not handle.\n\n**Existing suites break with no task to update them:**\n- `build.test.ts:9-20`, `prompt.test.ts:10-22`, `setup-ide.test.ts:28-44` have no `GuideManager` in their factory, so Task 20's `ensureGuideReady` import fails every existing test there.\n- `contextTools.test.ts:20-44` has the same gap for Task 22.\n- `guides.test.ts:27-43` and `guideTools.test.ts:18-42` lack `normalizeGuideMethod`, `CHECKOUT_STATE_LABELS` and `GUIDE_MANAGED_NOTICE` (Tasks 7, 22, 24, 28).\n- `init.test.ts:42-45` mocks `guides.js` with only `guidesInstallAction` and `registerGuidesCommand`. Task 26's `strategyHelpText()` call at registration breaks every `cf init` test.\n\n**The specified assertions cannot be written in the named files:**\n- Task 21 wants the real `cloned()` fixture in `build.test.ts`, `prompt.test.ts` and `setup-ide.test.ts`, where the core barrel and `node:fs` are mocked file-wide.\n- Task 8 (\"installs via tarball\"), Task 24 (\"directory unchanged afterward\") and Task 23 (`guide_status` \"does not initialize\") would assert against a mocked `GuideManager`.\n- Task 27's \"no `.gitmodules` is created\" is vacuous with `guidesInstallAction` mocked.\n- Task 18 puts fixture tests \"In `GuideManager.test.ts`\", which mocks `fs`, `gitExec`, `GuideDetector` and `SubmoduleStrategy` (lines 7-46).\n- Task 12 mixes fixture and \"existing mocked test\" cases; `GuideDetector.test.ts:7-14` mocks `fs` and `gitExec` for the whole file.\n- Task 16 has the same problem in `SubmoduleStrategy.test.ts:5-14`.\n- Task 14's \"listener that never answers\" option is impossible in `gitExec.test.ts:11-13`; only the mock option works.\n\n**Fix:**\n- Put real-git cases in new unmocked files (e.g. `*.integration.test.ts`), with the project store isolated via `CONTEXT_FORGE_DATA_DIR` as `integrationSetup.ts:79-80` does.\n- Add explicit steps to extend each existing mock factory.\n- State how CLI/MCP tests import a fixture that Task 9 places under `packages/core/tests/`.",
+      "file_ref": null,
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/build.test.ts:9-20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 throws from `detect()` for every caller and breaks three existing tests",
+      "description": "The design puts the `'error' \u2192 throw` branch inside `ensureCheckout()` (slice lines 105-110). Task 11 moves it into `detect()`.\n\n- **Wider blast radius:** `detect()` is also called by `status()`, `install()`, `update()`, `uninstall()`, `syncWorktrees()` (GuideManager.ts:29, 39, 60, 91, 147) and `setup-ide.ts:106`. `cf guides info`, `uninstall` and `guide_status` would start failing wherever `git submodule status` fails.\n- **Broken tests:** the submodule cases at GuideDetector.test.ts:68-90, 92-114 and 205-226 mock `gitExec` to succeed only for `describe`. `checkSyncStatus` would return `'error'` and `detect()` would reject. Task 4 only renames `manual`; no task fixes these.\n- **Coverage gap:** neither Task 12 nor Task 18 tests the `'error'` branch, though slice line 201 requires \"each branch of the state machine\".",
+      "file_ref": null,
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "location": "packages/core/tests/guides/GuideDetector.test.ts:68-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13's claim that `/timed out/i` already matches is wrong",
+      "description": "Task 13 (lines 213-214) and D10 say `NETWORK_ERROR_PATTERNS` contains `/timed out/i`. It contains `/connection timed out/i` and `/etimedout/i` only. A message like \"timed out after 60 seconds\" gets no hint, so Task 14's assertion on `GUIDE_OFFLINE_REMEDIATION` fails as written. The task must either word the message to match or add a pattern, which changes hinting for all `gitExec` callers.",
+      "file_ref": null,
+      "category": "wrong-claim",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:20-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 contradicts itself on `init()`'s timeout and nothing verifies D10 wiring",
+      "description": "- **Contradiction:** bullet 1 gives `init(operationPath)` always using `GUIDE_INIT_TIMEOUT_MS`; bullet 2 says the timeout is an `init()` option so `sync()` stays unbounded. Task 17 then calls `init(operationPath)` with no option, so whichever default is chosen, either auto-init is unbounded or `sync()` is bounded.\n- **No assertion:** Tasks 16 and 18 never check that the auto-init path passes `timeoutMs` or that `sync()` does not.\n- **Existing pin:** `SubmoduleStrategy.test.ts:220-223` expects `gitExec` called with exactly `(args, worktreePath)`. Routing `sync()` through `init()` with a third argument will most likely fail it.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 17 appends `GUIDE_OFFLINE_REMEDIATION` to messages that already contain it",
+      "description": "`gitExec` already appends the remediation sentence for network failures. Task 17 (lines 262-263) appends it again unconditionally, so a proxy failure prints it twice. The `setup-ide.ts:113` precedent appends to a message with no hint. Task 18's \"contains\" assertion passes either way. Append only when absent, and assert a single occurrence.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:42-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP `notices[]` has nowhere to go on text results, and `template_preview` is undecided",
+      "description": "- **Shape undefined:** `context_build` (line 165) and `prompt_get` (line 299) return `textResult(string)`. `generateContext()` returns `Promise<string>`. Task 22 does not say where a `notices` array lives on a plain-text result, and Task 23 asserts \"existing payload plus one `notices` entry\" without defining it.\n- **`template_preview`:** the line-57 insertion point is inside `generateContext()`, shared with `template_preview` (line 220), which is declared `readOnlyHint: true` and \"without \u2026 triggering any side effects\" (lines 179-181). Wiring it violates that; not wiring it leaves the #80 failure on that tool. The plan decides neither.\n- **Annotations:** `prompt_list`/`prompt_get` declare `readOnlyHint: true, openWorldHint: false` (lines 244, 277) and `context_build` `openWorldHint: false` (line 112). Auto-init fetches and writes the working tree; no task updates them.\n- **Grep omitted:** D3 requires grepping `packages/mcp-server/src`; Task 20 greps only `packages/cli/src` and Task 22 has no grep step.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:26-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 20's `prompt.ts` insertion point is after a guide read",
+      "description": "- **`cf prompt get P6`:** `resolvePhaseInput(phase, opPath)` at line 114 reads the prompt file through `getPhaseShorthands` (`phaseShorthand.ts:22-23`). On a fresh clone it throws `ENOENT` before the \"~line 116\" call runs. `phaseShorthand.ts:22` is a `PROMPT_FILE_RELATIVE_PATH` hit missing from the task's list.\n- **`build.ts` paths:** `project` comes from `resolveProject(store, id, worktreeId)`, whose overlay replaces `projectPath` with the worktree path (`worktree-overlay.ts:9`). The root path that `ensureGuideReady(projectPath, operationPath)` needs is not in scope at line 78, and the task does not say how to get it.",
+      "file_ref": null,
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/prompt.ts:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points after Tasks 4 and 6 leave the workspace broken; markers are inside checkboxes",
+      "description": "- **Broken build:** after Task 3, `GuideMethod` has no `'manual'`. The zod enum at line 101 still yields it, so `manager.install(strategy, source)` at line 116 no longer typechecks until Task 7.\n- **Runtime crash:** in the same window `cf guides install --strategy manual` reaches `getStrategy()` with no matching case (GuideManager.ts:214-223) and crashes on `undefined.install`.\n- **Weak gate:** Task 4's criterion is core tests only, though slice line 256 says to run the full suite after step 1. Move Task 7's source edits ahead of the first commit, or gate on `pnpm -r typecheck && pnpm -r test`.\n- **Format:** every commit instruction is embedded in a `- [ ] Success criteria:` checkbox (lines 99-100, 127-128, 153-154 and onward), not a plain `**Commit**:` line.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/guideTools.ts:100-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 26/27: `--strategy` handling in `cf init` is underspecified",
+      "description": "- **Flag omitted:** Task 26 passes `normalizeGuideMethod(opts.strategy)` unconditionally. `opts.strategy` is `undefined` when the flag is absent, and the function throws on anything non-canonical. A guard is needed here and in Task 7.\n- **`--strategy bogus`:** Task 27 requires it to fail \"before any install\". At \"~line 118\" the throw lands inside the try/catch at 117-127, which turns it into `warn('Guides install failed: \u2026')` and continues with exit 0. By then `git init` (line 81), `store.create` (line 104) and the `.gitignore` write (line 113) have run. Say whether validation moves to the top of the action or the warn-and-continue outcome is intended, and assert that.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/init.ts:115-127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 leaves the alias-reporting API open and misses one branch",
+      "description": "- **Open design choice:** `resolveStrategy()` is private and `install()` returns `InstallResult`. \"Choose one return shape\" hands a junior a public-API decision. Adding a field to `InstallResult` changes `guide_install` JSON (`guideTools.ts:117`).\n- **No `ConfigManager`:** the constructor's `configManager` is optional (line 19). With the line-196 literal deleted and \"no fallback branch needed\", that path has no defined result. It should read `CONFIG_KEYS['guide.git_strategy'].default`.\n- **Name:** the export is `CONFIG_KEYS`, not `ConfigKeys` as Task 6 writes.\n- **Config-path alias:** D5 requires an MCP notice when the alias comes from config, not just the parameter; Task 7 covers only the parameter. No CLI test covers the config-path warning (slice line 193); Task 8 tests only the flag.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideManager.ts:185-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rename sweep leaves user-facing \"manual\" text that the success grep cannot see",
+      "description": "These error strings survive Task 3's `grep \"'manual'\"` check because they are double-quoted or bare:\n- `SubmoduleStrategy.ts:39` \u2014 `use the \"manual\" strategy instead`\n- `SubmoduleStrategy.ts:45` \u2014 `--strategy clone or --strategy manual` (not in the design's sweep list)\n- `CloneStrategy.ts:34` \u2014 same wording as line 39\n\nA user following that advice gets a deprecation warning. Comments at `TarballStrategy.ts:1`, `GuideDetector.ts:139` and `GuideManager.ts:135` also remain. Name these lines and widen the grep to `manual` without quotes.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:39-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9 fixture rests on a pattern that does not exist",
+      "description": "- **Wrong claim:** lines 49-50 and 168-169 say `SubmoduleStrategy.test.ts` has a real-git temp-repo pattern. It mocks `fs` and `gitExec` entirely, and no file under `packages/core/tests/guides/` uses `mkdtemp`. Slice line 201 repeats the claim. Task 9 builds the first such fixture.\n- **File transport (from memory of git \u2265 2.38.1, not run here):** submodule operations refuse local-path remotes by default (\"transport 'file' not allowed\"). `gitExec` passes only `process.env` plus the non-interactive vars (`gitExec.ts:62`), so `init()` on the fixture would fail unless the fixture sets `protocol.file.allow=always` through the environment. The task should say so, and set `user.name`/`user.email` and `guide.source`.",
+      "file_ref": null,
+      "category": "wrong-claim",
+      "raw_category": null,
+      "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:5-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "States left by a timed-out init and by a worktree uninstall have no covering test",
+      "description": "- **Timed-out init:** Tasks 13/15 deliberately SIGTERM `git submodule update --init` mid-fetch. No task checks what `git submodule status` reports afterwards or that the next `cf build` retries. If the kill leaves a state that reads `+`, `ensureCheckout()` only warns and builds from an incomplete tree.\n- **Worktree uninstall:** `uninstall()` runs `submodule deinit -f` from the worktree, and `SubmoduleStrategy.ts:82-83` notes that this \"affects shared state\". If the main checkout then reports `-` (my reading of git, not run here), `cf guides info` would say \"not initialized\" for a populated directory and the next `cf build` would run `submodule update --init` on it, resetting a deliberately different commit against D2.\n\nAdd a fixture state and test for each, or record them as accepted.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideManager.ts:103-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 32 walkthrough fails as written",
+      "description": "- **Unregistered clone:** step 1 runs `cf guides info` and `cf build` in `/tmp/g925-clone`, which no step registers. `resolveProjectWorktree` matches neither by cwd (lines 65-69) nor as a git worktree (lines 153-163) and throws \"No project specified\u2026\". The walkthrough needs `cf init --no-ide` in the clone first, which also adds a third project to clean up.\n- **Relative path:** `node packages/cli/dist/index.js` breaks after the walkthrough's `cd /tmp/...`; use an absolute path.\n- **Cleanup command:** the subcommand is `cf project rm` (`project.ts:652`), not `delete`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/project.ts:168-175"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New `types.ts` symbols need explicit re-export",
+      "description": "`guides/index.ts` is an explicit named list and the root index exports guide types only (`index.ts:12`). Task 1 says to export; Tasks 10, 17 and 28 do not, for `SubmoduleCheckoutState`, `CHECKOUT_STATE_LABELS`, `GUIDE_INIT_TIMEOUT_MS`, `EnsureCheckoutResult` and `GUIDE_MANAGED_NOTICE`. Typecheck would catch it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/index.ts:4-15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality: a few splits to merge",
+      "description": "Thirty-two tasks is heavy but the slice spans three issues and three packages. Merge Tasks 10 and 11: Task 10's own criterion (line 186) admits the tree does not typecheck until 11. Tasks 28/29 and 30/31 could each be one task. No multi-file split and no surplus test tasks.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "README assumptions and `projectState` commit",
+      "description": "- Task 30 says to replace \"remaining `manual` strategy mentions\". The README has none; the only hit is the unrelated \"Manual setup\" heading at line 75. The guide is introduced at lines 103 and 258.\n- Frontmatter says the tree is clean at `14c2096`; the session's git snapshot shows HEAD `7616678`. I could not check whether they are related.",
+      "file_ref": null,
+      "category": "wrong-claim",
+      "raw_category": null,
+      "location": "README.md:75"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage, scope and NFR handling",
+      "description": "- **Functional criteria (slice lines 188-197):** each maps to a task \u2014 auto-init and stderr notice (17, 19-21), clean `--json` stdout (21), read-only info (11, 24), out-of-sync warning (17, 18, 21), alias on flag and config (5-8), `cf init --strategy` (26, 27), help (25, 27), managed notice and README (28-30), config error propagation (5, 6).\n- **Technical criteria:** covered by Tasks 2, 12, 18, 27, 29, 8 and the greps in Task 32, apart from the `'error'` branch gap above.\n- **Scope:** no task falls outside the slice; default strategy, clone behaviour and out-of-sync auto-correct are left alone.\n- **NFR:** the slice restates none (line 247), and the repo has no `tests/load/` or `.github/workflows/`, so no load-test or CI task is owed.\n- **Line references:** all checked references into source are accurate (`GuideManager.ts:177/192/196/220`, `guides.ts:63/119/125`, `guideTools.ts:47/93/101`, `SubmoduleStrategy.ts:127`, `build.ts:78`, `prompt.ts:60/116`, `setup-ide.ts:106/113`, `contextTools.ts:57/98`, `init.ts:118`).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "summary": "`ensureCheckout()` via `detect()` adds an unbounded `git ls-remote` to every read command",
+      "location": "packages/core/src/guides/GuideDetector.ts:164-175",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "summary": "CLI/MCP/core test tasks target files whose harness mocks the modules under test",
+      "location": "packages/cli/tests/commands/build.test.ts:9-20",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "summary": "Task 11 throws from `detect()` for every caller and breaks three existing tests",
+      "location": "packages/core/tests/guides/GuideDetector.test.ts:68-114",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "wrong-claim",
+      "raw_category": null,
+      "summary": "Task 13's claim that `/timed out/i` already matches is wrong",
+      "location": "packages/core/src/guides/gitExec.ts:20-30",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 15 contradicts itself on `init()`'s timeout and nothing verifies D10 wiring",
+      "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 17 appends `GUIDE_OFFLINE_REMEDIATION` to messages that already contain it",
+      "location": "packages/core/src/guides/gitExec.ts:42-50",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "MCP `notices[]` has nowhere to go on text results, and `template_preview` is undecided",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:26-65",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "plan-vs-code",
+      "raw_category": null,
+      "summary": "Task 20's `prompt.ts` insertion point is after a guide read",
+      "location": "packages/cli/src/commands/prompt.ts:114",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit points after Tasks 4 and 6 leave the workspace broken; markers are inside checkboxes",
+      "location": "packages/mcp-server/src/tools/guideTools.ts:100-116",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Tasks 26/27: `--strategy` handling in `cf init` is underspecified",
+      "location": "packages/cli/src/commands/init.ts:115-127",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 5 leaves the alias-reporting API open and misses one branch",
+      "location": "packages/core/src/guides/GuideManager.ts:185-197",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Rename sweep leaves user-facing \"manual\" text that the success grep cannot see",
+      "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:39-45",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "wrong-claim",
+      "raw_category": null,
+      "summary": "Task 9 fixture rests on a pattern that does not exist",
+      "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:5-14",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "States left by a timed-out init and by a worktree uninstall have no covering test",
+      "location": "packages/core/src/guides/GuideManager.ts:103-118",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 32 walkthrough fails as written",
+      "location": "packages/cli/src/utils/project.ts:168-175",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "New `types.ts` symbols need explicit re-export",
+      "location": "packages/core/src/guides/index.ts:4-15",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: a few splits to merge",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "wrong-claim",
+      "raw_category": null,
+      "summary": "README assumptions and `projectState` commit",
+      "location": "README.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage, scope and NFR handling",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-22T22:38:56.124591",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 64,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "chars": 24828,
+      "sha256": "4a77932407cf2b2b20ac682aab7d544ee89afe5b22fb9c715fc55c5bd8d3b062",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+      "chars": 22706,
+      "sha256": "34914a9a07a2d00f54b88afcb8e22cc86f32bb68b53a9da12204bd8863e6aedb",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/guides/types.ts",
+    "packages/core/src/guides/GuideManager.ts",
+    "packages/core/src/guides/GuideDetector.ts",
+    "packages/core/src/guides/gitExec.ts",
+    "packages/core/src/guides/strategies/SubmoduleStrategy.ts",
+    "packages/core/src/guides/strategies/TarballStrategy.ts",
+    "packages/core/src/guides/index.ts",
+    "packages/core/src/config/ConfigKeys.ts",
+    "packages/core/src/guides/strategies/CloneStrategy.ts",
+    "packages/cli/src/commands/guides.ts",
+    "packages/cli/src/commands/init.ts",
+    "packages/cli/src/commands/build.ts",
+    "packages/cli/src/commands/prompt.ts",
+    "packages/cli/src/commands/setup-ide.ts",
+    "packages/mcp-server/src/tools/guideTools.ts",
+    "packages/mcp-server/src/tools/contextTools.ts",
+    "packages/core/tests/guides/GuideDetector.test.ts",
+    "packages/core/tests/guides/GuideManager.test.ts",
+    "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts",
+    "packages/core/tests/guides/gitExec.test.ts",
+    "packages/core/src/services/CoreServiceFactory.ts",
+    "packages/cli/src/utils/phaseShorthand.ts",
+    "packages/cli/src/index.ts",
+    "packages/cli/src/utils/project.ts",
+    "packages/cli/src/utils/worktree-overlay.ts",
+    "packages/cli/src/commands/worktree.ts",
+    "packages/core/src/config/ConfigManager.ts",
+    "packages/cli/tests/commands/build.test.ts",
+    "packages/cli/tests/commands/guides.test.ts",
+    "packages/cli/tests/commands/init.test.ts",
+    "packages/cli/tests/commands/setup-ide.test.ts",
+    "packages/cli/tests/commands/prompt.test.ts",
+    "packages/mcp-server/tests/guideTools.test.ts",
+    "packages/mcp-server/tests/contextTools.test.ts",
+    "packages/cli/tests/integration/build.integration.test.ts",
+    "packages/cli/tests/commands/help.test.ts",
+    "packages/mcp-server/tests/helpers/integrationSetup.ts",
+    "CHANGELOG.md"
+  ],
+  "searches": [
+    "list_files packages/core/src/guides/**/*.ts in .",
+    "list_files packages/core/tests/guides/**/* in .",
+    "list_files packages/cli/src/**/*.ts in .",
+    "list_files packages/cli/tests/**/*.ts in .",
+    "list_files packages/mcp-server/{src,tests}/**/*.ts in .",
+    "grep manual in .",
+    "grep manual in packages",
+    "grep createContextPipeline|resolvePromptFilePath|GUIDE_RELATIVE_PATH|PROMPT_FILE_RELATIVE_PATH|SystemPromptParser\\(|GuideDetector|new GuideManager\\( in packages",
+    "grep manual|strategy|ai-project-guide in README.md",
+    "grep mkdtemp|tmpdir\\(\\) in packages",
+    "list_files packages/core/src/config/*.ts in .",
+    "grep guides|GuideDetector|GuideManager|submodule|strategy in packages/cli/src/commands/update.ts",
+    "grep ai-project-guide|GUIDE_|guideDir|project-documents in packages/cli/src",
+    "grep resolvePhaseInput|getPhaseShorthands|resolvePhaseValue in packages",
+    "grep guides|normalizeGuideMethod|GUIDE_|types\\.js in packages/core/src",
+    "list_files {tests/load/**,.github/workflows/*,packages/*/vitest.config.*,vitest.config.*,vitest.workspace.*} in .",
+    "grep template_preview|readOnlyHint|annotations|guide_status|guide_install|prompt_list|context_build in packages/mcp-server/tests",
+    "grep generateContext\\(|resolvePromptFileForTools\\( in packages/mcp-server",
+    "grep \"(typecheck|test|build|lint)\": in .",
+    "grep export (async )?function resolveProject\\b in packages/core/src",
+    "grep \\.command\\('(delete|remove|rm)|command\\('project'\\)|\\.command\\('[a-z-]+ in packages/cli/src/commands/project.ts",
+    "grep strategy|guides install|ai-project-guide|submodule in .",
+    "grep 14c2096|7616678 in project-documents/user",
+    "grep export function applyWorktreeOverlay in packages/core/src",
+    "grep generateContextFromProject\\(|worktreePath|GUIDE|ai-project-guide in packages/core/src/services/ContextIntegrator.ts"
+  ],
+  "sections_in_document": 7,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 65,
+  "prompt_tokens": 1135229,
+  "cached_tokens": 955880,
+  "cache_write_tokens": 179329,
+  "completion_tokens": 46892,
+  "reasoning_tokens": null,
+  "duration_seconds": 439.7633747495711,
+  "cost_usd": 4.9384912000000005,
+  "cost_basis": "provider"
+}

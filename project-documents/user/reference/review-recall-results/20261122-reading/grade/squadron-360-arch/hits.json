@@ -1,0 +1,34 @@
+{
+ "case": "squadron-360-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Output Conventions: \"Both capabilities write to the existing `project-documents/user/analysis/` directory\" (line 243) and the settled list (lines 332-333), while Capability 1 Outputs writes the concept to `project-documents/user/project-guides/000-concept.{project}.md` (line 148). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001; the response calls it \"a factual error\").",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     10
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     1
+    ],
+    "r07": [],
+    "r08": [
+     7
+    ],
+    "r09": [
+     7
+    ],
+    "r10": []
+   }
+  }
+ ],
+ "note": "No borderline calls. Findings that only note capability (a) writes planning artifacts (concept) while sitting in the analysis dispatcher (r03#14, r04#7, r06#8, r10#18) were not counted: they raise dispatcher placement, not the output-location contradiction."
+}

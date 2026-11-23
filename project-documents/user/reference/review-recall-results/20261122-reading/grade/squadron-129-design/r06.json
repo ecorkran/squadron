@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Login and logout I/O paths have no enumerated failure modes, and parts of them are unbounded",
+   "description": "The Failure Modes table is titled \"Codex Turn\" and covers only turns, plus `account()` and the `wait()` timeout. `sq auth login` and `sq auth logout` are new I/O paths with their own hang, timeout and disconnect cases. The login and logout failure handling is spread across D7 and the Patterns bullet.\n- **Unbounded calls:** `codex.login_timeout_s` bounds only `handle.wait()`. Runtime spawn and `initialize` for login, the `login_chatgpt()` / `login_chatgpt_device_code()` calls that return the handle, and `AsyncCodex.logout()` have no timeout. A hung runtime start during `sq auth login` or `sq auth logout` blocks the CLI indefinitely.\n- **Failures with no handling:** the local callback listener failing to bind (port in use), and `webbrowser.open` failing or finding no browser. The runtime dying mid-`wait()` is also unlisted. Logout when not logged in or when the runtime fails to start is unaddressed, as is a partial logout where `auth.json` still exists afterwards.\n- **No test assertions:** the Technical Requirements test list has no rows for these paths, though it requires one test per turn-table row.\n\nAdd a login/logout failure table. Each row should give the bound, the observable signal (WARNING+ log or non-zero exit with message) and a test. Put the spawn, handle acquisition and `logout()` calls under an existing timeout key.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Doctor row needs package version, but the shared `CodexRuntime` does not carry it",
+   "description": "D9 and Sub-part B require the doctor row to show the package version and runtime source. D9 says the detail comes from `CodexRuntime`, and that \"doctor contains no import probing or `shutil.which` of its own.\" But `CodexRuntime` is specified as `(source, path|None)` with no version field. Doctor has no sanctioned way to get the version except to probe it itself, which the design forbids. Extend `CodexRuntime` with the version, or state where version resolution lives. Without that, the one-source-of-truth claim for doctor does not hold.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D9"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the slice needs in a few places",
+   "description": "Cuts that would not lose any plan-assigned scope:\n- **Timeout mechanisms:** three config keys plus a `--timeout` CLI override make four timeout mechanisms. `codex.login_timeout_s` and `--timeout` do the same job, so drop the flag. `codex.account_timeout_s` (30 s) could fold into one runtime-operation key that also covers the login and logout spawn gaps above.\n- **Restating prose:** \"Runtime startup cost\" argues at length for not setting a latency target. \"Relationship to the architecture's auth model\" re-justifies D3. Each could be one or two sentences.\n- **Duplicated verification:** the Verification Walkthrough largely repeats Functional Requirements and the Part A\u2013C task flow. Keep only the manual-only steps (browser and device-code flows, and the real-account smoke test).\n- **Test inventory:** the test list is exhaustive per row, which is fine. Keep it as the single place enumerating tests, rather than restating it in the Success Criteria and the failure table.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D7"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Dependency list differs from the plan entry",
+   "description": "The plan entry lists `Dependencies: [128]`. The slice frontmatter lists two slices, and the Prerequisites section adds slice 931 (`AgentConfig.effort`, `applies_effort`, `core/usage.py`). That dependency is real, because Part A's effort and usage work needs it, but the slice plan entry does not record it. Reconcile the two so the plan reflects the actual ordering constraint.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Version cap is both decided and undecided",
+   "description": "D1 specifies `openai-codex>=0.159.3,<1`. Special Considerations says the upper bound is undecided and left for the PM. Settle on one: either state the bound as the design's decision, or mark D1's bound as provisional.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D1"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Ownership of browser launch is ambiguous",
+   "description": "The Login flow says `login_chatgpt()` \u2192 \"print `auth_url`, attempt `webbrowser.open`\", but `notify` is the only channel from provider to CLI. If `login.py` calls `webbrowser.open`, the provider layer is performing a UI side effect, which the `notify` design is meant to avoid. State whether the CLI opens the browser, for example via a second callback or by receiving the URL, or whether the strategy does.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Data Flow"
+  }
+ ]
+}

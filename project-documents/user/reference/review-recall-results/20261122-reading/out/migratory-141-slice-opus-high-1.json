@@ -1,0 +1,466 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The \"numpy\" backend actually measures Numba forces, and Numba is not \"a backend that doesn't exist\"",
+      "description": "The design says NumPy is \"the only backend that exists today\" (L25-26) and that Numba is out of scope (L92). But slice 118 is complete (`100-slices.behavior-engine.md:61` is `[x]`), and `src/migratory/engine/_jit_config.py:14` sets `USE_JIT_KERNELS: bool = True`. Every `BulkForce.__call__` checks that flag (`flocking.py:82,192,326`, `herding.py:32,175`) and goes to `forces_jit` kernels. The design's NumPy runner \"calls `tick()` directly\" (L131-132) and never touches the flag. So every `numpy` row, every NumPy parity hash, and the \"golden\" reference for slices 142/145 would actually be Numba numbers. Slice 142 is defined as Quadrants vs. Numba **and** NumPy (plan L30), so its comparison would be wrong from the start.\n\nThe flag is also a module-level global. Running `numpy` and a future `numba` backend in one process (`--all-backends`, L481) means toggling global state, and the design never addresses that. The design must:\n- have the `numpy` backend pin `USE_JIT_KERNELS=False` (and restore it in `finalize`), or rename the backend to what it actually measures;\n- register a `numba` backend now (one more file). Plan L26 says Numba \"slots in as those backends become available\", and it is available now.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The per-force breakdown the plan assigns to 141 is deferred, and the deferral breaks the \"zero harness changes\" promise",
+      "description": "Plan L26 gives 141 the job of producing timings broken down by phase, including \"force totals per force\". The design reports one `force_total` and pushes per-force timing to slice 142 by \"extending `PhaseTimings` with an optional `force_breakdown`\". That extension changes `runner.py` (the dataclass and `_PHASE_FIELDS`), both report renderers, and the JSON `schema_version` (L530-532). This contradicts the Integration Requirement that slice 142 lands with \"one file \u2026 and zero changes elsewhere in the harness\" (L586-588).\n\nPer-force bracketing in `tick_instrumented` is one `perf_counter_ns` pair inside the existing force loop (`tick.py:110-111`). Deliver it in this slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Numba backend is attributed to slice 144, which is Quadrants Force Kernels",
+      "description": "L92, L341 and L589-591 say \"Slice 144 registers `numba`\". Per plan L34, slice 144 ports forces *to Quadrants*. Numba is slice 118, which is already done. The Integration Requirement at L589 names a consumer that won't do that work.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The workload schema example is 3D, but the engine is 2D",
+      "description": "The example has `world_size: [200.0, 200.0, 200.0]` and 3-component `cluster_centers`. `src/migratory/__init__.py:4` sets `DIMS = 2`, and the existing loader rejects anything else (`src/migratory/bench/workload.py:187-191`, \"must have 2 entries (DIMS=2)\"). The design is the documented schema source (workload.py:8-11), so a workload copied from it fails to load. Fix the example to 2D.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:364-368"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Force resolution describes module-level singletons that don't exist, and \"five forces\" is wrong",
+      "description": "L398-399 says force names resolve to \"module-level singleton instances \u2026 (e.g. `flocking.cohesion_force`)\". The engine has no such attributes, only classes (`flocking.py:65,175,311`, `herding.py:14,102,157`). The existing code builds its own instances in `bench/workload.py:67-74`.\n\nL138, L543 and L554 also refer to \"the five existing `BulkForce` implementations\". There are six: `PropulsionForce` (`herding.py:102`) exists, the server's `force_builder.py:37` includes it, and `config/default.yaml:176` turns it on. The `mid-flock` force list (L379-384) leaves propulsion out but includes leadership and momentum. So it doesn't match the \"live-server default\" it claims to approximate (L353-355), and it doesn't match the architecture's reference of \"4 forces\" either (arch L55), which walkthrough step 9 compares against.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile registry invents profiles the design says it won't invent, and leadership is never populated",
+      "description": "L392-395 says `flocker`/`leader` map to \"existing `BehavioralProfile` constructors used in `config/default.yaml`\" and that \"the harness does not invent new profiles\". `config/default.yaml:145-182` defines only one profile, `\"default\"`, with no `max_neighbors`. The existing registry (`bench/workload.py:33-60`) invents a `leader` and adds `max_neighbors=32` to `flocker`. That flips `tick()` onto the kNN fast path (`tick.py:72-84`), which is a different code path from the live default.\n\nSeparately, `LeadershipForce` weights neighbours by `state.leadership` (`forces_jit.py:208`). `AgentState.create` sets that array to zero (`state.py:71`), and nothing in the workload schema sets it. So the \"leader\" profile has no effect, and the leadership force burns time producing zero output (rows with lead_sum < 1e-10 are zeroed, `forces_jit.py:192-193`). The design needs to say where profile values come from (inline in the YAML, or a named file) and how per-agent `leadership` is set.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-396"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Formation, initial-state and density generation are unspecified, and the plan's `density` input is missing",
+      "description": "Scope L70-71 promises a `density` field, and plan L26 requires workloads to specify \"N, density, profile mix, formation state\". The schema has no density field. Density can only be inferred from `n`/`cluster_radius`/`world_size`, and the design never defines it.\n\nThe schema also doesn't specify:\n- how each formation kind samples positions (uniform disk vs. Gaussian, for example);\n- initial velocities or headings (`AgentState.create` gives zeros);\n- how fractions turn into counts (rounding, ordering).\n\nOnly `mid-flock` is shown. The parameters for `dispersed` and `packed-herd` (N, radius) aren't given, so \"high/low density\" can't be checked. And parity-hash determinism across implementations depends on exactly these details.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:360-376"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No bounds handling, so formations drift during 660 ticks",
+      "description": "The live sim runs `apply_bounds_policy` after every tick (`migratory_server/simulation.py:11,123`). That lives in `migratory_server.bounds_enforcement`, which the harness is forbidden to import (L145, L573). The workload has a `world_size` but no bounds policy. A `uniform`/`dispersed` start with no walls spreads out freely, and clusters migrate, so the density being measured shifts across 60 warmup and 600 measure ticks. The whole point of the named formation regimes (arch L38, \"performance is formation-dependent\") is lost.\n\nFixes: state that bounds are deliberately left out and keep runs short enough that this doesn't matter; or move the policy into the engine (a dependency direction change that needs saying); or make the soft-bounds `WorldBoundsRepulsor` force (`engine/repulsor.py:40`) a workload option.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:143-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Phase boundaries don't \"correspond exactly\" to `tick()`, and the risk section puts setup cost in the wrong phase",
+      "description": "`tick.py` has work between the named phases:\n- profile-attribute arrays and per-agent gathers (L58-72), after build and before query;\n- `exclude_self` and `apply_neighbor_cap`, mixed into both query branches (L81-102). The architecture counts these as \"CSR assembly\" (`self_excl_cap`, arch L54);\n- the `max_speeds` gather (L114);\n- `record_density` (L129-130).\n\nThe design never says which phase each of these goes in. The Risk section (L697-701) says `force_total` includes `all_radii = np.array(...)`, but that runs before the spatial query, not in the force loop.\n\n`total_ns` is defined two ways. The design says \"tick wall time, including overhead\" (L284). The existing code says \"spatial_build through end of integrate\" (`runner.py:27-30`), which leaves out `record_density`. The duplication is also understated as \"~5 lines per phase\" (L266-267). `tick_instrumented` has to copy the whole ~90-line body, both query branches included.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:246-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity hash timing is contradictory, and a hash can't support slice 145's tolerance-based parity",
+      "description": "The hash is taken \"post-warmup\" in one place (L81) and \"after the measure phase\" in another (L460). L471-473 says GPU backends' hashes get interpreted \"within the documented tolerance band\", and L533-534 says slice 145's parity test uses the NumPy hash as its reference. A SHA-256 only supports exact equality, so no tolerance can be applied to it. Plan L36 defines 145's parity as \"within a documented tolerance for non-deterministic GPU reductions\". It's also the same trajectory-comparison job the design hands to `tools/run_deterministic_trajectory.py` in Open Questions (L748-755).\n\nEither drop the claim that 145 consumes the hash, or save the final arrays (`.npy`) next to the hash so a tolerance comparison is possible.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Registry discovery is unspecified, so \"one file, zero changes elsewhere\" can't hold",
+      "description": "`@register_backend` only runs when its module is imported. Nothing says who imports `backends/numpy_backend.py`. If `backends/__init__.py` imports it explicitly, each new backend needs an edit there, which breaks L586-591. If backends are auto-discovered (for example with `pkgutil.iter_modules`), the design has to say so. It also has to say how a Quadrants backend whose package isn't installed is handled at discovery time (skip with a warning, or fail), because L93-95 says 141 doesn't require Quadrants. There's also an API mismatch: Scope L84 describes `register_backend(name, factory)`, while L305 is a decorator that takes only `name`, and the Protocol's `name: str` attribute (L327) duplicates the registry key with no rule for keeping them consistent.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The spatial backend is fixed to KDTreeQuery, but slice 143 needs it as a variable",
+      "description": "Plan L32 says slice 143's `QuadrantsSpatialQuery` is \"validated by the harness \u2026 timing comparison\" against `KDTreeQuery`. In this design the spatial choice is buried inside the backend runner, and the workload has no spatial field. So comparing spatial backends with the same force backend means another backend class for every pairing. The live default is `\"adaptive\"` (`migratory_server/config.py:293`), not kdtree, which undercuts \"current default operating point\" (L75, L179). L542 also gives the wrong path, `engine.spatial.KDTreeQuery`. The real one is `migratory.spatial.kd_tree.KDTreeQuery`, and `migratory/spatial/__init__.py` exports nothing.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:136-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Result-file I/O failure modes are missing",
+      "description": "None of these is handled:\n- `git rev-parse HEAD` failing (no git, or not in a repo, e.g. a copy on an NVIDIA box);\n- a dirty working tree, which makes \"reproducible by repo hash\" (L184-185) false unless it's recorded. The example's short SHA `fc989bf` (L418) also doesn't match `rev-parse HEAD`'s full SHA;\n- two runs in the same second overwriting `{timestamp}_{workload}_{backend}.json`;\n- ISO timestamps with `:` in filenames, which are invalid on Windows. That matters for a \"cross-platform\" harness;\n- `bench/results/` resolved against the current directory, not the repo root;\n- a run killed mid-write, leaving a truncated JSON that the directory-wide Markdown pass (L440) then hits. Write to a temp file and rename;\n- exceptions from `tick_once` mid-measure. Only `setup` failures are listed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI and Markdown aggregation are underspecified, and the walkthrough uses flags the CLI section doesn't define",
+      "description": "Walkthrough steps 1-2 (L605, L611) use `--list-backends` and `--list-workloads`, which don't appear in the CLI section. Nothing says how `--workload mid-flock` maps to a path. The Markdown report is \"one table per workload across all backends in `bench/results/`\" (L440), but the directory will hold many runs per backend, across SHAs and platforms, and the design never says which one becomes the row. The `bench/results/*.md` filename is also never given. \"Sortable on TPS\" (L80) means nothing for a static Markdown table.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tps_observed` and `wall_seconds` are undefined, and the example contradicts itself",
+      "description": "Plan L26 wants output that \"per-tier validation can be automated\" against, which means checking TPS. The design never defines `tps_observed`: measure ticks over loop wall time, or 1e9 over mean `total_ns`? The example gives mean `total_ns` = 9.55 ms (about 105 TPS, and 600 ticks would take about 5.7 s), alongside `wall_seconds` 9.21 and `tps_observed` 65.1. Those numbers can't all hold unless there are about 6 ms of unexplained work per tick outside `tick_once`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:426-434"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: cut features nothing uses yet",
+      "description": "With one registered backend, cut or defer:\n- `--all-backends` (L481), which has nothing to run beyond `--backend numpy`;\n- `--workload-dir` (L482);\n- the cross-run Markdown pass over `bench/results/` (L440). Render the current run only;\n- reusing `pytest-benchmark` in the stub-backend tests (L122-124). Timing-accounting tests on synthetic timings don't need it.\n\nThe Value section (L36-51) mostly repeats the plan entry. \"Eight new files\" (L741) understates the 11 Python modules and 3 YAML files in Component Structure (L157-181).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-483"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"All new code lives under src/migratory/bench/ and bench/workloads/\" contradicts the tests and .gitignore",
+      "description": "New tests live in `tests/bench/` (`test_runner.py`, `test_workload.py` already exist), and `.gitignore:172-174` is modified. `bench/results/.gitkeep` is also checked in. Reword the requirement to list these paths.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:574"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and engine/server boundary",
+      "description": "The harness depends on `migratory.engine` and `TickResult` (`engine/tick_result.py:84`) and not on `migratory_server`. It leaves `tick()` alone, which keeps slice 140's contract and the `from_numpy_state` construction benchmark (`tests/test_tick_result.py:76-90`) intact. The `tick()` signature the design relies on (`tick.py:15-22`) matches. `pyyaml` and `pytest-benchmark` are present (`pyproject.toml:14,73`). `tools/run_deterministic_trajectory.py` exists. The architecture states no harness NFR, so none needs restating.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#interfaces-required"
+    },
+    {
+      "severity": "PASS",
+      "title": "Deferring CUDA, CI gating and wire-in-the-loop work fits the plan",
+      "description": "Plan L26 says \"standalone against NumPy at first\", and the wire is a separate problem (plan L70). Leaving out the CUDA matrix and transport benchmarks is consistent, as long as the harness itself stays OS-portable (see the filename finding above).",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96-108"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The \"numpy\" backend actually measures Numba forces, and Numba is not \"a backend that doesn't exist\"",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The per-force breakdown the plan assigns to 141 is deferred, and the deferral breaks the \"zero harness changes\" promise",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Numba backend is attributed to slice 144, which is Quadrants Force Kernels",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The workload schema example is 3D, but the engine is 2D",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:364-368",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Force resolution describes module-level singletons that don't exist, and \"five forces\" is wrong",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-400",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Profile registry invents profiles the design says it won't invent, and leadership is never populated",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-396",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Formation, initial-state and density generation are unspecified, and the plan's `density` input is missing",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:360-376",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No bounds handling, so formations drift during 660 ticks",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:143-149",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Phase boundaries don't \"correspond exactly\" to `tick()`, and the risk section puts setup cost in the wrong phase",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:246-249",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Parity hash timing is contradictory, and a hash can't support slice 145's tolerance-based parity",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Registry discovery is unspecified, so \"one file, zero changes elsewhere\" can't hold",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-320",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The spatial backend is fixed to KDTreeQuery, but slice 143 needs it as a variable",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:136-137",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Result-file I/O failure modes are missing",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "CLI and Markdown aggregation are underspecified, and the walkthrough uses flags the CLI section doesn't define",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`tps_observed` and `wall_seconds` are undefined, and the example contradicts itself",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:426-434",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: cut features nothing uses yet",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-483",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"All new code lives under src/migratory/bench/ and bench/workloads/\" contradicts the tests and .gitignore",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:574",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependency direction and engine/server boundary",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#interfaces-required",
+      "location_verified": null
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Deferring CUDA, CI gating and wire-in-the-loop work fits the plan",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96-108",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-22T22:08:11.933994",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+      "chars": 30571,
+      "sha256": "10ce150e4c17336a810d204a9657ee39f47dd47e7e7aea4b61f8b9756b664893",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+      "chars": 13684,
+      "sha256": "30d85553dc6a8e1b5afcaff8c62be68411741f76d568b273eb7bab907ed67078",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/migratory/engine/tick.py",
+    "src/migratory/bench/runner.py",
+    "src/migratory/bench/backends/__init__.py",
+    "src/migratory/bench/workload.py",
+    "src/migratory/bench/cli.py",
+    "src/migratory/engine/state.py",
+    "src/migratory/engine/profile.py",
+    "config/default.yaml",
+    "src/migratory/engine/tick_result.py",
+    "src/migratory/__init__.py",
+    "src/migratory/engine/_jit_config.py",
+    "src/migratory/engine/herding.py",
+    "src/migratory/spatial/__init__.py",
+    ".gitignore",
+    "pyproject.toml",
+    "src/migratory_server/force_builder.py",
+    "src/migratory_server/server.py",
+    "src/migratory/spatial/kd_tree.py",
+    "src/migratory/engine/forces_jit.py"
+  ],
+  "searches": [
+    "list_files src/migratory/**/*.py in .",
+    "list_files project-documents/user/architecture/140* in .",
+    "list_files {pyproject.toml,.gitignore,config/*.yaml,tools/*.py} in .",
+    "grep (?i)(budget|spatial_build|spatial query|csr|2,?500|3,?500|profile principle|formation|cKDTree|57 TPS) in project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "grep ^(class |def |[a-z_]+_force\\s*=) in src/migratory/engine",
+    "grep USE_JIT_KERNELS|_jit_config in src",
+    "grep ^\\s*\\d+\\.\\s*\\[.\\]\\s*\\*\\*\\(11[6-9]\\) in project-documents/user/architecture/100-slices.behavior-engine.md",
+    "grep \\.leadership\\b|KDTreeQuery|AdaptiveSpatial|HashGridQuery\\(|backend ==|forces_list|PropulsionForce\\(|WorldBoundsRepulsor\\( in src/migratory_server",
+    "grep leadership in src/migratory_server",
+    "list_files tests/**/*bench* in .",
+    "grep ^def |^class  in src/migratory/environment/bounds.py",
+    "grep apply_bounds_policy|tick\\( in src/migratory_server/simulation.py",
+    "grep ^\\s*(async )?def test_ in tests",
+    "list_files tests/**/test_{main,tick_result*,*parity*,*determin*}.py in .",
+    "grep benchmark|from_numpy_state in tests",
+    "grep benchmark|50 in tests/test_tick_result.py",
+    "list_files bench/** in .",
+    "grep (?i)(NFR|harness|benchmark) in project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "grep backend: str = |backend.*default in src/migratory_server/config.py"
+  ],
+  "sections_in_document": 37,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 40,
+  "prompt_tokens": 706205,
+  "cached_tokens": 641584,
+  "cache_write_tokens": 64595,
+  "completion_tokens": 21558,
+  "reasoning_tokens": null,
+  "duration_seconds": 214.98437237506732,
+  "cost_usd": 1.078377,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D4 treats \"tool use not reported\" as \"no tool calls\", so Codex reviews get a false finding",
+   "description": "D4 computes successful calls as `(tool_calls_made or 0) - (failed_tool_calls or 0)` and reads `tool_calls_made is None` as \"no tools offered\". The design's own conventions (line 216) say `None` means \"not reported\" and forbid `or 0` for counts.\n\nThe two meanings diverge for Codex. D8 and D11 already state that Codex returns only final text and reports nothing. Codex is also a provider that reads files natively in its own sandbox, so its `tool_calls_made` is always `None` whether or not it read the rest of the diff.\n\nUnder D4 as written:\n- Every truncated Codex PASS is capped to CONCERNS.\n- The synthetic finding asserts \"The model made no successful tool calls, so the remaining N characters were not reviewed\", which squadron did not measure.\n\nThat contradicts the slice's principle of recording facts about the run, and the plan's Part B rule that a truncated diff where the model did read files keeps its verdict. SC4 (line 289) locks the behaviour in by listing `None` as a capping case.\n\nFix: split `None` into \"no tools and no native file access\" versus \"tool use not reported\". For the second case, either do not cap, or cap with finding text that says tool use was not reported. Add a success criterion for the Codex path and remove the `or 0`.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"pipeline stops for a human either way\" argument does not hold inside loop bodies",
+   "description": "D4 justifies capping over failing by pointing at `CheckpointTrigger.ON_CONCERNS`. Slice 910 established a second consumer: in a `loop:` body, a non-passing review's findings are fed back into the next dispatch as a fix prompt.\n\nAn imposed CONCERNS there does not pause. Its consequences:\n- The synthetic finding goes to the implementing agent as work to do, including \"Raise review.max_file_size_bytes\".\n- The same diff is truncated again next round, so a loop gated on a PASS cannot converge and runs to `max`.\n- The findings-addressed gate (305) receives a finding that no code change can address.\n\nThe design should state the intended loop behaviour. Options are to exclude `review-coverage` findings from the fix prompt, or to accept exhaustion and say so. Either way, add a criterion or an explicit accepted-consequence note, as slice 916 Part B did for its verdict change.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:137"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The metrology identity change is called correct but its effect on stored samples and graduated judges is not designed",
+   "description": "D10 accepts that OpenAI-direct judges change identity from `gpt-5` to `gpt-5-2025-08-07`. Metrology matches judge identity on the exact model string, both when filtering stored samples and when checking graduation.\n\nThe first review after this slice therefore stops matching existing calibration samples and any graduated config recorded under the requested id. This repeats every time a provider rolls a snapshot.\n\nThat may be the right outcome, but the \"Metrology calibrates the right judge\" value claim (line 29) has no success criterion and no statement of what happens to existing samples and graduation. Add an accepted-consequence note naming the effect, and one criterion or test that exercises metrology with a dated `aiModel`.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`--stat` is deferred although the design calls it small",
+   "description": "The plan put ordering and `--stat` in scope \"only if design shows it is small\". D7 says `--stat` is small and defers it anyway, on a different ground (D4 does not depend on it). The plan entry already records the deferral to #137, so no action is required; the stated reason just differs from the plan's test.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:166"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D5's \"no outside reader\" check covers context-forge only",
+   "description": "The design names Amoeba as an artifact consumer (lines 27, 273), and Amoeba already routes on tool-call fields in the JSON output. The claim that nothing outside squadron reads `verdictSource` rests on a grep of context-forge alone. Inside squadron the new member is safe: only the parser and persistence touch the enum. Worth one line confirming Amoeba does not switch on the two existing values.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:156"
+  }
+ ]
+}

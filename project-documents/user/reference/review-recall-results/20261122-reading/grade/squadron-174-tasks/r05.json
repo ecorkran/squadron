@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Slice design still says \"no assertion on time in tests\", which contradicts Task 22a",
+   "description": "Special Considerations ends with \"There is still no assertion on time in tests.\" Task 22a adds a hard wall-clock assertion, `MAX_LISTING_S = 1.0`. The breakdown is right to add the load test, but the design sentence now misleads an implementer. Update that sentence, or note the superseding task, so the two agree.\n\nThe 1.0 s bound is also tight. 199 measured 0.67 s for 188 runs, and Task 22a seeds \"a few hundred\" files with `include_all=True`. Pick a bound with clear headroom, or state in the task how the bound was calibrated.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Foreground timeout value has no stated source or plumbing",
+   "description": "Task 8 adds \"a typed reader\" for each key but does not say where it lives. Task 15 says to pass `idle_s=foreground_idle_timeout_s` without saying how `_collect_turns` obtains it. The existing 932 pattern in `src/squadron/pipeline/sdk_session.py:327-331` is a private `_background_idle_timeout_s()` method that calls `get_typed_config(..., cwd=...)`. Task 17 also needs a way to make the timeout small in tests, and that is unspecified. Name the reader's home and have Task 15 mirror the 932 pattern, so the value is not hard-coded or read from the wrong cwd.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Tasks 8, 15, 17)"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 11 attaches `finalize` to `RunStateRecorder`, but the design puts it on `StateManager`",
+   "description": "The Task 11 `RunStateRecorder` bullet says \"`finalize` clears `active_step` and `active_item`\". The `RunObserver` protocol (Task 4, D12) has no `finalize`. The design describes `StateManager.finalize` writing the terminal status and clearing the active fields. A junior implementer could add a method to the recorder or the protocol that the design does not call for. Say explicitly that this is the `StateManager.finalize` change.\n\nTask 11 also makes `init_run`'s `owner` a required parameter, as the design signature does. It does not list updating the existing `init_run` callers and tests, other than the prompt-only path in Task 13. Add that to the task.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 11, Task 12)"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 42 mixes validation, new code and a status update",
+   "description": "Task 42 is the final validation, but it also asks the implementer to write a seed helper under `tests/pipeline/` that creates the orphan, stale, unowned, gone and junk runs. It then runs six walkthrough steps and edits the slice design status and slice plan, all under one `docs:` commit. The helper is new test code and does not belong in a `docs:` commit or hidden inside a verification task. Split out a short \"seed helper\" task before the walkthrough, and have Task 42 only run the checks and update status.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 42)"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 3/5 slice",
+   "description": "There are 43 tasks and about 15 commit markers. Several tasks restate design decisions nearly verbatim instead of referencing them, even though the Context Summary says \"the design is the contract\". Examples are the `process_alive` error mapping in Task 9, the D6 failure classes in Task 11 and the interrupt and drain logic in Task 16. This duplication invites drift, as the Task 11 `finalize` issue shows.\n\nCut or merge as follows:\n- Merge Tasks 33 and 34 (one `plan_prune` implementation) and Tasks 36 and 37 (`apply_prune` is a single small function). Drop the separate commit at Task 37.\n- Fold Task 29 (`resolve_pipeline`) into the Task 30/31 `show` group, so that `resolve_pipeline` is tested straight after it is written. Today its unit tests sit two tasks later in Task 31, which breaks the test-with pattern.\n- Fold Task 22a's separate commit into the Task 22 commit.\n- Trim the extras in Task 24 beyond the slice's `fit_widths` list (wide-character width, `render_rows` ANSI checks), unless the criterion \"when piped, never truncates\" needs them. The ANSI check does serve that criterion, so keep it and consider dropping the wide-character test.\n- Replace restated design detail with section references (D3, D6, D7).",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task ordering is sound",
+   "description": "There are no circular dependencies.\n- Task 4 defines `ActiveItem` before Task 8 uses it, and Task 8 says not to redefine it.\n- The liveness module (Task 9) precedes `claim` (Task 11), wait (Task 19), listing (Task 21) and prune (Task 33).\n- The renderer (Task 23) precedes its consumers (Tasks 25 and 27).\n- `scan_runs` and the report glob (Task 32) precede `plan_prune` and `apply_prune`.\n- Task 5 intentionally leaves tests red until Task 6, and the commit is placed at Task 7, where the tree is green.\n- The spike (Task 2) correctly gates Tasks 15 and 16.\n\nCommit markers sit at working, tested points. The only concern is how many there are, covered under proportionality above.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  }
+ ]
+}

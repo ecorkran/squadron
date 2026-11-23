@@ -1,0 +1,576 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 14 gives MemoryError two outcomes: unparsed (Task 14) and tool_failed (Tasks 10\u201311)",
+      "description": "Task 14 line 160 sets the TypeScript token errors to `TypeScriptParseError` and `MemoryError`. That copies length's parse-error tuple (`src/squadron/metrology/snapshot/typescript_length.py:151`). Task 10 line 121 puts anything in `token_errors` into `unparsed_files`. Task 10 line 123 and Task 11 line 139 require a MemoryError during the pass to become `tool_failed` with a WARNING, and design:109 says the same. An implementer following Task 14 produces `unparsed` and fails Task 11's test. Remove MemoryError from Task 14's token errors and let the pass's own handler deal with it.",
+      "file_ref": null,
+      "category": "spec-contradiction",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's \"passes unchanged\" success check fails on an existing assertion",
+      "description": "`test_adapter_declares_its_metrics_and_pb2_conventions` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 line 44 replaces `PythonAdapter.metrics` (`src/squadron/metrology/snapshot/python_adapter.py:105`) with four metrics, and line 43 makes the enum eight, so this assertion fails. Task 2 line 45 says the suite passes unchanged, and the commit at line 46 would be red. Name this assertion as an edit. Task 25 restores the equality, so the break is intermediate, but Task 2 is a commit point.",
+      "file_ref": null,
+      "category": "test-breakage",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_python_length.py:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7 breaks construction sites it doesn't name, so its commit isn't green",
+      "description": "Task 7 line 91 adds `complexity: int` to the renamed dataclass with no default. Positional calls at `test_lengths.py:104-106` and `test_render.py:35-36` pass four arguments and raise TypeError. Line 96 says \"edited only for the rename\", but `test_render.py` isn't a length test and the new argument isn't a rename. Name both files and say what complexity value they pass. Otherwise the commit at line 97 is red.",
+      "file_ref": null,
+      "category": "test-breakage",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_lengths.py:104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The read-and-decode helper can't serve duplication as `_measure_source` behaves today",
+      "description": "Task 7 line 94 extracts the read-and-decode step for Task 10 to reuse, and says length behavior is unchanged. The existing decode branch (`lengths.py:173-178`) counts the file with replacement characters and returns no error. Its OSError and decode warnings say \"for length\" (`lengths.py:168`, `:176`, `:186`). Task 10 line 121 needs an error signal and a WARNING that doesn't name length. Task 7 must define what the helper returns (text or failure) and keep the length branch's replacement count on the length side.",
+      "file_ref": null,
+      "category": "spec-gap",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/lengths.py:156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's function-set check can't be read from the complexity measurement",
+      "description": "Line 110 asks that complexity and function length share the same \"(path, qualified name, start line) set\". Task 8 line 101 gives complexity no rows (no `per_file`, no `over_limit`), and design:52 excludes per-function complexity rows. Function-length rows exist only above a limit (`lengths.py:126-139`). The set has to be compared on the `MeasuredFunction` lists, which the task doesn't say. Without that, SC2 (design:264) has no executable check.",
+      "file_ref": null,
+      "category": "verification-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "RecursionError isn't a TypeScript parse error, so a recursive walk would crash the snapshot",
+      "description": "design:110 says RecursionError \"is already one of the adapter's parse errors.\" That holds for Python (`python_adapter.py:81`), not TypeScript, whose tuple is `(TypeScriptParseError, MemoryError)`. The existing TypeScript walk is an explicit stack (`typescript_length.py:125-138`), but Task 5 (line 74) and Task 14 (line 159) don't require the new walks to be iterative. Require iterative traversal in both tasks, or add RecursionError to the TypeScript tuple and say so.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/typescript_length.py:151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13 says function length is unaffected for two files that length also rejects",
+      "description": "Line 154 says the unterminated-string file and the bad-indentation file are in duplication's `unparsed_files) \"while their function length is unaffected.\" Both fail `ast.parse` in `_extract_functions` (`python_adapter.py:84-85`), and `SyntaxError` is in `_PARSE_ERRORS` (`:81`). Both files are also in function length's `unparsed_files`, as in 400. Write the expectation as \"function length still lists them unparsed, values unchanged.\" design:124 and the failure row at design:108 only hold in the trivial sense that `ast` fails first.",
+      "file_ref": null,
+      "category": "test-expectation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test checks SC10's \"other metrics unchanged\" at the adapter level",
+      "description": "SC10 (design:278) requires that a language past the ceiling gets `duplicated_lines` as `tool_failed` and that \"its other metrics are unchanged.\" Task 11 tests only `measure_duplication`, and Task 26 doesn't cover it. Add an adapter-level test that lowers the ceiling and compares the other measurements with an unlowered run. Also state that `measure_duplication` must read `DUPLICATION_MAX_TOKENS` at call time, not as a default argument, or Task 11's monkeypatch has no effect.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 18 tells the fixture author to replace the whole `<source>` path, which breaks the path mapping",
+      "description": "Line 187 says \"the absolute `<source>` path is replaced with the existing FIXTURE_ROOT_TOKEN.\" `read_fixture` is a plain prefix `str.replace` (`tests/metrology/snapshot/builders.py:92-95`), and the fixture README calls the edit a \"path-prefix substitution\" (`tests/metrology/fixtures/snapshot/README.md:11-14`). If the whole `<source>` becomes `__REPO_ROOT__`, the join with a `filename` like `metrology/x.py` gives `repo/metrology/x.py`, not `repo/src/squadron/metrology/x.py`, and SC6's totals fail. Say that only the repo-root prefix is replaced, so `/src/squadron` stays. Line 188 (Istanbul) references the same rule and needs the same wording.",
+      "file_ref": null,
+      "category": "fixture-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 19 leaves the path mapping unspecified where the existing helper doesn't do what the task assumes",
+      "description": "Line 196 says the joined path goes through `tool_support.repo_relative` and entries that \"resolve outside the repo are dropped.\" `repo_relative` calls `relative_to` on the raw string (`tool_support.py:57-65`) and doesn't resolve `..`. So `/repo/src/squadron/../x.py` comes back as `src/squadron/../x.py` and matches no file. Normalize the joined path first and say so. Line 197 also doesn't say that a `<class>` with no `<line>` children still gets a per-file entry with empty sets. Without that, a zero-statement file falls into `tool_ignored_files`, which contradicts line 234's \"zeros included.\"",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/tool_support.py:57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Marks every line under both windows\" doesn't say which lines, and Task 13's expectation depends on it",
+      "description": "Tokens carry only a start line (lines 119, 121). So a window's lines are either its tokens' start lines, which misses comment-only lines and the interior of multi-line strings, or the span from its first to its last token line, which includes blank lines unless they're filtered. design:169 says `per_file` counts non-blank lines. Task 13 line 153 expects \"the function's lines\" in both files, and the two versions differ in their comments. State which rule applies, including the blank-line filter, and test it.",
+      "file_ref": null,
+      "category": "spec-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "coverage.py collects four tasks' code with no split rule, and likely exceeds the ~300-line limit",
+      "description": "Tasks 16 (key and parser), 19 (Cobertura reader), 21 (`read_coverage` with freshness) and 23 (`coverage_measurements` with its counting text) all write to `snapshot/coverage.py`. Task 30 line 287 requires about 300 lines or less. Tasks 12 and 14 (lines 149, 163) have split rules, and this one doesn't. My estimate is at or above 300 lines once docstrings and the counting strings are counted. Add a split now, for example the Cobertura reader in its own module, and update design:81.",
+      "file_ref": null,
+      "category": "size",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough leaves snapshot records in the real store that nothing removes, and step 10 depends on data no step creates",
+      "description": "The store defines no delete or remove method. `write_snapshot` replaces a record only for the same (project, commit) (`store.py:115-118`, `:422-426`). Steps 1\u20139 write 401 records to the developer's real store, including the scratch vitest project from step 9. Nothing removes them when line 282 deletes the scratch project. Run the walkthrough with an isolated store via `metrology.store_dir` (`src/squadron/config/keys.py:196`), or name the cleanup. Step 10 (line 280) needs a 400-written record. Task 29 says to record its absence and continue, which conflicts with line 282's \"all steps match.\" Create one by snapshotting an older commit from a `git worktree` of the target branch, and read any existing 400 record before step 1, because a 401 snapshot at the same commit overwrites it.",
+      "file_ref": null,
+      "category": "state-cleanup",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:422"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Python token errors don't match length's parse errors",
+      "description": "Length's `_PARSE_ERRORS` includes `ValueError` as well as `SyntaxError` and `RecursionError`. Task 12 line 146 lists only `TokenError` and `SyntaxError`. Task 14 line 160 states the parity rule for TypeScript (a file unparsed for length is unparsed for duplication), and Task 12 doesn't state it for Python. Say the same for Python or explain the difference. I haven't confirmed whether `tokenize` rejects a NUL byte.",
+      "file_ref": null,
+      "category": "spec-gap",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two failure-mode rows don't require the WARNING assertion",
+      "description": "Technical Requirements require each failure-mode test to assert the signal and the outcome. Task 9 line 111 says RecursionError is \"handled the same way,\" which doesn't require the per-file WARNING from design:110. Task 20 line 206 requires a failure for an unreadable report, but not its WARNING. Task 24 line 243 covers failures in general, so the gap is narrow. Name the WARNING assertion in both places.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are written as \"- Commit:\" bullets, not `**Commit**:`",
+      "description": "The markers are plain bullets without bold. Their placement is right: they sit at tested points, after Tasks 2, 4, 6, 7, 9, 11, and so on, and never after every task. If the tooling matches the literal `**Commit**:` form, none will register. Change the form to match.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Each task cites its decision\" is not true",
+      "description": "Eleven tasks cite a decision in their headings (3, 5, 7, 8, 10, 12, 14, 16, 19, 21, 23). Nineteen don't, including Tasks 4, 9, 11, 13, 15, 17, 20, 22, 24, 25 and 26, which implement D2\u2013D6 behavior. Cite the decisions or soften the sentence.",
+      "file_ref": null,
+      "category": "doc-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 is one git command and could be folded into Task 2",
+      "description": "Task 1 is a branch creation and a single check. It's too granular for a task of its own. Fold it into the Context Summary or the first commit's setup.",
+      "file_ref": null,
+      "category": "decomposition",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Every project without coverage logs a WARNING per language, and the cited builder doesn't log",
+      "description": "Task 21 line 218 says each absence logs at WARNING. `tool_support.absent` doesn't log (lines 26\u201330). Only `tool_missing` and `tool_failed` do. So `read_coverage` has to log absences itself. The default unset state, which is the walkthrough's step 1 on squadron, then produces two WARNINGs per snapshot. That's the design's rule (design:225), but the task should say where the call lives and whether `coverage_not_configured` is logged.",
+      "file_ref": null,
+      "category": "observability",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/tool_support.py:26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16's key-occurrence criterion is ambiguous",
+      "description": "\"Appears once in source, in coverage.py, apart from CONFIG_KEYS\" is hard to check. The existing `CONFIG_KEYS` entries use string literals (`src/squadron/config/keys.py:196-204`). Say the `keys.py` entry uses the literal and `coverage.py` holds the constant. `keys.py` should not import from `snapshot/`, since that would make config depend on metrology.",
+      "file_ref": null,
+      "category": "spec-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:177"
+    },
+    {
+      "severity": "PASS",
+      "title": "Python and TypeScript decision-point sets match D2",
+      "description": "Lines 51\u201355 and 72\u201373 match the design's D2 lists (design:135\u2013144). Tasks 5 and 7 cite `_is_counted` (`typescript_length.py:110`) and `_collect_functions` (`python_adapter.py:56`), and both exist as described.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Each implementation task is followed by its test task",
+      "description": "Pairs are 3\u21924, 5\u21926, 10\u219211, 12\u219213, 14\u219215, 16\u219217, 19\u219220, 21\u219222, 23\u219224 and 25\u219226. Task 8's tests come in Task 9 and share its commit (line 115). Tasks 27 and 28 carry their own checks.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Store compatibility claim holds",
+      "description": "`_iter_records` catches `ValueError`, which pydantic's `ValidationError` subclasses. A 400 snapshot record that fails `LanguageSnapshot`'s every-metric validation is skipped with a WARNING, as design:246\u2013247 states.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:186"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load test is required",
+      "description": "The parent architecture and slice restate no performance, memory, latency or throughput NFR. This slice's paths aren't in the load-tier list in `.claude/rules/python.md:56`. So no `tests/load/` task or CI gate is needed.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-slices.code-quality-measurement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria map to tasks, apart from SC2 and SC10",
+      "description": "SC1 \u2192 8, 12, 14. SC3 \u2192 4, 6. SC4 \u2192 11, 15. SC5 \u2192 22. SC6 \u2192 20, 24. SC7 \u2192 20, 24. SC8 \u2192 20. SC9 \u2192 17. SC11 \u2192 26. SC12 \u2192 7, 8. SC2 and SC10 have the gaps noted above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:289"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "spec-contradiction",
+      "raw_category": null,
+      "summary": "Task 14 gives MemoryError two outcomes: unparsed (Task 14) and tool_failed (Tasks 10\u201311)",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-breakage",
+      "raw_category": null,
+      "summary": "Task 2's \"passes unchanged\" success check fails on an existing assertion",
+      "location": "tests/metrology/snapshot/test_python_length.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-breakage",
+      "raw_category": null,
+      "summary": "Task 7 breaks construction sites it doesn't name, so its commit isn't green",
+      "location": "tests/metrology/snapshot/test_lengths.py:104",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "spec-gap",
+      "raw_category": null,
+      "summary": "The read-and-decode helper can't serve duplication as `_measure_source` behaves today",
+      "location": "src/squadron/metrology/snapshot/lengths.py:156",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification-gap",
+      "raw_category": null,
+      "summary": "Task 9's function-set check can't be read from the complexity measurement",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:110",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "RecursionError isn't a TypeScript parse error, so a recursive walk would crash the snapshot",
+      "location": "src/squadron/metrology/snapshot/typescript_length.py:151",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-expectation",
+      "raw_category": null,
+      "summary": "Task 13 says function length is unaffected for two files that length also rejects",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test checks SC10's \"other metrics unchanged\" at the adapter level",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "fixture-correctness",
+      "raw_category": null,
+      "summary": "Task 18 tells the fixture author to replace the whole `<source>` path, which breaks the path mapping",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 19 leaves the path mapping unspecified where the existing helper doesn't do what the task assumes",
+      "location": "src/squadron/metrology/snapshot/tool_support.py:57",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "spec-gap",
+      "raw_category": null,
+      "summary": "\"Marks every line under both windows\" doesn't say which lines, and Task 13's expectation depends on it",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "size",
+      "raw_category": null,
+      "summary": "coverage.py collects four tasks' code with no split rule, and likely exceeds the ~300-line limit",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "state-cleanup",
+      "raw_category": null,
+      "summary": "Walkthrough leaves snapshot records in the real store that nothing removes, and step 10 depends on data no step creates",
+      "location": "src/squadron/metrology/store.py:422",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "spec-gap",
+      "raw_category": null,
+      "summary": "Python token errors don't match length's parse errors",
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:81",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two failure-mode rows don't require the WARNING assertion",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are written as \"- Commit:\" bullets, not `**Commit**:`",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "doc-accuracy",
+      "raw_category": null,
+      "summary": "\"Each task cites its decision\" is not true",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "decomposition",
+      "raw_category": null,
+      "summary": "Task 1 is one git command and could be folded into Task 2",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "observability",
+      "raw_category": null,
+      "summary": "Every project without coverage logs a WARNING per language, and the cited builder doesn't log",
+      "location": "src/squadron/metrology/snapshot/tool_support.py:26",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "spec-clarity",
+      "raw_category": null,
+      "summary": "Task 16's key-occurrence criterion is ambiguous",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:177",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Python and TypeScript decision-point sets match D2",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:50",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Each implementation task is followed by its test task",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F023",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Store compatibility claim holds",
+      "location": "src/squadron/metrology/store.py:186",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "No load test is required",
+      "location": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F025",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria map to tasks, apart from SC2 and SC10",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:289",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-22T20:45:51.796839",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "chars": 27509,
+      "sha256": "0140fe138470636527919ab6cb5da4e5020cfd344e0167cfebbed1754fee4fdd",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+      "chars": 28404,
+      "sha256": "a4463f25f83a4c09f39ff7d41f477bd6608c766850fbc0e187998a0561c66b1f",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/metrology/snapshot_models.py",
+    "src/squadron/metrology/snapshot/lengths.py",
+    "src/squadron/metrology/snapshot/python_adapter.py",
+    "src/squadron/metrology/snapshot/typescript_length.py",
+    "src/squadron/metrology/snapshot/tool_support.py",
+    "src/squadron/metrology/snapshot/take.py",
+    "src/squadron/metrology/snapshot/preflight.py",
+    "src/squadron/metrology/snapshot/render.py",
+    "src/squadron/metrology/snapshot/typescript_adapter.py",
+    "src/squadron/review/git_utils.py",
+    "src/squadron/config/keys.py",
+    "tests/metrology/snapshot/builders.py",
+    "tests/metrology/snapshot/test_python_length.py",
+    "tests/metrology/snapshot/conftest.py",
+    ".gitignore",
+    "tests/metrology/fixtures/snapshot/README.md",
+    "src/squadron/metrology/store.py"
+  ],
+  "searches": [
+    "list_files src/squadron/metrology/**/*.py in .",
+    "list_files tests/metrology/**/* in .",
+    "grep class SnapshotMetric|class AbsenceReason|class LanguageSnapshot|def run_git|def get_config|^CONFIG_KEYS|class SnapshotIntegrityError|class SnapshotPreflightError|def measure_length_metrics|class FunctionLength|def measure_typescript_lengths|def ast_tool_identity|def tree_sitter_tool_identity|def _is\u2026 in .",
+    "list_files project-documents/user/architecture/400* in .",
+    "grep SnapshotMetric\\b|AbsenceReason\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks",
+    "grep FunctionLength|measure_length_metrics|_measure_source|measure_lengths|_extract_functions|_collect_functions|function_length_measurement|_PARSE_ERRORS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks",
+    "grep _iter_records|ls-files|CONFIG_KEYS|FIXTURE_ROOT_TOKEN|def read_fixture|def snapshot_git_repo|pytest-cov|tree.sitter-typescript|tests/load in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks",
+    "grep _iter_records|WARNING|def write_snapshot in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/src/squadron/metrology/store.py",
+    "grep ls-files|pytest-cov|coverage in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks",
+    "list_files tests/load/**/*.py in .",
+    "grep lint_count|function_length|file_length|cyclomatic|tool_ignored|skipped by the tool in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/tests",
+    "grep ALL_METRICS in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/tests/metrology/snapshot/test_take.py",
+    "grep lint_count|type_errors|function_length in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/tests",
+    "grep metrology snapshot|metrology\\.max_function_lines|metrology\\.snapshot_exclude|metrology\\.snapshot_tool_timeout_s in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/docs/COMMANDS.md",
+    "grep ^## |Unreleased in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/CHANGELOG.md",
+    "grep NFR|non-functional|[Pp]erformance|[Mm]emory|[Ll]atency|[Bb]udget|[Tt]hroughput|load test|tests/load in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "grep NFR|non-functional|[Pp]erformance|[Mm]emory|[Ll]atency|[Tt]hroughput|load test|tests/load|real report|captured|fixture in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "grep requires-python|tree-sitter|pytest|coverage in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/pyproject.toml",
+    "grep captured|real (tool|report|output)|parsing rule|parser.*fixture|fixture.*parser in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks",
+    "list_files tests/**/test_{coverage,complexity,duplication,python_complexity,typescript_complexity}*.py in .",
+    "grep     def |^def  in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/src/squadron/metrology/store.py",
+    "grep CONFIG_KEYS|len\\(CONFIG_KEYS\\) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/tests",
+    "grep def default_registry|def snapshot_record_id|def write_snapshot|_write_atomic\\(self\\._record_path|record_location\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-401-tasks/src/squadron/metrology"
+  ],
+  "sections_in_document": 31,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 25,
+    "in_fences": 0,
+    "in_section": 25,
+    "surviving": 25
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 41,
+  "prompt_tokens": 1346634,
+  "cached_tokens": 1139350,
+  "cache_write_tokens": 207262,
+  "completion_tokens": 134451,
+  "reasoning_tokens": null,
+  "duration_seconds": 559.2973937499337,
+  "cost_usd": 0.45573401999999996,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Relocated modules still import `RoundDiff` from `pipeline/`, recreating the review\u2192pipeline cycle",
+   "description": "`RoundDiff` is defined in `screens.py:34`, which T3 deliberately leaves in `pipeline/`. Both modules T3 and T5 move into `review/addressed/` depend on it:\n- `verification.py:17` imports it, and `verify_outcomes` takes it at line 49.\n- `judge.py:21` imports it, and `judge_residue` takes `diff: RoundDiff` at line 94. T5's `judge_residue_core(residue, fresh_findings, diff, ...)` inherits that.\n\nT3's second sub-item calls this import \"the pipeline\u2192review direction\". It is the reverse. After the move, `review/addressed/verification.py` imports from `pipeline/actions/...`, and `pipeline/.../screens.py` and `policy.py` import `review.addressed`. That is the package cycle the slice's Dependency direction section (F002) says the relocation avoids.\n\n`review/resolution.py` also needs a `RoundDiff` and a `compute_round_diff` equivalent. The data flow calls it \"compute_round_diff-equivalent\". The same cycle follows.\n\nAdd an explicit task, before T3, that moves `RoundDiff` (and `compute_round_diff` if resolution reuses it) into `review/addressed/`. Then fix T3's wording. Check the design for the same assumption. T2/T4's \"suite passes unchanged\" would not catch this, because Python tolerates the cycle until an import-order problem shows up.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Overwrite guard is placed on `save_review_file`, but the CLI review path does not use it",
+   "description": "`save_review_result` is the path behind `sq review code <N>`. It builds its own path and calls `path.write_text(...)` directly, for both the JSON and markdown branches. It never calls `save_review_file`. The pipeline action also uses `save_review_result` whenever `slice_info` is present (`pipeline/actions/review.py:253-263`). T12 only changes `save_review_file`, so the case the success criterion names (\"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\") stays unguarded. The Verification Walkthrough step 7 would also fail.\n\n`save_review_result` returns `Path` and has no `None` failure contract, so T12's \"return `None`, do not call `write_text`\" does not translate to it as written.\n\nRevise T12/T13 in one of two ways:\n- Extract one shared archive-then-write helper and call it from both functions.\n- Have `save_review_result` raise on a failed archive.\n\nT13 should test the CLI path, not just `save_review_file`.",
+   "location": "src/squadron/review/persistence.py:291-304"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "T14 gates T12 but is sequenced after T12 and T13, and T13 commits before it resolves",
+   "description": "The slice design's Phase 5 note says the cf archive-scanning check must be \"sequenced before Part D lands\". The breakdown puts it last. Its own text says T12 can't be marked done until T14 resolves, yet T13's commit marker (line 272) sits before T14. A junior following the numbering would implement T12, write T13, and commit with T12 unchecked. If cf turns out to scan recursively, they would then have to redo the filename scheme and the tests.\n\nMake T14 the first task in Part D and remove the \"numbered after but gates\" workaround at lines 253-255 and 293-295.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:253-296"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Part 0 is split far finer than a mechanical move needs",
+   "description": "Part 0 takes 8 of 14 tasks and about half the file, for code that only moves. T2, T4, T6 and T8 each re-run the same suites as a separate task. T1 and T3 are the same operation done twice. T7 is a clean-up of the `__init__` edits that T1 and T3 already touch. Re-running existing tests is a sub-step of the move, not a separate unit.\n\nCollapse it to roughly three tasks:\n- Move models, parsing and verification, plus `RoundDiff` (see the first finding), with their import and export updates and a verify sub-item.\n- Extract the judge core, with a verify sub-item.\n- Run the full suite, lint and typecheck as a final sub-item.\n\nKeep two or three commit markers. The T8 hard-coded baseline (\"2832 passed, 2 skipped\") will go stale. Say \"same pass count as before the move\" instead.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Part A tests may leave one persistence path unexercised, and the git lookup is duplicated",
+   "description": "The success criterion requires `reviewedSha` \"from both the CLI and the pipeline persistence paths\". T11 says the integration test covers `save_review_result` \"or the pipeline review action, whichever is more directly testable\", so one path can go untested. There are actually three call sites:\n- `save_review_result` (CLI, and the pipeline when `slice_info` is present).\n- The pipeline's no-`slice_info` fallback, which calls `format_review_markdown` then `save_review_file` (`pipeline/actions/review.py:265-278`).\n- `save_review_file` itself, which only receives pre-formatted content.\n\nName each path T10 changes and require a test for each. T10 also describes the same `rev-parse HEAD` lookup with the same warn-and-omit handling twice. Make it one shared helper (DRY).",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:202-227"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Archive naming loses earlier archived content, and the success-path WARNING is untested",
+   "description": "T12 archives to `archive/{original filename}`, so a third save overwrites the archive copy made by the second. Hand-written content preserved at the first overwrite is then silently destroyed. This conflicts with the success criterion \"nothing is silently destroyed\".\n\nT12 should say what happens when the archive filename already exists, for example a timestamp or counter suffix. T13 should test that case.\n\nT12 also hard-codes `project-documents/user/reviews/archive/`. The reviews directory is derived from `cwd` (`persistence.py:241-245`), so the archive directory should be derived from the target file's directory.\n\nT13 asserts the failure-path ERROR but never asserts the success-path WARNING that T12 requires.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-273"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers are not in the `**Commit**:` form",
+   "description": "The file uses `- Commit: \\`...\\`` bullets nested inside task items (lines 99, 121, 152, 183, 226, 272). The required form is a plain `**Commit**:` line at the top-level task. A parser or agent reading for `**Commit**:` would find none, and the project rule would then fall back to a commit at the end of every top-level task. That contradicts the intended placement (for example, no commit after T1 or T3 alone). Convert them to `**Commit**:` plain lines and trim them as part of the Part 0 consolidation.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  }
+ ]
+}

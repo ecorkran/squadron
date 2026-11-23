@@ -1,0 +1,82 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tick/asyncio coexistence leaves state ownership and I/O latency undefined",
+   "description": "The design runs the tick synchronously and then yields to the event loop (L78, L59-66).\n- **Event-loop stall:** Steps 3-5 run inside the loop with no `await` points, so WebSocket accept, ping/pong and sends stall for the whole tick. At 20 tps the budget is 50 ms. The document puts 10K-50K entities in the \"comfortable\" range, so the tick could use most of the budget. Client I/O then gets only the leftover sleep time. A client's keepalive timeout can expire if the loop is starved.\n- **Where I/O happens:** Step 5 \"push to clients\" is async I/O. The document doesn't say whether serialization and send happen inside the tick (blocking it) or are handed to a sender task that holds a snapshot.\n- **Thread upgrade path:** L78 calls offloading the tick to a thread \"the upgrade path\", but that breaks \"tick as transaction\" (L39). If the tick runs concurrently with serializers and loggers reading the arrays, the state needs double-buffering or a copy at commit. That is a state-ownership decision the document avoids.\n- **Process upgrade path:** The \"or process\" option conflicts with the \"arrays in server memory\" model. It needs shared memory or a copy.\n\nDecide now whether commit produces an immutable snapshot (a copy or buffer swap) that distribution and logging consume. That is cheap to do early and expensive to retrofit.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Entity ID vs array-index model is unspecified, yet snapshots, deltas, subsets and aggregation all depend on it",
+   "description": "L70 says the server \"assigns entity IDs, allocates space in the state arrays, and removes entities\". It doesn't say how IDs map to array slots, or what happens to slots on removal.\n- **Compaction or tombstones:** Swap-remove compaction or free-list tombstones change what a delta means. The wire format at L80 carries only \"tick number, entity count, array layout descriptor\", with no IDs.\n- **Client identity:** A client rendering instanced meshes needs stable identity across frames. Positional index is not stable if slots are compacted.\n- **Subset indices:** The behavior engine's subset-evaluation contract (100-arch) uses index arrays or masks, which are invalidated by compaction between ticks.\n- **Capacity:** Capacity is preallocated (L84), but there is no policy for exhaustion. Disaggregation (L104) can spawn thousands of entities at once, so this is a real case.\n- **Precision:** The wire format is 12 bytes per entity (L108), which is float32 positions. Internal state is 48 bytes per entity (L92), which is probably float64 x/y/z positions plus velocities. The float64-to-float32 conversion per tick per client is not budgeted anywhere. 2D vs 3D is never stated.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"designed for, not built\" scaling extension points are asserted, not designed",
+   "description": "L112 calls \"ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start\" the key decision. But the document specifies no concrete mechanism for it.\n- **Aggregate representation:** Aggregates are described as statistical entities. There is no definition of where they live. They could be rows in the same arrays, a separate array set, or a separate type. The 100-arch engine expects to see them \"through the same neighbor query interface\".\n- **Per-entity tier state:** Nothing says where an entity's tier or rate is stored.\n- **Selection ownership:** 100-arch says \"the caller decides\" which entities are evaluated. The server never says what component owns that policy, or what input it uses. Observer position is a client concept, but \"nothing flows back from clients\" (L43).\n- **Reduced-rate interpolation:** It is not stated who interpolates (server or client), and wire protocol has no field for it.\n- **Disaggregation:** Spawning individuals from a statistical model needs an RNG, and so conflicts with replay determinism (see the replay finding).\n- **Missing slice:** No slice covers aggregation, tiers, or per-client culling.\n- **Distribution phrases:** \"Region-aware entity management\" and \"protocol-based client communication\" (L35) are listed as distribution enablers. \"Region-aware\" is never described anywhere else in the document.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:100-112"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scaling section is out of proportion for a foundation doc and its numbers are unvalidated",
+   "description": "About a quarter of the document covers 1M-4M+ entity GPU and multi-GPU tiers, merge-front partition strategies and wargaming analogues. None of it maps to a slice or an interface. The stated initial range is 10K-50K entities. Cut it down to a short list of interface constraints:\n- stable IDs\n- subset ticking\n- snapshot immutability\n- per-client view filtering hook\n\nMove the rest to a separate future-scaling note.\n\nThe unvalidated claims in the section are:\n- **Compute at 50K:** \"10K-50K comfortable on a single CPU with NumPy\" at 20 tps with about 100 neighbors each means about 5M neighbor pairs per tick inside a 50 ms budget. That is not obviously achievable with vectorized spatial hashing, and no benchmark backs it.\n- **\"Memory is never the constraint\":** The 24 MB figure covers only state arrays. Materialized neighbor lists (500K \u00d7 100 \u00d7 4-8 B \u2248 200-400 MB per tick) and transient force arrays are the memory pressure in a vectorized design.\n- **Egress at the initial range:** The egress analysis (L108) takes 500K entities as its example. At 50K entities, full snapshots cost 12 MB/s per client (50K \u00d7 12 B \u00d7 20 tps). That already forces culling or deltas inside the \"initial operating range\".\n- **Priority order:** \"Spatial query cost, network egress, raw computation\" are described as separate bottlenecks, but the first and third are largely the same thing.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle events and the \"nothing flows back\" principle are inconsistent with the engine contract",
+   "description": "Step 4 handles \"lifecycle events (spawning, removal, profile changes) queued during the tick\". The document never says who queues them.\n- **No source named:** Clients can't (L43, L68). The engine returns only positions and velocities (L63). Config seeds the initial population. The source is undefined.\n- **Replay:** L90 says logging must capture \"non-deterministic inputs (entity spawns/removals, configuration changes)\". If spawns have no external source, they are deterministic and need no logging. If they do come from tooling or an admin interface, then \"state flows outward\" is not the whole story. It also adds a \"future tooling\" input path that isn't designed.\n- **Removal:** \"Removes entities when appropriate\" (L70) has no criteria.\n- **Conflict with 100-arch:** That document's system interface includes \"register/remove agents\" (100-arch L81) and lists the \"simulation tick loop\" in the engine's scope (100-arch L21). The engine is also stated to be stateless. 300-arch says the engine \"does not manage the entity lifecycle itself\" and the server owns the tick loop. The two documents describe the interface differently. 100-arch also depends on `000-concept` and links `200-arch.world-server-foundation.md`, while this document is `300-arch.worldserver-foundation` and depends on `001-concept`. Reconcile these.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:64"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Replay claim (\"reconstructed tick-by-tick from log + config\") is not backed by a determinism design",
+   "description": "L74 and L90 assume that the same log and config reproduce the simulation. That needs more than a \"deterministic tick function\".\n- **Floating-point reproducibility:** Results can differ across NumPy and BLAS versions, CPU architectures and thread counts. The spatial-hash iteration order is another source.\n- **RNG state:** RNG state ownership isn't specified for the environment seed, spawn placement or disaggregation. The log doesn't capture any of it.\n- **Variable-rate ticking:** Tier assignment depends on the observers. Replay would need to log observer-driven decisions, which contradicts the \"initial state plus non-deterministic inputs\" shortcut. Observers aren't simulation inputs under the current design, so the log can't reproduce them.\n- **Wall-clock timestamp:** Step 1 records a wall-clock timestamp. The sim should use tick-derived time only, so that seasonal time isn't affected by overruns.\n- **Log content:** L74 includes \"significant behavioral transitions\" in the log. Under 100-arch's \"forces, not decisions\" principle (no state machines), behavioral transitions don't exist as events. The server would have to infer them from state, and nothing says how.\n- **Log I/O:** Log writing is in step 5, so synchronous disk I/O would block the tick.\n\nAt minimum, decide on periodic full snapshots as the v1 replay guarantee and treat deterministic re-simulation as a stretch.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:74"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Environment is \"read-only\" but swarm stigmergy and resource depletion require writes",
+   "description": "L72 and the tick order (step 2) treat environment as advancing on its own and being queried read-only. 100-arch defines the swarm archetype as responding to \"environmental stigmergy (reinforced paths)\". It also lists \"threat zones\" as environment input. Stigmergy means agents write into the environment. Resource regeneration implies resource consumption, with depletion triggered by agents.\n- **Missing write path:** No write path exists, and no ordering is given for it (read at step 3, write at step 4?).\n- **Determinism:** Writes would have to be part of the committed, logged, deterministic state.\n- **Slice order:** \"Behavior engine integration\" comes before \"Environment layer foundation\" in the slices. The engine needs environment context from the first integrated tick, so there needs to be a stub environment interface in the earlier slice.\n- **Seasonal state:** It is listed as part of the environment layer (L57, L72) and also given its own late slice. That makes the environment interface boundary unclear.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:72"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Failure handling is deferred for the cases that matter most",
+   "description": "\"Explicit lifecycle\u2026 no silent failures, no undefined states\" (L45) is a principle, but no lifecycle states or failure policies follow.\n- **Tick exceptions:** An exception, or NaN/inf positions, from the behavior engine mid-tick has no stated policy. Options are abort, skip the tick, or roll back (the transaction metaphor implies rollback, but no previous-state copy is kept). If the engine fails after the lifecycle step starts, state may be half-applied.\n- **Overrun policy:** The policy is \"warn and continue\" (L88). It doesn't say whether the loop catches up, drops ticks, or resets its schedule. Catch-up after a long GC or log-flush pause can spiral. With a fixed timestep, simulated time drifts from wall time and the choice affects the seasonal time scale.\n- **Slow clients:** L82 lists \"buffering, dropping frames, or disconnecting\" and picks none. This is the main way a client can affect the tick through `websockets` write buffers. A concrete default is needed, such as a bounded per-client queue with latest-wins and disconnect on N drops.\n- **Shutdown persistence:** L45 says \"persist state on shutdown\", but nothing else describes it. The Envisioned State (L57) has no startup-from-saved-state. Crash recovery isn't mentioned. The concept calls the world \"persistent\", yet the process holds all state only in memory. The periodic snapshots in the logging section could serve, but that link is not made.\n- **Slice impact:** No slice owns any of this.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:45"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"Logging\" conflates three different things; observability and security are absent",
+   "description": "The scope (L21) includes \"logging infrastructure\". The text uses \"logging\" for three distinct things:\n- application/diagnostic logging\n- the simulation event log\n- the replay/state log\n\nThey have different consumers, formats, volumes and failure modes, and need separate treatment. \"Provide metrics to diagnose the bottleneck\" (L88) names no mechanism, such as tick-phase timings, per-client queue depth or entity counts. Observability is described as \"first-class\" (L31), so that is an omission.\n\nWebSocket exposure has nothing on bind address, authentication or origin checks, maximum clients, or message size limits. Even for a v1 with read-only clients, a per-client full-snapshot send is a cheap amplification vector. This is an architectural boundary decision.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:21"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Configuration approach left as \"YAML or similar\"",
+   "description": "The format and validation approach are left open (\"YAML or similar\", \"validated before the server begins\"). Because the config feeds capacity preallocation, seeds, profiles and the tick rate, the decision on a validation layer (such as pydantic or dataclasses with a schema) is load-bearing for the first slice. Name one. Also say whether the config is immutable after load. L47 says it is \"available to all subsystems\", which risks a global mutable object. Config changes are also listed as a replay input (L90), which contradicts \"loaded at startup\".",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:86"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Slice decomposition omits wire protocol and the first-slice end-to-end path",
+   "description": "The binary framing protocol (L80) is a standalone design item with a versioning concern, but it is folded into \"WebSocket client layer\". Entity management is sequenced before engine integration, but it can't be validated without the engine's array contract. A slice for the snapshot/protocol contract that precedes both client and logging work would remove the duplicate serialization decisions between the log format and the wire format. L80 says both use the same serialization, but it isn't set out as a shared component.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:114-128"
+  }
+ ]
+}

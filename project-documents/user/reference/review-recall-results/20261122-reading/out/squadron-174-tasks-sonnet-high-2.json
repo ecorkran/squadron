@@ -1,0 +1,438 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 13 wires `RunHeartbeat`, owner and `init_run` into the wrong function",
+      "description": "The design (line 88) and Task 13 treat `_run_pipeline_sdk` as the single `execute_pipeline` call site. It isn't.\n- `_run_pipeline_sdk` (`run.py:299`) calls `_run_pipeline` (`run.py:373`).\n- `_run_pipeline` calls `init_run` (`:227`), `execute_pipeline` (`:241`) and `finalize` (`:264/267`).\n- `_run_pipeline_sdk` never sees the new run's `run_id`, because `run_id=None` goes in and `init_run` mints it inside `_run_pipeline`.\n- \"Build `RunOwner` before `init_run(owner=...)` in `_run_pipeline_sdk`\" cannot be done as written. Either `owner` is threaded through `_run_pipeline`, or `init_run` moves up.\n- Wrapping the `_run_pipeline` call in `RunHeartbeat` puts `finalize` inside the context. That contradicts design step 4 (\"heartbeat cancelled, then finalize\").\n- `_run_pipeline` is also the prompt-only resume path (`run.py:1201`, `:1259`). Those paths must get neither claim nor heartbeat.\n- Tests call `_run_pipeline` directly (13 call sites in `tests/cli/commands` and `tests/pipeline/test_cli_integration.py`).\n\nTask 13 needs to name where owner, `init_run`, heartbeat enter and exit, and `finalize` go. Task 11's \"success\" (\"executor call sits inside the context manager\") also has to be restated.",
+      "file_ref": null,
+      "category": "code-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:188-268"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 22 commit leaves `sq runs list` and pyright broken",
+      "description": "Task 21 changes `list_run_summaries` to return `RunListing`. `runs.py:27-28` passes the result straight to `render_run_listing(summaries: list[RunSummary])`. Neither `runs.py` nor `run_views.py` changes until Task 25.\n- The Task 22 commit therefore fails the plan's own \"pyright zero errors\" gate and breaks `sq runs list` at runtime.\n- The existing `_list` helper in `tests/pipeline/test_run_listing.py:65-80` is typed `-> list[RunSummary]`, and `_only` and many other 199 tests index the result as a list. Task 22 only mentions updating tests \"that assert running runs are hidden\".\n- Fix: Task 21 adapts the caller minimally, or Tasks 21\u201326 become one commit. Task 22 should also list the `_list`/`_only` update and every other 199 test that uses the list return.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/runs.py:27-28"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 22's I/O-bounds assertion needs injection that Task 21 doesn't add",
+      "description": "Task 22 asserts `process_alive` is \"called exactly 20 times\". `list_run_summaries` currently takes only `load_definition` and `load_report`. Task 21 adds no `now`, `hostname` or `process_alive` parameters. Without them the count can't be observed, and stale versus live can't be deterministic. The plan also never says how the seed helpers in `tests/pipeline/run_listing_support.py` gain owner or dead-PID seeding.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "tests/pipeline/test_run_listing.py:373-381"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing tests that Task 8, 15 and 17 break are not listed",
+      "description": "Task 8 bumps `_SCHEMA_VERSION` to 5 and `_SUPPORTED_SCHEMA_VERSIONS` to `{3,4,5}`. Two existing tests then fail:\n- `test_schema_v4_round_trips` asserts `schema_version == 4` after `init_run` (`:1213`).\n- `test_unsupported_schema_raises` uses `(2, 5)` as the bad versions (`:1217-1219`). Version 5 is now supported.\n\nTask 8 names neither.\n\nTask 15 and 17 have the same problem in `tests/pipeline/test_sdk_session.py`:\n- `test_slow_foreground_turn_has_no_timer` (`:1084-1094`) asserts `get_typed_config` is not called and no timer exists for a foreground turn. It becomes wrong, but Task 17 says only \"932 background-wait tests unchanged\".\n- Other 932 tests patch `get_typed_config` with a blanket `return_value=0.05` (`:1044`, `:1074`, `:1088`). Once foreground reads call `get_typed_config`, foreground reads in those tests get a 0.05 s idle bound and can stall spuriously. Task 17 needs to cover these.\n\nThe `pipeline.background_idle_timeout_s` description at `config/keys.py:122-126` ends with \"Foreground turns get no timer.\" That becomes false and should be updated.",
+      "file_ref": null,
+      "category": "existing-tests",
+      "raw_category": null,
+      "location": "tests/pipeline/test_state.py:1206-1219"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import cycles from where `ActiveItem` and the liveness calls live",
+      "description": "`state.py` imports `executor` at module level (`:25`). The executor imports `state` only lazily inside functions (`executor.py:661`, `:828`, `:1456`), which avoids that cycle.\n- Task 4 defines `ActiveItem` in `state.py`, and Task 5 has `executor.py` use it. A module-level import in the executor creates a cycle.\n- `StateManager.observer()` returning `RunStateRecorder` from `run_observer.py`, which imports `ActiveItem` from `state.py`, is another cycle.\n- Task 11's `claim` calls `assess_liveness`, but `run_liveness.py` imports `RunState` and `RUNNING_STATUS` from `state.py`.\n\nTask 4's success check (\"no import of `executor`\") only covers one direction. The plan should place `ActiveItem` and `RunOwner` in a leaf module, or direct `TYPE_CHECKING` and lazy imports.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 omits threading the observer to the `each` loop",
+      "description": "`_execute_each_step` is reached through `_execute_step`, whose `common` dict is splatted into every step shape (each, fan-out, loop body, once). It is also reached through `_run_each_item`. Task 5 says \"call `observer.item_started` at each `each` item start\" but never says `observer` must be added to those signatures and to `common`. It also doesn't say whether pre-flagged items (`reason is not None`, `:1560`) fire `item_started`. `item.get(\"index\")` may be an int or a string (`:1585` uses `str(item.get(\"index\",\"\"))`), and `ActiveItem.index` is `str | None`. Without `str()`, pydantic raises `ValidationError` in the executor. That would fail the run, since D6 lets non-I/O errors propagate.",
+      "file_ref": null,
+      "category": "under-specified",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:704-753, 1511-1597"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 and 16 don't match how `_read_turn` works",
+      "description": "- `_read_turn` raises `_BackgroundIdleTimeout` on any idle expiry (`:305-306`). Task 15 adds `_ForegroundIdleTimeout` but never says the read must be told which kind to raise.\n- `_read_turn` raises `ProviderAPIError` on `ResultMessage.is_error` (`:315-319`) before it returns. Task 16 says \"an `is_error` result is not re-raised\" without naming the parameter or flag that makes the drain tolerant.\n- `_read_turn` returns on any `ResultMessage`. \"Drain until the dispatch's own result\" needs a loop over `is_own_result`, plus handling of `None` (stream ended).\n\nA junior implementer would have to rediscover each of these.",
+      "file_ref": null,
+      "category": "code-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:288-325"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`init_run(owner=)` signature would break every existing caller",
+      "description": "Task 11 writes `init_run(..., owner: RunOwner | None)` without a default. Current callers pass no owner:\n- `run.py:227`\n- `run.py:653`, the prompt-only path\n- Many test calls such as `mgr.init_run(\"test-pipe\", {})`\n\nIt must default to `None`. Task 11 should say so, and say that `run.py:653` stays `owner=None` explicitly.",
+      "file_ref": null,
+      "category": "existing-callers",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py:236-265"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`claim` failure and item-resume status handling are unspecified",
+      "description": "- Task 11 says `claim` \"raises\" for a live-owned running run but names no exception type. Nothing catches it on the `--resume`, implicit-resume or item-resume paths. `handle_item_resume` catches only `typer.Exit`, so the user sees a traceback.\n- If `claim` runs inside `_run_pipeline`'s `BaseException` handler, it would finalize another process's live run as `failed`. The plan must place `claim` outside that handler, and say which.\n- Item resume operates on `completed` runs (`item_resume.py:186-204` doesn't check status). Task 12 tests claim only from `paused` and `failed`. Add `completed`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:79-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 19 and the existing wait CLI/logging overlap",
+      "description": "- `runs.py:61` already prints `sq runs wait: run {run_id} {outcome}` for any non-zero code. Task 19's stderr line `sq runs wait: run <id> orphaned (process <pid> gone)` duplicates it. The plan doesn't say which one stays.\n- `wait_for_run` already logs a WARNING for every non-COMPLETED outcome (`run_wait.py:76-78`). Task 19's \"ends with a WARNING\" would log twice.\n- `_STATUS_PANEL_OUTCOMES` (`runs.py:32`) doesn't say whether `ORPHANED` prints the panel.\n- Stale text: the `--timeout` help says \"A crashed run stays 'running' forever, so this is the only bound\" (`runs.py:50-51`), and the `run_wait.py` docstring says the same. Neither is in Task 19 or 40.",
+      "file_ref": null,
+      "category": "code-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/runs.py:42-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 25 column order contradicts the UI spec",
+      "description": "The UI spec (slice lines 428-433) orders columns as Run ID, Pipeline, Target, Status, At, Started, Activity. Task 25 lists Run ID, Status, Pipeline, Target, At, Started, Activity. The task also doesn't say what happens to the existing `render_run_listing` pieces:\n- The \"No resumable runs.\" message and its `--all` hint (`:148`).\n- `_RESUME_HINTS` (`:46-50`).\n- The `list --all` help text, which says \"(completed, running)\" (`runs.py:21-23`).\n\nExisting 199 view tests assert these.",
+      "file_ref": null,
+      "category": "spec-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/cli/run_views.py:117-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 29 leaves `resolve_pipeline` under-specified against `load_pipeline`",
+      "description": "- `load_pipeline` first accepts an existing file path (`candidate.is_file()`, `:107-109`) before the name search. \"Refactor `load_pipeline` to call `resolve_pipeline`\" while \"a path argument is reported as not found\" would remove path loading unless the path branch stays in `load_pipeline` ahead of the call. The task only says \"behaviour unchanged\".\n- `PipelineInfo` requires `description` (`:52-58`), but resolution doesn't parse YAML. `_search_dirs` returns bare `Path`s with no `PipelineSource` label, so the source must be derived. The plan says neither.\n- `load_pipeline`'s `project_dir` and `user_dir` kwargs must reach `resolve_pipeline`.\n- `PipelineInfo.params` (Task 27) must have a default, or the only constructor (`loader.py:177`) and any test constructor breaks.",
+      "file_ref": null,
+      "category": "code-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/loader.py:93-124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6 scope omits the test-support module and is large",
+      "description": "`tests/pipeline/run_listing_support.py` (a non-test helper) calls `make_step_callback` three times. `test_state.py` calls it about 30 times, and about 10 other files do too. Task 6 says \"every test\", and the grep gate sits in Task 5's success line, which says it is checked \"after Task 6\". Name `run_listing_support.py` explicitly. Consider splitting Task 6 by file group, since it is the largest mechanical edit in Part A.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "tests/pipeline/run_listing_support.py:93-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 22a asserts wall-clock time that the design says tests don't assert",
+      "description": "Slice line 648 says \"There is still no assertion on time in tests\". Task 22a asserts `MAX_LISTING_S = 1.0`. The slice's NFR (line 505) does call for a load test under `tests/load/`, so the task is justified. One of the two documents should be corrected. The CI claim holds: `pyproject.toml:82` has `testpaths = [\"tests\"]` and `ci.yml:38` runs `uv run pytest`, so no wiring task is needed.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prune's report glob and stray `.tmp` files",
+      "description": "The heartbeat now writes every 30 s through `_write_atomic`, which writes `{run_id}.tmp` and then renames. A `kill -9` mid-write (exactly the crash this slice targets) leaves a `{run_id}.tmp` that nothing removes. Prune deletes only `{run_id}.json` and report siblings (Task 36). A pruned or orphaned run can leave this file behind indefinitely. Task 36 should also remove `{run_id}.tmp`. Also, `batch_report.py:313` already builds `.report.md` as an f-string, so Task 32's check `grep \"report\\.md\" src` showing one definition only passes if that line is rewritten to use the new shared pattern.",
+      "file_ref": null,
+      "category": "state-sequences",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py:218-222"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Orphaned status after a killed resume",
+      "description": "Once `claim` flips a `paused` or `failed` run to `running`, a crash during the resume leaves it `orphaned`. `RESUMABLE_STATUSES` excludes it, so only prune can act on it. The design accepts this and Task 41 opens the issue. No change is needed, but the docs task could mention it.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py:51"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and traceability",
+      "description": "Every functional and technical requirement from the slice maps to a task. The traceability line is accurate. The line references the plan cites for existing code are correct: `state.py:267`, `executor.py:390/427/576`, `run.py:251`, `sdk_session.py:218`. All named test and doc files exist. The spike (Task 2) and `to_thread` audit are correctly placed first. Test-with ordering and commit markers sit at working points, with the exception of Task 22 noted above.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "code-mismatch",
+      "raw_category": null,
+      "summary": "Task 13 wires `RunHeartbeat`, owner and `init_run` into the wrong function",
+      "location": "src/squadron/cli/commands/run.py:188-268",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 22 commit leaves `sq runs list` and pyright broken",
+      "location": "src/squadron/cli/commands/runs.py:27-28",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "Task 22's I/O-bounds assertion needs injection that Task 21 doesn't add",
+      "location": "tests/pipeline/test_run_listing.py:373-381",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "existing-tests",
+      "raw_category": null,
+      "summary": "Existing tests that Task 8, 15 and 17 break are not listed",
+      "location": "tests/pipeline/test_state.py:1206-1219",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Import cycles from where `ActiveItem` and the liveness calls live",
+      "location": "src/squadron/pipeline/state.py:25",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specified",
+      "raw_category": null,
+      "summary": "Task 5 omits threading the observer to the `each` loop",
+      "location": "src/squadron/pipeline/executor.py:704-753, 1511-1597",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "code-mismatch",
+      "raw_category": null,
+      "summary": "Task 15 and 16 don't match how `_read_turn` works",
+      "location": "src/squadron/pipeline/sdk_session.py:288-325",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "existing-callers",
+      "raw_category": null,
+      "summary": "`init_run(owner=)` signature would break every existing caller",
+      "location": "src/squadron/pipeline/state.py:236-265",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`claim` failure and item-resume status handling are unspecified",
+      "location": "src/squadron/cli/commands/run_item.py:79-108",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "code-mismatch",
+      "raw_category": null,
+      "summary": "Task 19 and the existing wait CLI/logging overlap",
+      "location": "src/squadron/cli/commands/runs.py:42-62",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "spec-mismatch",
+      "raw_category": null,
+      "summary": "Task 25 column order contradicts the UI spec",
+      "location": "src/squadron/cli/run_views.py:117-163",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "code-mismatch",
+      "raw_category": null,
+      "summary": "Task 29 leaves `resolve_pipeline` under-specified against `load_pipeline`",
+      "location": "src/squadron/pipeline/loader.py:93-124",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 6 scope omits the test-support module and is large",
+      "location": "tests/pipeline/run_listing_support.py:93-108",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Task 22a asserts wall-clock time that the design says tests don't assert",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "state-sequences",
+      "raw_category": null,
+      "summary": "Prune's report glob and stray `.tmp` files",
+      "location": "src/squadron/pipeline/state.py:218-222",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Orphaned status after a killed resume",
+      "location": "src/squadron/pipeline/state.py:51",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and traceability",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-22T23:41:18.524172",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "chars": 29479,
+      "sha256": "4ed714a1b6693b7f4f2b587f8def1a83b5a8e7e0d6ff7627c49e30542bfc3fd6",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "chars": 52821,
+      "sha256": "061553b264f86433ab7ec2602e6ea27e06f35586c7ad983b1c36e945fd61fb69",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/pipeline/state.py",
+    "src/squadron/cli/commands/run.py",
+    "src/squadron/cli/commands/run_item.py",
+    "src/squadron/pipeline/sdk_session.py",
+    "src/squadron/pipeline/run_wait.py",
+    "src/squadron/pipeline/run_listing.py",
+    "tests/load/test_usage_reader_loop.py",
+    "src/squadron/cli/commands/runs.py",
+    ".github/workflows/ci.yml",
+    "src/squadron/pipeline/executor.py",
+    "src/squadron/pipeline/loader.py",
+    "src/squadron/cli/commands/pipelines.py",
+    "src/squadron/cli/run_views.py",
+    "tests/pipeline/test_sdk_session.py",
+    "tests/pipeline/test_state.py",
+    "tests/pipeline/test_run_listing.py",
+    "src/squadron/pipeline/item_resume.py",
+    "src/squadron/config/keys.py"
+  ],
+  "searches": [
+    "grep on_step_complete|make_step_callback in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "list_files **/{state.py,sdk_session.py,run_wait.py,run_listing.py,run_views.py,loader.py,batch_report.py,run_listing_support.py,test_usage_reader_loop.py} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "grep _run_pipeline\\b|_run_pipeline_sdk|init_run\\(|state_mgr\\.finalize|\\.finalize\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src",
+    "grep _run_pipeline\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests",
+    "grep _run_pipeline_sdk|_run_pipeline\\b in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/cli/commands",
+    "grep run_pipeline_sdk|run_pipeline|def handle_item_resume|state_mgr|StateManager|finalize|status in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/cli/commands/run_item_resume.py",
+    "list_files src/squadron/cli/commands/*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "grep testpaths|tests/load|-m |markers|addopts|ignore in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/pyproject.toml",
+    "list_files .github/workflows/* in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "grep list_run_summaries|WAIT_EXIT_CODES|wait_for_run in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "grep ^def |^class |^[A-Z_]+ =|REPORT_ in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/batch_report.py",
+    "grep report\\.md|REPORT_MD in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src",
+    "grep def |^class |^[A-Z_]+ =|_search_dirs|_find_by_identity in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/loader.py",
+    "grep asyncio.to_thread|to_thread|run_in_executor in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron",
+    "grep _execute_each_step|item_rerun=|async def _execute_step\\b|async def _execute_step_once|def _execute_loop|nested in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/executor.py",
+    "grep except |ProviderError|ActionResult\\(|logger\\.(warning|exception|error) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/actions/dispatch.py",
+    "grep foreground|idle_s=None|_BackgroundIdleTimeout|background_idle_timeout_s in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests",
+    "grep pipeline\\.(background_idle_timeout_s|[a-z_]+) in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/config/keys.py",
+    "grep PipelineInfo\\( in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "grep schema_version|_SCHEMA_VERSION|SchemaVersion|== 4|\"schema_version\": 4 in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests",
+    "grep schema_version.*[34]|SUPPORTED_SCHEMA|\\{3, 4\\} in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests/pipeline",
+    "grep class ScriptedClient|def scripted_session|get_typed_config in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests/pipeline",
+    "grep hostname|def .*io_bound|process_alive|len\\(load_definition|load_report in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/tests/pipeline/test_run_listing.py",
+    "grep ^from squadron\\.pipeline\\.state|^import squadron\\.pipeline\\.state|pipeline\\.state import in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/executor.py",
+    "grep pipeline\\.state|import state in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline",
+    "grep status|state_manager|\\.load\\(|finalize in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks/src/squadron/pipeline/item_resume.py",
+    "grep background_idle_timeout_s in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks",
+    "list_files {tests/pipeline/actions/test_dispatch_session.py,tests/cli/test_run_views.py,tests/cli/test_pipelines_command.py,tests/pipeline/test_loader.py,tests/test_config.py,tests/pipeline/test_executor_each.py,tests/pipeline/test_cli_integration.py,tests/_hermetic.py,docs/PIPELINES.md,docs/COMMANDS.md,README\u2026 in /Users/manta/.config/squadron/reading-20261122/wt/squadron-174-tasks"
+  ],
+  "sections_in_document": 51,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 195,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 50,
+  "prompt_tokens": 2068568,
+  "cached_tokens": 1946744,
+  "cache_write_tokens": 121778,
+  "completion_tokens": 27037,
+  "reasoning_tokens": null,
+  "duration_seconds": 211.66738283308223,
+  "cost_usd": 0.9559780999999999,
+  "cost_basis": "provider"
+}

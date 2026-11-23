@@ -1,0 +1,583 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The `[codex]` in the install hint and marker is swallowed by Rich on every surface that prints it",
+      "description": "The hint `pip install 'squadron-ai[codex]'` and the marker `(needs [codex] extra)` (line 173) reach the terminal through Rich markup strings. Rich treats `[codex]` as a style tag and drops it, so the user sees `pip install 'squadron-ai'` and `(needs  extra)`.\n- `src/squadron/cli/commands/review.py:734` interpolates the exception into `rprint(f\"[red]Error: Review failed \u2014 {exc}[/red]\")`.\n- `src/squadron/cli/commands/doctor.py:78` interpolates `fix_hint` into `[dim]fix: \u2026[/dim]`.\n- `src/squadron/cli/commands/setup.py:72` interpolates the step command into `[bold]$ \u2026[/bold]`.\n- `src/squadron/cli/commands/models.py:113` passes plain strings to `table.add_row`, which renders markup.\n- `src/squadron/cli/commands/auth.py:36` prints `setup_hint` through `rprint`.\n\nOnly `run.py` and `run_dry_run.py` call `escape()` today. The design must require escaping at each of these sites and a test that asserts the literal `[codex]` in rendered output. Without it, Value line 28 and functional requirement line 190 are unmet.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`pip install 'squadron-ai[codex]'` does not fix the documented install methods",
+      "description": "`README.md:41-44` documents `uv tool install squadron-ai` and `pipx install squadron-ai`. Under either, ambient `pip install` targets a different environment (a uv tool venv has no pip), and `sq` keeps failing with the same message. The walkthrough (line 209) only exercises a hand-made venv. The hint should name `uv tool install 'squadron-ai[codex]'` and the pipx equivalent, or the \"exact command\" requirement is unmet for most users.",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`create_agent` ordering is unspecified; as coded, a not-logged-in user never sees the install hint",
+      "description": "`src/squadron/providers/codex/provider.py:32-34` raises `ProviderAuthError(\"No Codex credentials found. \u2026\")` before any runtime check. The Data Flow shows only `create_agent \u2192 resolve_codex_runtime()`.\n- If the credential check stays first, walkthrough step 1 (line 210, fresh venv, no login) and requirement line 190 fail: the user is told to authenticate, not to install.\n- If the runtime check moves first, `tests/providers/codex/test_provider.py:79-88` (`pytest.raises(ProviderAuthError, match=\"No Codex credentials\")`) fails in CI, where the extra is absent.\n\nThe design must state the order and name the test change.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing guidance keeps sending users to the Codex CLI and npm",
+      "description": "`setup_hint` (`src/squadron/providers/codex/auth.py:64`, \"Run 'codex' CLI to authenticate, or set OPENAI_API_KEY\") is changed only in the fallback's \"fails\" outcome. In the \"works\" outcome it still names a binary the bundled install does not put on PATH, and it feeds `provider.py:34`, `auth.py:36,57` and `doctor_checks.py:233`. The design updates the README only (line 174) and leaves these stale:\n- `src/squadron/cli/commands/setup_steps.py:138-141` (\"The Codex CLI enables the codex provider\") and its \"Install Codex CLI\" step.\n- `docs/QUICKSTART.md:126,136-140` (`npm i -g @openai/codex`, `codex auth login`), plus its link to `README.md#using-codex-experimental`, which breaks if that heading changes.\n- `src/squadron/providers/profiles.py:86` (description \"(MCP)\").\n\nThis contradicts the \"no npm\" value at line 25.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D9's per-alias provider resolution breaks an existing model-list test and has no error handling",
+      "description": "`sq models` never resolves profiles today. `tests/cli/test_model_list.py:479-485` pins that an alias with profile `some-custom-profile` is listed with exit 0. Under D9 that alias reaches `get_profile` (KeyError, `profiles.py:168-170`) or `get_provider` (KeyError, `registry.py:22-24`, after `loader.py:23-24` swallows the ImportError). A malformed `providers.toml` would newly break the listing too. The design must say that an unresolvable profile or provider yields no marker and no error. It also makes a list command import the `sdk` and `openai` provider packages.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`applies_effort=True` fails a pinned test the design does not name",
+      "description": "`tests/review/test_review_client.py:1544-1558` (`test_codex_artifact_has_no_effort_key`) takes `CodexProvider().capabilities` and asserts `result.effort is None` and `\"- Effort: backend default\"`. It fails once the capability flips. The class docstring at `tests/providers/test_capabilities.py:51` and the comments at `review/models.py:245` and `review_client.py:258-262` state the old behavior. Line 204 promises the full existing suite passes; this test must be listed as changed.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D8's empty-response error bypasses the existing `EmptyFinalTurnError` recovery path",
+      "description": "`src/squadron/providers/errors.py:34-54` already defines `EmptyFinalTurnError` for exactly this case. `review_client.py:370-386` catches it and sends one recovery turn on the same agent. D8 raises a plain `ProviderError`, so a Codex empty turn fails the review outright, although `CodexAgent` reuses its thread and could take the recovery turn. The existing error also requires integer `reasoning_chars`, `tool_calls_made` and `failed_tool_calls`, which Codex cannot supply without fabricating zeros. The design must either use it and say what it passes, or state that Codex opts out of recovery.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The failure table collapses every error to plain `ProviderError`, ignoring subclasses that callers branch on",
+      "description": "- **Not logged in / token rejected:** specified as `ProviderError`. `src/squadron/server/routes/agents.py:67-75` maps `ProviderAuthError` to 401 and everything else to 502, and `create_agent` already raises `ProviderAuthError` for the same condition.\n- **Rate-limited:** specified as `ProviderError`. `src/squadron/metrology/audit.py:699` catches `ProviderRateLimitError` to pause a campaign.\n- **Timeout:** specified as `ProviderError`. `ProviderTimeoutError` exists and the OpenAI agent uses it.\n\nThe row at line 131 also gives no way to tell an auth `CodexRpcError` from any other RPC error.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout and cancellation mid-turn: interrupt mechanism and post-timeout agent state are not defined",
+      "description": "The rows say \"cancel the turn\" and \"turn handle interrupted\". Interfaces Required (line 54) lists only `AsyncThread.run(...)` returning `TurnResult`, with no turn handle or interrupt call. Whether cancelling the await stops the runtime's turn is not established.\n\nThe `_codex`/`_thread` reset is specified only for `TransportClosedError` (line 129). After a timeout the agent keeps a thread that may still be running a turn.\n\n\"`shutdown()` still runs in `finally`\" holds for `review_client.py:281-282` and `pipeline/summary_oneshot.py:169-170`. It does not hold for daemon-held agents (`core/agent_registry.py:49,118`), which stay registered and receive the next message on that thread. The design should reset or close the client on timeout.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D6 rests on an unverified reading of `usage.last` and leaves `turns` undefined",
+      "description": "The design asserts \"`last` = this turn\" (line 54). I could not check this. In the upstream Codex protocol as I recall it, `last` is the most recent model response, which would under-report an agentic turn that makes many requests. The design should pin the semantics with the real-types or real-run test, or derive per-turn usage from the `total` delta.\n\nIt also says to stamp `metadata[\"turns\"]` (line 55) without a value. `core/usage.py:49-57` and `review/turn_capture.py:84-86` define `turns` as requests sent. A hard-coded 1 would be the fabricated plausible value that `turn_capture.py:69-70` forbids. Either leave it unstamped or define it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `OPENAI_API_KEY` fallback's \"works\" branch is not carried through the new status, logout and login flows",
+      "description": "If the fallback is kept:\n- **Status:** line 86 runs `account()` for any valid `InteractiveLogin` strategy, so a key-only environment spawns the runtime on every `sq auth status`. What `account_summary()` returns when `account.root` is not a `ChatgptAccount` is unspecified.\n- **Logout:** walkthrough step 8 (line 219) expects `\u2717 not authenticated`. With the key exported (step 6 uses `env -u OPENAI_API_KEY`, implying it usually is) the row reads `\u2713 authenticated | OPENAI_API_KEY`.\n- **Login:** `sq auth login openai-oauth` with a valid key today prints \"authenticated (OPENAI_API_KEY)\". Whether it now always opens the browser is unstated.\n- **Tests:** `tests/cli/test_auth.py:66-74` sets `OPENAI_API_KEY`. In an environment with the extra installed it would spawn the real runtime, unless status is specified to skip `account()` when the source is not the auth file.",
+      "file_ref": null,
+      "category": "state-sequences",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq auth status` with a login file present but the extra absent is unhandled",
+      "description": "Validity is file presence, so a user who logged in with the Codex CLI and never installed the extra is \"valid\". Status then calls `account_summary()`, and `resolve_codex_runtime()` raises a `ProviderError`. The row covers only \"timeout or SDK error\". As written this either aborts the whole table (violating \"never \u2026 block the other profiles' rows\") or logs a WARNING on every run. The design should specify no `account()` call and no warning when the runtime is unresolvable.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validity is a hard-coded file path while login is owned by the runtime",
+      "description": "`src/squadron/providers/codex/auth.py:17-18` fixes `~/.codex/auth.json`. The design is itself unsure whether the runtime honors a `CODEX_HOME`-style location (line 232), and nothing establishes that the runtime always stores credentials in that file. If either differs, `sq auth login` reports success, status says not authenticated, and `create_agent` refuses with `ProviderAuthError`. The user can only escape by editing environment or files. The login flow already re-reads `account()` (line 84); the design should say what happens when that succeeds but the file is absent.",
+      "file_ref": null,
+      "category": "state-sequences",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:191"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No hang bound for logout, or for runtime start and login initiation",
+      "description": "`codex.login_timeout_s` bounds only `handle.wait()`. `codex.account_timeout_s` bounds status and post-login confirmation. `sq auth logout` (runtime start plus `logout()`) and the pre-`wait()` part of login (runtime start plus `login_chatgpt()`) have no row and no timeout, although line 82 lists both as spawn sites. A hung runtime blocks the command indefinitely.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:107-109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Generic auth CLI must read a Codex-named config key to satisfy `InteractiveLogin.login`",
+      "description": "`login(..., timeout: float, ...)` is required. The default is `codex.login_timeout_s`, which `--timeout` overrides (line 108). So `cli/commands/auth.py` must read a `codex.*` key for whichever strategy implements the Protocol. That is the provider-identity coupling D3 and line 198 set out to avoid. `account_summary()` takes no timeout, so the two bounds would also live in different layers. Make `timeout` `float | None` and let the strategy resolve its own default.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`pyright clean` and the drift test have no environment in which they hold",
+      "description": "- `.github/workflows/ci.yml:33` runs `uv sync --dev` with no extras, so the real-types test (line 200) is skipped on every leg. \"A drifted SDK surface fails loudly\" never executes.\n- `pyproject.toml:94-98` sets strict mode with `reportMissingImports = true`. The new `login.py` uses SDK types and fails pyright in that environment unless it is suppressed into `Unknown`s.\n- `pyproject.toml:95` excludes `providers/codex/agent.py` from pyright, so \"pyright clean\" says nothing about the port.\n\nThe design must state whether CI gains a leg with the extra (keeping one without, for line 204) and how the pyright exclude changes.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:200-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough steps that do not run as written",
+      "description": "- `sq model list` (lines 37, 73, 173, 205, 211) is not a command. `src/squadron/cli/app.py:55` registers `models`, so it is `sq models list`.\n- Step 1's \"`sq doctor` \u2192 `codex provider` row WARN\" shows nothing. `doctor.py:64-65` hides WARN rows without `-v`.\n- Step 2's row status for \"installed, not logged in\" is never defined. If it is WARN it is hidden too.",
+      "file_ref": null,
+      "category": "operability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:209-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The doctor row and `ExtraRequirement` are specified inconsistently",
+      "description": "- `missing_extra_hint()` uses `resolve_codex_runtime()`, which raises `ProviderError` both for \"package missing\" and \"no binary\" (line 80). Nothing lets the caller tell them apart, so a no-binary state would be labelled as needing the extra.\n- The row shows \"package version\", but `CodexRuntime` is `(source, path|None)` (line 63) and doctor is forbidden its own probing.\n- The mapping from row state to `CheckStatus` is absent.\n- `run_all_checks` feeds `sq setup` (`setup_steps.py:216-266`). A new WARN row becomes an optional setup step printing the pip command, with no `_EXPLANATION` or `_TITLE_MAP` entry. The design does not mention setup.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smaller inaccuracies and ordering",
+      "description": "- `get_provider(\"openai-oauth\")` does not raise the install hint. `registry.py:16-25` returns the provider or raises KeyError; `create_agent` raises the hint.\n- The hedges at lines 25 and 171 about the distribution name are resolvable now: `pyproject.toml:2` is `squadron-ai`.\n- D9 appears before D8.\n- The \"Codex Turn\" failure table also holds login and status rows.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Deferred slice 907 specifies a conflicting `codex` extra",
+      "description": "`project-documents/user/slices/907-slice.optional-dependency-split-serve-and-codex-extras.md:40-44,102-119` (status deferred) defines an intentionally empty `codex = []` extra and an npm-hint binary guard. This design supersedes both. 907 should be annotated so it is not later implemented as written.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality: sized to the plan entry, with two small cuts available",
+      "description": "The mechanisms map to plan requirements, and timeouts as config keys follow the `cf.mcp_timeout_s` precedent. `--timeout` duplicates `codex.login_timeout_s` and nothing requires both. The \"reusable by any later Codex-adjacent feature\" framing (line 181) is speculative but adds no work.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "Parts A, B and C from plan line 79 are all present, including the PATH fallback, #171, the logout command and the smoke test. Nothing assigned is dropped. Exclusions (no token store, no `login_api_key`) match the plan. The added dependency on slice 931 is real and that slice is complete.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:30-44"
+    },
+    {
+      "severity": "PASS",
+      "title": "Auth-model relationship and dependency directions",
+      "description": "`100-arch\u2026md:231-243` reads as quoted. An optional Protocol implemented by one strategy, delegating to the runtime and storing nothing, does not unify auth. Function-local SDK imports keep the provider registrable, as `agent.py:107-110` does today. Providers reading config has precedent in `providers/openai/provider.py:10`.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verified claims about existing code",
+      "description": "- `resolve_codex_binary` has exactly three call sites (`agent.py:131`, `provider.py:38,53`).\n- The stale pyproject comment is at `pyproject.toml:49-51`.\n- Sandbox default `\"read-only\"` and `approval_policy=\"never\"` are at `agent.py:16,137,144`.\n- The effort WARNING is at `agent.py:50-55`; `Effort` values are at `core/models.py:52-56`.\n- `TokenUsage` fields are at `core/usage.py:27-30`; metadata keys at `providers/openai/agent.py:689-690`.\n- `cf.mcp_timeout_s` is at `config/keys.py:356`.\n- `codex-agent` and `codex-spark` are the only `openai-oauth` aliases (`data/models.toml:142-154`).\n- `sq auth login` only validates today (`cli/commands/auth.py:19-36`).",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97-103"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The `[codex]` in the install hint and marker is swallowed by Rich on every surface that prints it",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "`pip install 'squadron-ai[codex]'` does not fix the documented install methods",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:171",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`create_agent` ordering is unspecified; as coded, a not-logged-in user never sees the install hint",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Existing guidance keeps sending users to the Codex CLI and npm",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "D9's per-alias provider resolution breaks an existing model-list test and has no error handling",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "`applies_effort=True` fails a pinned test the design does not name",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "D8's empty-response error bypasses the existing `EmptyFinalTurnError` recovery path",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The failure table collapses every error to plain `ProviderError`, ignoring subclasses that callers branch on",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-131",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Timeout and cancellation mid-turn: interrupt mechanism and post-timeout agent state are not defined",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-128",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D6 rests on an unverified reading of `usage.last` and leaves `turns` undefined",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "state-sequences",
+      "raw_category": null,
+      "summary": "The `OPENAI_API_KEY` fallback's \"works\" branch is not carried through the new status, logout and login flows",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`sq auth status` with a login file present but the extra absent is unhandled",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:126",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "state-sequences",
+      "raw_category": null,
+      "summary": "Validity is a hard-coded file path while login is owned by the runtime",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:191",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "No hang bound for logout, or for runtime start and login initiation",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:107-109",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "Generic auth CLI must read a Codex-named config key to satisfy `InteractiveLogin.login`",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "`pyright clean` and the drift test have no environment in which they hold",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:200-201",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "operability",
+      "raw_category": null,
+      "summary": "Walkthrough steps that do not run as written",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:209-213",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The doctor row and `ExtraRequirement` are specified inconsistently",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Smaller inaccuracies and ordering",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Deferred slice 907 specifies a conflicting `codex` extra",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: sized to the plan entry, with two small cuts available",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:30-44",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Auth-model relationship and dependency directions",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verified claims about existing code",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97-103",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-22T22:15:08.665067",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 66,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+      "chars": 23601,
+      "sha256": "436430dde2d5b6a6091b49d0aceae004fcaac49c0323ac7f4f6d7b4dbdeb13e7",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+      "chars": 19232,
+      "sha256": "57a466b5779999a0b04e7724cdf4d5d62435c0561c5023b4af612841becb2a56",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "pyproject.toml",
+    "src/squadron/providers/codex/agent.py",
+    "src/squadron/providers/codex/provider.py",
+    "src/squadron/providers/codex/auth.py",
+    "src/squadron/providers/codex/__init__.py",
+    "src/squadron/providers/auth.py",
+    "src/squadron/providers/base.py",
+    "src/squadron/cli/commands/auth.py",
+    "src/squadron/cli/commands/doctor_checks.py",
+    "src/squadron/cli/commands/models.py",
+    "src/squadron/providers/registry.py",
+    "src/squadron/providers/loader.py",
+    "src/squadron/config/keys.py",
+    "src/squadron/review/review_client.py",
+    "src/squadron/core/usage.py",
+    ".github/workflows/ci.yml",
+    "src/squadron/providers/profiles.py",
+    "src/squadron/data/models.toml",
+    "src/squadron/review/turn_capture.py",
+    "src/squadron/providers/openai/agent.py",
+    "src/squadron/providers/openai/usage.py",
+    "tests/cli/test_auth.py",
+    "tests/cli/test_model_list.py",
+    "src/squadron/providers/errors.py",
+    "tests/providers/test_capabilities.py",
+    "tests/review/test_review_client.py",
+    "src/squadron/cli/commands/doctor.py",
+    "src/squadron/cli/commands/setup_steps.py",
+    "tests/providers/codex/test_provider.py",
+    "project-documents/user/slices/907-slice.optional-dependency-split-serve-and-codex-extras.md",
+    "tests/providers/codex/test_agent.py",
+    "src/squadron/pipeline/summary_oneshot.py"
+  ],
+  "searches": [
+    "list_files src/squadron/providers/**/*.py in .",
+    "grep codex in .",
+    "list_files project-documents/user/**/*.md in .",
+    "list_files src/squadron/config/*.py in .",
+    "grep codex|Codex in src/squadron",
+    "list_files src/squadron/core/*.py in .",
+    "grep applies_effort|resolve_codex_binary|codex_app_server|AppServerConfig in .",
+    "list_files .github/workflows/* in .",
+    "list_files **/site-packages/openai_codex/__init__.py in .",
+    "grep metadata\\[|\"usage\"|\"turns\"|RunTelemetry|TokenUsage in src/squadron",
+    "grep class Effort|none = |xhigh|minimal in src/squadron/core/models.py",
+    "list_files tests/cli/test_*{auth,doctor,model,setup}*.py in .",
+    "grep codex|Codex|pip install|uv tool|pipx in README.md",
+    "grep codex|len\\(results\\)|== \\d+$|names ==|\\[r\\.name in tests/cli/test_doctor_checks.py",
+    "grep codex|Codex in tests",
+    "grep uv tool|pipx|escape\\(|markup=False in src/squadron",
+    "grep codex|Codex in docs/QUICKSTART.md",
+    "grep except (ProviderError|ProviderAuthError|ProviderTimeoutError|ProviderAPIError|\\(Provider)|ProviderTimeoutError|ProviderAuthError in src/squadron",
+    "list_files src/squadron/cli/commands/doctor*.py in .",
+    "grep Authentication Patterns|does not unify|self-contained in project-documents/user/architecture/100-arch.orchestration-v2.md",
+    "grep get_config|from squadron\\.config|import squadron\\.config in src/squadron/providers",
+    "grep ProviderError|create_agent|shutdown\\(|\\.shutdown in src/squadron",
+    "grep models_app|auth_app|add_typer|name=\"model in src/squadron/cli/app.py",
+    "grep codex provider|_EXPLANATION|DOCS_ANCHOR|len\\(steps\\)|_RECHECK_MAP in tests/cli",
+    "grep create_agent\\(|\\.shutdown\\(\\)|except ProviderError|wait_for|asyncio\\.timeout in src/squadron",
+    "grep def get_typed_config|def get_config|def load_config|def resolve_config in src/squadron/config/manager.py",
+    "grep ProviderRateLimitError|ProviderTimeoutError in src/squadron",
+    "grep step\\.command|subprocess|shlex|rprint\\(.*command in src/squadron/cli/commands/setup.py",
+    "grep sandbox in src/squadron",
+    "grep auth (login|status|logout)|sq auth in .",
+    "grep HOME|codex|auth\\.json in tests/conftest.py",
+    "grep latency|NFR|[Nn]on-[Ff]unctional|startup|optional extra|optional-dependencies in project-documents/user/architecture/100-arch.orchestration-v2.md",
+    "grep status:|Effort|effort|usage in project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
+  ],
+  "sections_in_document": 29,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 24,
+    "in_fences": 0,
+    "in_section": 24,
+    "surviving": 24
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 67,
+  "prompt_tokens": 1318096,
+  "cached_tokens": 1157462,
+  "cache_write_tokens": 160608,
+  "completion_tokens": 44191,
+  "reasoning_tokens": null,
+  "duration_seconds": 415.18606970924884,
+  "cost_usd": 4.5710059,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,38 @@
+{
+ "case": "squadron-401-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criterion 10 says that when `DUPLICATION_MAX_TOKENS` is passed, `duplicated_lines` is `tool_failed` \"and its other metrics are unchanged\". The task at the reviewed commit (line 138) asserts only `tool_failed` plus the WARNING. The correction adds the \"other metrics still present\" assertion. **VALID** (minor): the task leaves out something its parent's success criterion requires. Needs: document alone (design plus tasks). Found by the original review (F004), so a control.",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     6
+    ],
+    "r05": [
+     10
+    ],
+    "r06": [],
+    "r07": [
+     5
+    ],
+    "r08": [],
+    "r09": [
+     3
+    ],
+    "r10": [
+     12
+    ]
+   }
+  }
+ ],
+ "note": "r10 i12 is a bundled finding listing several under-tested criteria; its SC10 bullet names the defect, counted."
+}

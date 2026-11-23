@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+   "description": "Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29 and 30 use `- [ ] Commit: ...`. The convention is a plain `**Commit**: ...` line, never a checkbox. As written, task-checker will check the commits off as work items, and the \"never a commit that only checks boxes\" cadence rule gets muddied. Convert each to a plain `**Commit**: \\`type: summary\\`` line.\n\nThe placement is otherwise good. Markers sit at tested, working points, and the implementation-only tasks (8, 10, 12, 14, 16, 19, 21, 23, 25) correctly roll into the commit of the test task after them.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2 names enum members in value case, but the existing members are uppercase",
+   "description": "Existing members are uppercase with lowercase values, for example `FILE_LENGTH = \"file_length\"` and `TOOL_FAILED = \"tool_failed\"`. Task 2 says to add members `cyclomatic_complexity`, `duplicated_lines`, `coverage_not_configured` and the rest, in lowercase. A junior could add lowercase member names. That would break the naming convention and the references in Tasks 23 and 27 (`SnapshotMetric.\u2026`). State the names as `CYCLOMATIC_COMPLEXITY = \"cyclomatic_complexity\"` and so on, or say \"follow the existing member/value convention\".",
+   "location": "src/squadron/metrology/snapshot_models.py:26-55"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 8 doesn't say the Python adapter's call site changes",
+   "description": "Task 8 renames `measure_length_metrics` to `measure_parse_metrics` and gives it a second `ToolIdentity` parameter. For TypeScript it says that `measure_typescript_lengths` passes the identity through. For Python it only describes building the identity. It never says that `PythonAdapter.measure` passes the identity and includes the returned complexity measurement in its output. Task 8 also has no success check beyond \"400's length tests pass\". That check doesn't prove the complexity measurement reaches the Python snapshot until Task 9. Add a Python call-site bullet matching the TypeScript one.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:99-106"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 1 and Task 30 are thin",
+   "description": "Task 1 is a single `git checkout -b` and could be the first item of Task 2. Task 30 largely repeats the per-commit format, lint, typecheck and test gate. Its unique value is the line-count check, the `snapshot_models.py` enum-only diff check, the unchanged-file checks, and the criteria-to-test mapping. Keep those items and drop the repeated gate. Neither is worth blocking on.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38-40"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "No load test needed",
+   "description": "The slice states no NFR requiring a `tests/load/` test. The memory bound is enforced by `DUPLICATION_MAX_TOKENS`, and Task 11 tests it by lowering the constant. A load-test task or CI gate would therefore be scope creep. The task file is also proportionate: it is one file, and the 30 tasks follow the slice's module table.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:163-167"
+  }
+ ]
+}

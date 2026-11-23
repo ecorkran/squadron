@@ -1,0 +1,585 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`reviewedSha` is stamped from the operator's HEAD, not the PR head",
+      "description": "Lines 162-163 say \"the head sha recorded in the artifact is what was reviewed,\" and line 140 says the comment carries \"the reviewed head sha.\" The code does not do this. `save_review_result` stamps the anchor with `resolve_reviewed_sha(\".\")` (`src/squadron/review/persistence.py:515`), which is HEAD of the process working directory. A `sq review pr 42` run from a checkout on `main` writes `reviewedSha: <main HEAD>` into an artifact whose diff is the PR head. The `sq review resolve` \"what changed since\" diff anchors on that value (`persistence.py:102-115`), so the wrong sha propagates downstream. `save_review_result` (`persistence.py:454-464`) has no parameter for an explicit sha, and the document never names this seam. The PR record's head sha must be passed through it. The existing `--cwd` path has the same defect.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:162-163"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Posting \"the saved review\" would publish debug prompts, injected rules, and raw output to the PR",
+      "description": "Lines 138-141 say \"the saved review is rendered as one PR comment,\" and lines 56-58 say \"never surprise the operator.\" The saved artifact is not a summary. When prompt capture fields are populated, `format_review_markdown` appends `## Debug: Prompt & Response` containing the full system prompt, the user prompt (which will embed the diff and, under this design, the PR body and unresolved threads), \"Rules Injected,\" and the raw response (`persistence.py:320-349`). Degraded reviews also carry `### Raw Response` (`persistence.py:314-318`). Posting that text verbatim exposes the operator's rules and conventions to every reader of the PR. The document does not say which sections are rendered. It also has no size rule: GitHub caps comment bodies at 65,536 characters, and a raw response can exceed that. The document needs an explicit comment render contract (verdict, findings, provenance, reviewed sha; never prompt or raw response), a size policy, and a rule for whether a degraded review posts at all.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:138-141"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The source of rules and conventions is undefined, and it changes with `--no-tools`",
+      "description": "Lines 84-87 put a tool-enabled review in a scratch worktree and say \"a review without tools needs only the fetched ref.\" So a no-tools review runs with cwd set to the operator's checkout. The review path resolves rules from the repository it runs in: `_resolve_review_cwd` anchors `resolve_rules_dir` at the git root of cwd (`src/squadron/cli/commands/review.py:244-258`). `code_review_prompt` also tells the model to \"Apply the project conventions from CLAUDE.md\" (`src/squadron/review/builders/code.py:51-53`). With tools, conventions come from the PR head. Without tools, they come from the operator's current branch. The same command reviews against different rules depending on a flag, and a PR that edits `.claude/rules` or `CLAUDE.md` is judged by different rules in each mode. Lines 109-110 and 174-176 never resolve this.\n\nA second gap is in the no-tools path. `code_review_prompt` emits only \"Run `git diff {diff}`\" instructions (`builders/code.py:23-35`) and does not inject diff text. Without tools the model has no route to the diff, unless `--no-tools` still grants a shell, which I did not verify. The \"needs only the fetched ref\" claim therefore does not hold as written. Pick one source for rules (for example, the PR base via `git show <base>:<path>`), state it for both modes, and specify how a no-tools review receives the diff.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:84-87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The rules degradation the document promises has no mechanism in the code",
+      "description": "Lines 174-176 say an unplanned repository \"runs with the template's rules and language auto-detection only, and says so.\" The code does not do this. Template rules come only from a rules directory (`src/squadron/review/rules.py:175-188`). Language auto-detection is gated on the same directory (`rules.py:234` and `rules.py:244`; `cli/commands/review.py:1049-1050`). With no rules directory, `load_review_rules` returns only manual content, with no template rules, no auto-detection, and no message. The packaged template rules the document assumes do not exist. `resolve_rules_dir` also falls back silently to `~/.config/squadron/rules/` (`rules.py:18-26`), so an unplanned repo would pick up the operator's personal rules without saying so. The document has to scope the packaged rules content and the gating change, and it has to define how the operator-global fallback behaves in unplanned repositories.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:174-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Current State misdescribes persistence outside a planned project",
+      "description": "Lines 106-108 say that outside a planned project \"the rules and persistence steps have no defined behavior.\" That is wrong. `save_review_result` writes to `REVIEWS_DIR` (`persistence.py:23`, `494-495`), a path relative to the process cwd, and calls `mkdir(parents=True)`. In a repository with no `project-documents/`, a review silently creates `project-documents/user/reviews/` in that repository. Lines 171-173 forbid exactly that. The path is also cwd-relative rather than `review_cwd`-relative, so running from a subdirectory writes under the subdirectory. Current State should describe this silent behavior, since the design is framed as a change from it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:106-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The persistence \"target\" is undefined, and the formatter is hard-wired to `SliceInfo`",
+      "description": "Lines 76-79 say persistence takes a target, and lines 133-136 say a PR review saves under a PR-keyed name \"that satisfies the review frontmatter contract without a slice index.\" The document names neither the target type nor the contract. Today `format_review_markdown` takes a `SliceInfo` and emits `slice:` and `project:` from its keys, a heading `# Review: \u2026 \u2014 slice {index}`, and an index defaulting to 0 when none is given (`persistence.py:201-208`, `266`). The filename is built from `slice_index` and `slice_name` (`persistence.py:438`, `497`). Making this generic requires a PR frontmatter schema (which keys identify host, PR, head sha, base), a filename scheme, and a heading format. None of these is specified, and the frontmatter is the contract the 900-band tooling reads. Name the type and its fields.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:76-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR-keyed artifact names fall outside the index-keyed readers without the document saying so",
+      "description": "Metrology's `capture` resolves reviews by `{index}-review.*` (`src/squadron/metrology/capture.py:97`). `resolution_evidence` matches `{index}-review.{type}.*.md` (`src/squadron/review/resolution_evidence.py:105`). `discovery` globs `*-review.*` (`src/squadron/metrology/discovery.py:46`). The document does not say which readers must see PR reviews, which must not, or whether a non-integer prefix is allowed. As written, PR reviews are unreachable by index lookup and enter `*-review.*` discovery, and the document does not say that is intended. Decide the filename, list the readers in and out of scope, and add a test for each.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The digest and integrity checks the document says \"apply unchanged\" are not on this branch",
+      "description": "Lines 135-136 say \"archiving, digest, and integrity checks from the 900-band review work apply unchanged.\" Archiving exists (`persistence.py:354-409`). A search of `src/squadron/review` found no digest or integrity check, and the other \"digest\" matches are in metrology. Lines 209-211 and 226-227 say persistence is sequenced after 917, which makes 917 a prerequisite the document itself treats as not yet landed. Either declare the 917 seams a hard prerequisite in the status and slice sequencing, or define the PR path's own artifact checks.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:135-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Share one new boundary and nothing else\" is false",
+      "description": "Lines 18-19 say the three capabilities \"share one new boundary and nothing else.\" Posting reads the saved review artifact (lines 139-140). `sq pr create` reads the latest saved review (line 144). Both depend on the persistence layout, the PR record, and the frontmatter. The document also adds a persistence target (lines 133-136), changes `sq doctor` (lines 198-199), and adds a CLI group. The overview should name the surfaces the capabilities share.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:17-19"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adapter protocol has no list or edit operation for comments, so idempotent posting cannot be implemented as specified",
+      "description": "Lines 52-55 enumerate the protocol: resolve a PR, fetch its head, read its threads, post a comment, create a PR, identify the operator. Lines 181-182 require that a repeated `--post` update squadron's prior comment, and line 141 says \"updates or supersedes.\" Updating requires listing comments, finding the one carrying squadron's marker, and editing or deleting it. None of those operations is in the protocol. Add them, or the idempotency design cannot be implemented through the adapter.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Updates or supersedes\" is a load-bearing choice left open",
+      "description": "Line 141 says a later invocation \"updates or supersedes rather than stacking.\" These are different designs. Updating in place overwrites the review of an earlier head, so a reader can no longer see what was said about it. Superseding keeps history but needs a way to mark the old comment stale. The head-moved rule at lines 162-163 (\"must say so\") is also unimplemented. Pick one, and specify what the comment shows once the head has moved.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:140-141"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Base moved since resolution\" is a named failure mode with no detection or behavior",
+      "description": "Lines 91-93 list \"base moved since resolution\" among the enumerated, logged, and tested failures, and line 94 requires a test for each. Lines 160-163 discuss only head movement. The document never says when the base is captured, how a moved base is detected, or whether the review refuses, warns, or proceeds. The failure mode cannot be tested as specified.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:91-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create` has no push step, no default base, and no named configuration key",
+      "description": "Lines 194-197 say the PR targets \"the configured integration branch\" and never `main` in that case. Three gaps follow. `gh pr create` requires the head branch on the remote, and the document never says whether squadron pushes, refuses, or prompts. With no integration branch configured, the base is unspecified, and the configuration key is not named. `gh pr create` also prompts for a missing title and body, and the document does not require the explicit non-interactive form (`--title`, `--body-file`, `--base`, `--head`).",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:194-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create` cannot locate its own review provenance before a PR exists",
+      "description": "The provenance section comes from \"the latest saved review\" (line 144). PR-keyed reviews (lines 133-136) are keyed by a PR record, and `sq pr create` runs before any PR exists, so there is no PR key to look up. For a non-slice branch (lines 195-197) there is no slice-keyed review either. The lookup key is undefined for exactly the case the command serves. Key provenance on head sha or branch and specify the lookup, or drop provenance for branches with no review.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:143-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The traceability rule is asserted but has no mechanism",
+      "description": "Lines 62-64 and 233-234 adopt \"assert nothing not supported by an input\" for PR descriptions. The body sections \"how it was verified\" and \"known gaps\" (lines 145-146) are written by a one-shot model call (lines 190-191). The document does not say which input supplies verification claims (the slice tasks, the review verdict, the commit messages), and nothing checks the output against those inputs. Without such a check, traceability is an instruction to the model, not a guarantee. This is the \"step 3: magic happens\" gap. Each section needs a sourcing rule and a test that rejects unsourced claims, or the rule should be weakened.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:145-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The target grammar leaves \"branch name\" ambiguous and the single-remote rule too strict",
+      "description": "Line 156 accepts \"a branch name,\" but one branch can have several PRs (a closed and reopened PR, or fork-owned heads with the same name). The document does not say which is chosen. Lines 157-158 require failing loudly for \"more than one host remote,\" which rejects the common origin-plus-upstream layout where the PR lives on the upstream. Specify which remote is authoritative (origin by default, a flag, or config) and how branch-name matches are disambiguated.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remote and identity parsing already exists in `metrology/identity.py` and is not mentioned",
+      "description": "`src/squadron/metrology/identity.py:67-76` already reads the remote URL through `git config --get remote.origin.url`, with timeout and error handling. `normalize_remote_url` (`identity.py:101-128`) collapses scp, https, and credential-bearing forms to `host/owner/repo`. The adapter's grammar and PR record need exactly this. The document should either reuse it or specify promoting it out of the metrology package. As written, the adapter would duplicate the logic or import a private helper across packages. `_read_git_remote_url` reads only `origin`, so the multi-remote rule would also need extending.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unresolved review threads need GraphQL with pagination, which the document does not mention",
+      "description": "Lines 128-129 put \"unresolved review threads\" into the prompt inputs, and lines 52-53 put \"read its threads\" in the protocol. To my knowledge, `gh pr view --json` does not expose per-thread resolution state. Unresolved state comes from `gh api graphql` against `reviewThreads { isResolved }`, which requires a `first:` argument (maximum 100) and cursor pagination. A PR with more threads than one page would silently drop unresolved ones. Name the call, the pagination, and the truncation rule, and verify against the `gh` version operators run.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:128-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blocking `gh` subprocess calls sit in a path that becomes async",
+      "description": "`run_review_with_profile` is `async def` (`src/squadron/review/review_client.py:60`). The adapter transport is a process per call with JSON parsing (lines 184-188), and the document does not say whether it is sync or async or where it is called from. Lines 151-152 defer a pipeline input that must accept identical inputs. A pipeline action calling a blocking `subprocess.run` for each hosting call, plus blocking git fetch and worktree operations, would stall the event loop. Specify the calling context for each operation and where the adapter runs relative to the event loop.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:184-188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Free-form targets reach `gh` without an argv-safety rule, and the untrusted-text rule relies on delimiters alone",
+      "description": "Lines 156-159 accept free-form targets. A target beginning with `-` could be read as a `gh` flag unless the adapter passes argv as a list and terminates options with `--`. The document should require both and reject leading `-` in the grammar. Separately, lines 177-179 say PR title, body, and threads are \"clearly delimited data \u2026 never as instructions.\" Delimiters are not a boundary. The reviewer has file tools, so an injected PR body can steer what it reads. Specify a length cap, a rule that escapes or rejects the closing delimiter inside the content, and a test that a planted instruction does not change the verdict.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:177-179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The PR grammar and record cannot represent a second host without edits",
+      "description": "Lines 53-55 say \"a second host is a new implementation, not an edit.\" But the typed record has `owner` and `repository` fields (lines 72-73), and the grammar is \"fixed at the adapter boundary\" (lines 158-159). GitLab's nested groups (`group/subgroup/project`) do not fit a two-part `owner/repository`, and its merge requests are addressed through a project-scoped `iid`. Gerrit and Bitbucket have their own addressing. Use a single namespace-and-path string or an opaque host-specific locator, and settle the vocabulary (pull request versus change request) so the protocol does not bake in GitHub's shape.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:53-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One protocol combines the read path with write capabilities",
+      "description": "The review path (\"the adapter resolves, the review engine reviews,\" lines 68-71) needs only resolve, fetch, and head metadata. The single protocol also includes post, create, and identify. Lines 80-83 want reads and writes separated, but one protocol means `sq review pr` depends on write-capable code, and the dry-run and identity-refusal guarantees must be enforced inside each implementation rather than at the type boundary. Split a read protocol from a write protocol, and have the review path accept only the read one.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependency direction for the PR record and the comment renderer is unspecified and could cycle",
+      "description": "Persistence \"keys on that record\" (lines 72-75 and 76-79), so `review/persistence` depends on the adapter's record type. Posting \"renders the saved review\" (lines 138-141), but the renderer's package is not named. If the renderer lives in the adapter, the adapter depends on `review` (for the artifact and `ReviewResult`), which closes a cycle with persistence's dependency on the record. If it lives in `review`, posting depends on review and not the reverse. The document should name the package for the record type, the renderer, and the post operation, and show the import direction.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:138-141"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree lifecycle, concurrency, and cleanup are deferred although they decide whether the design works",
+      "description": "Lines 167-168 defer \"concurrency with the operator's own worktrees, disk use, and cleanup on failure\" to \"the slice-level questions.\" These are load-bearing for the isolated-checkout principle (lines 84-87). Two concurrent `sq review pr 42` runs share the same namespaced fetch ref and collide on a scratch worktree path unless the path is keyed by head sha. `git fetch` and `git worktree add` also write the operator's `.git` (refs, objects, worktree metadata), so \"the operator's checkout is untouched\" (line 86) holds only for the working tree. State the path key, the cleanup contract on failure and interrupt, and how the namespace's refs are garbage-collected.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:164-168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Interactions among save, post, and existing flags are undefined",
+      "description": "Lines 21-22 promise that every existing review flag \"behav[es] as it does today\" for `sq review pr`. Several conflict with a PR target: `--diff` (a PR already defines the range), `--files` (resolved against the scratch tree or the checkout?), and `--no-save` combined with `--post` (posting renders the saved artifact, which will not exist). The document also does not say whether `--post` runs after a failed save (`cli/commands/review.py:377-378` exits 1 for a failed save) or on a degraded review (verdict UNKNOWN). \"Non-zero exit\" (line 93) has no code mapping. Define each conflicting combination and its exit code.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:21-22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: one initiative bundles a model-composed body, idempotent posting, and worktree isolation",
+      "description": "Six slices ship together, covering a new protocol, a persistence target, a scratch-worktree lifecycle, idempotent comment editing, a model-composed body with a section contract, doctor checks, and slash-command parity. The document requires that the CLI prove its shape before a pipeline input (lines 151-152) but applies no such sequencing to posting or PR creation. Candidates to cut or defer: (1) ship `sq pr create` with a deterministic body (commits, slice link, reviewed sha, provenance) and defer model composition, the least verifiable part (see the traceability finding); (2) ship `--post` as a dry run plus a single post that refuses when a marker already exists, and defer in-place update until the list and edit operations are specified; (3) ship `sq review pr` without tools first, which removes the worktree lifecycle, but only after the rules and diff-injection issues above are resolved. Record each cut as a named decision in the document.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:201-218"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR scope has no size budget for PR-scale diffs",
+      "description": "A PR is often far larger than a slice. The review path passes the range to the model, which runs `git diff` itself (`builders/code.py:23-35`). The only pre-flight is that the range is non-empty (`cli/commands/review.py:1025-1030`). The document states no size check, chunking, or context budget. Lines 177-179 invoke \"the same truncation discipline as file injection,\" but the code builder injects no file contents, so that discipline is not visible in the code path this design extends. State the performance and context-budget assumptions and the behavior when a PR exceeds the model's context.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:124-131"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`reviewedSha` is stamped from the operator's HEAD, not the PR head",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:162-163",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Posting \"the saved review\" would publish debug prompts, injected rules, and raw output to the PR",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:138-141",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The source of rules and conventions is undefined, and it changes with `--no-tools`",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:84-87",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The rules degradation the document promises has no mechanism in the code",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:174-176",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Current State misdescribes persistence outside a planned project",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:106-108",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The persistence \"target\" is undefined, and the formatter is hard-wired to `SliceInfo`",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:76-79",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "PR-keyed artifact names fall outside the index-keyed readers without the document saying so",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133-136",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The digest and integrity checks the document says \"apply unchanged\" are not on this branch",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:135-136",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Share one new boundary and nothing else\" is false",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:17-19",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The adapter protocol has no list or edit operation for comments, so idempotent posting cannot be implemented as specified",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Updates or supersedes\" is a load-bearing choice left open",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:140-141",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Base moved since resolution\" is a named failure mode with no detection or behavior",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:91-93",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "`sq pr create` has no push step, no default base, and no named configuration key",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:194-197",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "`sq pr create` cannot locate its own review provenance before a PR exists",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:143-146",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The traceability rule is asserted but has no mechanism",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:145-146",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The target grammar leaves \"branch name\" ambiguous and the single-remote rule too strict",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Remote and identity parsing already exists in `metrology/identity.py` and is not mentioned",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:156-159",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Unresolved review threads need GraphQL with pagination, which the document does not mention",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:128-129",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Blocking `gh` subprocess calls sit in a path that becomes async",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:184-188",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Free-form targets reach `gh` without an argv-safety rule, and the untrusted-text rule relies on delimiters alone",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:177-179",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The PR grammar and record cannot represent a second host without edits",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:53-55",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "One protocol combines the read path with write capabilities",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:52-55",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency direction for the PR record and the comment renderer is unspecified and could cycle",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:138-141",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Worktree lifecycle, concurrency, and cleanup are deferred although they decide whether the design works",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:164-168",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Interactions among save, post, and existing flags are undefined",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:21-22",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Proportionality: one initiative bundles a model-composed body, idempotent posting, and worktree isolation",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:201-218",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "PR scope has no size budget for PR-scale diffs",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:124-131",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-22T23:00:19.186037",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+      "chars": 16392,
+      "sha256": "81a81c1e8a8fc73709aaebdd24a181a2e6c8fdb86a3214f6750b4b5bd286f01f",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/squadron/review/persistence.py",
+    "src/squadron/cli/commands/review.py",
+    "src/squadron/metrology/identity.py",
+    "src/squadron/review/builders/code.py",
+    "src/squadron/review/rules.py",
+    "src/squadron/metrology/discovery.py",
+    "src/squadron/metrology/capture.py"
+  ],
+  "searches": [
+    "list_files src/squadron/review/**/*.py in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch",
+    "grep SliceInfo in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep \\bgh\\b|subprocess.*gh|api\\.github|github\\.com in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep merge-base|merge_base in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep digest|sha256|integrity|verdict_valid|failure artifact in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron/review",
+    "grep class SaveTargetT|SaveTargetT\\s*=|TypeVar\\(\"SaveTargetT\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep jail|tool_root|allowed_roots|workspace_root in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep \"diff\"\\s*:|inputs\\[[\"']diff|\\[\"diff\"\\]|\"diff_exclude_patterns\" in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep no_tools|no-tools in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron/cli/commands/review.py",
+    "grep def _resolve_review_cwd|def load_review_rules|def _resolve_rules_dir|def extract_diff_paths in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep def resolve_rules_dir|def get_template_rules in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep review\\\\\\.|-review\\.|REVIEWS_DIR|glob\\(.*review in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep digest|integration_branch|integration-branch in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron",
+    "grep def run_review_with_profile|async def run_review_with_profile in /Users/manta/.config/squadron/reading-20261122/wt/squadron-380-arch/src/squadron"
+  ],
+  "sections_in_document": 8,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 27,
+    "in_fences": 0,
+    "in_section": 27,
+    "surviving": 27
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 27,
+  "prompt_tokens": 516869,
+  "cached_tokens": 457863,
+  "cache_write_tokens": 58980,
+  "completion_tokens": 60599,
+  "reasoning_tokens": null,
+  "duration_seconds": 269.3680654577911,
+  "cost_usd": 0.047558130000000004,
+  "cost_basis": "provider"
+}

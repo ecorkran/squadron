@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 8.4 byte-identity check has no git baseline",
+   "description": "Task 8.4 proves \"populated sections stay byte-identical\" with `git diff`. The document written in 8.1 is a new, untracked file, and the first commit that includes it is at the end of 8.6 (line 351). `git diff` prints nothing for untracked files, so the check passes vacuously and SC6/SC8's \"survives untouched\" clause is not demonstrated. Move the commit point to after 8.1 (or stage the file there) so 8.4 diffs against a recorded baseline.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Scratch-copy setup for 8.2 and 8.3 is not executable as written",
+   "description": "Task 8.2 says only \"on a scratch copy\" and leaves three things a junior implementer must guess:\n- **Existing concept:** 8.2 runs after 8.1, so a copy of the tree contains `000-concept.squadron.md`. The flow would then hit re-run semantics (report, default stop) instead of the decline-path fresh write that SC5 needs. The copy must exclude that file.\n- **Project name:** precondition 3 (Task 2.1) is a terminal stop when no cf registration resolves a name. The task does not say how a copy at a different path resolves `squadron`; I did not verify how cf registration behaves for a copied directory.\n- **Guide path in 8.3:** \"point the check at it\" has no mechanism, because the flow reads the guide from a fixed path. Running the grep by hand tests grep, not the flow's stop message that SC7 requires.\n\nFix: state the scratch recipe once, covering the concept file excluded, the graph and guide tree present, and how the name resolves. Then run 8.3 inside that same scratch tree with the heading renamed in its guide copy.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Four success-criterion clauses are authored but never checked on output",
+   "description": "Each gap below is one added line in an existing task, not a new task:\n- **SC4 (dropped topics absent from the document):** Task 4.1 authors the rule, but 8.1's checklist never inspects the written concept for why-now, audience-evolution or methodology content or gap markers. Add that check to 8.1.\n- **SC8 (mechanical refillability on augment):** 8.4 re-runs against the 8.1 document, where both questions were answered, so no `[GAP: ...]` section exists to refill. Run augment once against the 8.2 decline-path document, which has them.\n- **SC10 (every `[INFERRED]` sentence satisfies the rule):** 8.1 confirms only that the inferred-claims line exists. Add a check that body markers match the provenance list and each cites a named graph field.\n- **SC3 (absences reported as observations, not gaps):** squadron has every signal, so no run exercises this. Removing `tests/` in the 8.2 scratch copy covers it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-336"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items, not plain `**Commit**:` lines",
+   "description": "All eight markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: ...` sub-items, and 9.3's final commit has no marker at all. Convert them to plain `**Commit**:` lines.\n\nPlacement also needs a look. The commits after Tasks 1\u20136 land on a skill file whose `concept` argument routes to an empty or partial section, so they are not working, tested points. Three would do: after Task 7 (flow fully authored and text-verified), after 8.1 (which also fixes the baseline finding above), and after 8.6.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 7.4 edits the same paragraph Task 1.1 rewrites",
+   "description": "The \"slices 363 and 364\" sentence at line 393 sits directly after the \"any argument other than the comprehension default is unrecognized\" rule at line 392, which Task 1.1 must rewrite. Deferring the sentence fix to 7.4 leaves the file contradicting itself across six commits. It also makes 7.4's success line (\"no other comprehension-flow text changed\") false, since 1.1 already changed that section. Merge 7.4 into 1.1.",
+   "location": "commands/analysis/understand.md:392-393"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Repeated premise checks and Python tooling on a no-Python slice",
+   "description": "- **Repeated checks:** `grep -c '^## User-Provided Concept'` is run in 0.2 and again in 6.3. The `squadron-ai` project name is checked in 0.2 and 2.2. The filesystem signals are checked in 0.2 and 3.4. All three are already recorded in the Verified anchors table.\n- **Suggested cuts:** move the `cf get` name check into 0.2 and drop 2.2 and 6.3. Fold 1.2 and 4.2 into their parents' success lines.\n- **Ruff in 9.3:** `uv run ruff format .` (line 371) is a mutating run after 8.6 has already verified the changed-file set with `--check`. Drop it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:120-124"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 0.1 asserts the integration target instead of reading it",
+   "description": "The task states \"integration branch is unset; target is `main`\" as a fact and hardcodes `main` in the checkout. The project convention is to read `cf config get git.integration_branch` before starting work. Replace the assertion with that read.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:59-63"
+  }
+ ]
+}

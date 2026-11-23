@@ -1,0 +1,89 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Part 0 relocation adds the review\u2192pipeline import F002 forbids, plus a likely circular import",
+   "description": "The design moves the core so that `review/` never imports `pipeline/` (slice lines 141\u2013155). The moves as written break that rule twice:\n- **T1 (task lines 78\u201392)** moves `models.py` \"verbatim\". Line 14 is `from squadron.pipeline.models import ActionResult`, and `read_findings` (models.py:93) takes an `ActionResult`. The moved file would import `squadron.pipeline.models`, which loads the whole `squadron.pipeline` package (`pipeline/__init__.py:15-35` pulls in actions, resolver, sdk_session and steps).\n- **T3 (task lines 109\u2013113)** keeps `verification.py:17` `from squadron.pipeline.actions.findings_addressed.screens import RoundDiff`. The task calls this the \"pipeline\u2192review direction\", but a file under `review/addressed/` importing `pipeline.actions` is review\u2192pipeline.\n- **T5** has the same problem: `judge_residue_core(..., diff)` needs `RoundDiff` (judge.py:21).\n\nThis is also a real import cycle. Importing `squadron.review.addressed.verification` loads `screens`. That first runs `pipeline/actions/findings_addressed/__init__.py`, which (until T7) imports `verify_outcomes` back from the half-loaded `review.addressed.verification`. After T7, `review/addressed/__init__.py` exports `verify_outcomes`, so any import of `review.addressed.*` goes round the same loop. T2/T4 won't catch it, because the 305 tests import the pipeline package first. It shows up in file 2 when `review/resolution.py` imports `review.addressed` first.\n\n**Fix:** move the `RoundDiff` dataclass into `review/addressed/` and leave `compute_round_diff` in `screens.py`. Keep `read_findings(ActionResult)` in the pipeline layer, or make it accept a list of finding dicts. Then add a check, for example a test that imports `squadron.review.addressed` in a fresh interpreter and asserts no `squadron.pipeline` module was loaded.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T5's extraction moves the model call out from under the mocks in the 305 tests; T6's \"pass unchanged\" check then fails",
+   "description": "Both `test_findings_addressed_judge.py:32` and `test_findings_addressed_e2e.py:27` patch `\"squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile\"`. T5 (task lines 124\u2013141) moves the `run_review_with_profile` call into `review/addressed/judge.py`. After that, patching the pipeline module no longer intercepts it. Five judge tests (lines 176\u2013248) and three e2e tests (lines 190, 253, 297) would then fail, or try to reach a real provider.\n\nT6 (lines 149\u2013151) says that if any test needs rewriting, \"stop and reconcile with the design\", so following the plan as written stops the work. T1 also already rewrites imports in the four test files (lines 89\u201391), which contradicts the \"unchanged\" wording of T2, T6 and success criterion line 377.\n\n**Fix:**\n- In T5, name the patch-target problem and choose a remedy: either update `_JUDGE_TRANSPORT` in both files (and allow that edit in T6), or have the wrapper pass the model-call function into the core so the existing patch still works.\n- Spell out that import-path and patch-target edits are allowed under \"unchanged\".",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The overwrite guard goes into `save_review_file`, which `sq review code` never calls",
+   "description": "T12 (lines 233\u2013256) puts the archive step only in `save_review_file`. Every CLI review command saves through `save_review_result` instead: `cli/commands/review.py:451, 523, 610, 746` (code review at 746). That function writes directly with `path.write_text` (persistence.py:300, 303) and never calls `save_review_file`. The pipeline review action also uses `save_review_result` whenever `slice_info` exists (`pipeline/actions/review.py:253-263`). It only falls back to `save_review_file` when there is no slice info (lines 264\u2013278).\n\nSo success criteria line 364 (\"Re-running `sq review code <N>` \u2026 archives the prior content\") and line 372 (F003, fail-closed) stay unmet for the path the slice is about. The design text names `save_review_file` too, but the plan has to fit the actual code.\n\nKnock-on effects:\n- `save_review_result` returns `Path` and has no `None` contract, so its four CLI callers need the abort case handled (print the content, exit non-zero). The slice requires \"the review content is still printed to the terminal\" (line 328); T12 doesn't mention it.\n- `tests/cli/test_review_save.py:117-127` (`testsave_review_result_overwrites_existing`) will start producing an archive copy and should be updated to assert it.\n\n**Fix:** put the guard in a shared helper used by both save functions, and test it through `save_review_result`.",
+   "location": "src/squadron/review/persistence.py:257-314"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T14 (cf archive-scanning check) comes after Part D's commit",
+   "description": "The slice requires the cf `archive/` check \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme\" (slice lines 381\u2013383). In the plan, T14 comes after T13, and T13 carries the commit `fix: archive prior review content\u2026` (line 272). The plan relies on a \"don't mark T12 done\" note (lines 253\u2013255, 293\u2013295) instead of the order of tasks. A junior agent working top to bottom will commit Part D before the answer is known. Move T14 ahead of T12 and drop the workaround notes.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The archive path is relative to the process's working directory, and a second archive overwrites the first",
+   "description": "- **Wrong location:** T12 line 236 hard-codes `project-documents/user/reviews/archive/{original filename}`. `save_review_file` resolves its target as `Path(cwd) / _REVIEWS_DIR` (lines 241\u2013245). A literal relative path would land under the process's working directory, not `cwd`. In tests that pass `cwd=tmp_path` (test_persistence.py:235-259), archives would be written into the real repo. Use `path.parent / \"archive\"`.\n- **Second overwrite destroys the first archive:** with the plain original filename, re-review #2 replaces `archive/X.md`, which holds review #1's hand edits. That is exactly the silent loss success criterion line 365 forbids (\"nothing is silently destroyed\").\n  - Add a non-colliding suffix, such as a timestamp or `-a{n}`, chosen to fit T14's outcome.\n  - Add a T13 case that overwrites twice and checks both archived versions survive.",
+   "location": "src/squadron/review/persistence.py:241-249"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T5 doesn't account for model resolution needing the template first",
+   "description": "`_resolve_model(context, template.model)` needs the template loaded first (judge.py:106-116). T5 puts template loading inside `judge_residue_core` but has the wrapper resolve the model before calling the core. The wrapper therefore has to load the template too, or the core needs a different signature. T5 should also say what stays in the wrapper:\n- the `if not residue` early return (needed so `test_empty_residue_produces_zero_transport_calls` makes no call);\n- the `ModelResolutionError` \u2192 `JudgeLegResult(failed=True)` mapping.\n\nIt also omits updating `policy.py:13`, which imports `JudgeLegResult` from the pipeline judge module that T5 moves it out of.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:103-119"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "T10 doesn't say which working directory the SHA comes from, and the pipeline path would stamp twice",
+   "description": "T10 (lines 203\u2013211) calls `run_git([...], cwd=...)` inside `save_review_result`, but that function has no `cwd` parameter. It writes relative to the process's working directory or `reviews_dir`. The pipeline action calls `save_review_result` without passing `context.cwd` (review.py:255-262), while the code review itself runs in `review_cwd` (cli review.py:722).\n\nThe plan should state where the SHA is resolved and whether the signature changes. If it changes, all five callers need updating. T10 should also note that the pipeline action's `slice_info` branch already goes through `save_review_result`. Only the fallback branch (review.py:265-271) needs separate resolution; doing it in both places would resolve HEAD twice and log the warning twice.",
+   "location": "src/squadron/review/persistence.py:257-267"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Too many tasks for the slice's size",
+   "description": "- The slice is rated 3/5 with Part 0 described as \"mechanical\", yet Part 0 takes 8 tasks. Four of them (T2, T4, T6, T8) are run-the-suite steps of effort 1/5, and T7 is a 1/5 export and docstring task.\n- Fold each verification run into its move task (T1+T2, T3+T4, T5+T6), and merge T7 into T8. That gives about 4 Part 0 tasks with the same commits.\n- Across both files the plan has 40 tasks for a 3/5 slice. Trimming Part 0 here is the clearest cut.",
+   "location": "unverified"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "T14's first source doesn't exist in this repo",
+   "description": "T14 line 281 says to consult `ai-project-guide/tool-guides/context-forge/`, but nothing matches `**/tool-guides/context-forge/**` in this repo. The fallback (ask the Project Manager) still works. Give the guide's real location, or say it is external.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "T8's baseline count can't be checked and doesn't fit that point in the plan",
+   "description": "\"2832 passed, 2 skipped\" (line 179) appears in no 305 document I found. \"Plus this slice's later additions\" doesn't apply at T8, because nothing has been added yet. Use \"same count as recorded before T1\".",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Commit markers are bullets rather than `**Commit**:` lines; the count wording in the Context Summary is off",
+   "description": "- The commit markers (lines 99, 121, 152, 183, 226, 272) are written as `- Commit:` bullets. They aren't checkboxes, and each sits at a tested point, which is fine.\n- Line 55 says \"Two failure-closed rules covered in this file\" but lists only F003.",
+   "location": "unverified"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "T9's test comes after T10, not straight after T9",
+   "description": "The unit test for T9 is in T11, after T10. Testing the two together is reasonable, so this is not a defect.",
+   "location": "unverified"
+  }
+ ]
+}

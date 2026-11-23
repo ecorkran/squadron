@@ -1,0 +1,131 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Snapshot identity cannot deliver the determinism guarantee, and the record key is undefined",
+   "description": "Line 33 promises the same value \"on the same commit with the same tool versions.\" Line 37 lists what identifies a snapshot, and line 59 adds per-metric tool versions. The identity still omits inputs that change the value:\n\n- **Environment.** `pyproject.toml:95-96` runs pyright in strict mode with `reportMissingImports = true`. The type-error count therefore depends on which third-party packages are installed, not on the pyright version. The installed environment is not part of the identity.\n- **Materialization.** Line 71 says \"a project can be measured at any commit\" but not how. A git worktree, `git archive` (which drops gitignored files that the exclusion rules assume exist), and a checkout (which dirties the tree) produce different file sets.\n- **The adapter's own counting rules.** Line 53 leaves length undefined. If squadron changes whether docstrings count toward function length, the value changes with no tool version change, so the rule at line 59 never fires. The adapter needs a metric-definition version.\n- **Record key.** Nothing says whether a re-run on the same commit overwrites the record or adds a second one. Overwrite loses the earlier measurement taken under different tools. Adding a second record double-counts in rollups.\n\nAdd the environment fingerprint, materialization method and metric-definition version to the identity. Define the record key and re-run semantics before the keystone slice starts.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33-37"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Doesn't modify the measured repository\" is contradicted by the tooling the design implies",
+   "description": "- CI runs `uv sync --dev` (`.github/workflows/ci.yml:33`), which creates `.venv` inside the repo. pytest writes `.pytest_cache` and `__pycache__`, and coverage adds `.coverage`. None of this is mentioned.\n- The baseline command (line 25) includes an audit. The audit's preflight refuses a dirty tree for variance series (`src/squadron/metrology/audit.py:374-386`), and the audit writes its own output under `analysis/` in the repo, which is exempted from that check (`audit.py:296-303`). The one command that claims not to touch the repo therefore dirties it. It also applies two dirty-tree policies: the snapshot's \"refuse or mark,\" and the audit's \"refuse.\"\n- Review files are written under `project-documents/user/reviews/` inside the repo (`src/squadron/review/persistence.py:32`). They are stamped with `reviewedSha` = HEAD whether or not the tree is dirty (`persistence.py:172-205`). That is the silent HEAD attribution line 49 forbids. Pipeline-attached snapshots at merge (line 95) will routinely see dirty trees.\n\nRedirect the venv and caches out of the repo, or run in a throwaway copy. Pick one dirty-tree policy for the baseline command. Make commit attribution dirty-aware, or stop relying on `reviewedSha` for ingest.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:49, 71, 25"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"no config edits\" adoption goal fails for repos without a git remote",
+   "description": "`derive_project_id` (`src/squadron/metrology/identity.py:131-155`) raises `MetrologyIdentityError` unless the repo has `remote.origin.url` or a recorded `metrology.project_id` in `.squadron.toml`. The error message tells the user to run `sq config set ... --project`, which writes into the project's config. The remote lookup only checks `origin` (`identity.py:76`), so a repo whose remote has another name also fails.\n\n\"Cheap\" (line 41) also means four LLM audit runs on a possibly large codebase (line 97). Derive identity without writing to the repo, for example from a user-store mapping or the root-commit hash. State how remote-less repos are handled.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:41, 25, 77"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Write-time review categorization is a judge-path change that 320 ruled out, and it silently lapses graduations",
+   "description": "- Review templates are 300's judge templates. 320 line 64 says judges \"run as review-action templates.\" 320 line 120 rules out \"change to the judging path.\" 320 lines 87\u201390 require a template-version change to be a \"300 write-path change, coordinated as a dependency.\" 400 names neither 300 nor that coordination. Its frontmatter lists only 100 and 320 (line 8).\n- The consequence is not mentioned. `template_content_hash` covers `system_prompt` and `prompt_template` (`identity.py:309-315`). Editing templates to emit the vocabulary changes that hash for every edited template. `GraduatedConfig` is keyed on the full `JudgeConfigId` including the hash, and by its own docstring \"lapses on a prompt/model edit\" (`src/squadron/metrology/models.py:103-113`). The preferred option therefore lapses every graduation on those templates and re-keys their samples. 320 line 91 warns that this starves the minimum-evidence floor.\n\nList 300 as a dependency and state the re-key and lapse as an explicit cost. Consider shipping read-side mapping first, since it does not touch templates.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91, 73, 8"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The vocabulary's fit to review findings is unverified, but the preferred option commits to it",
+   "description": "The ten categories are tech-debt dimensions (`src/squadron/metrology/models.py:136-145`: architectural-decay, consistency-rot, and so on). Line 113 treats fit as something to report after the fact. Line 91 nonetheless makes write-time categorization preferred, which bakes in the fit before it is measured. 320 line 22 describes the review judges as grading artifacts against in-repo ground truth (tasks-vs-slice, slice-design-vs-arch). A defect such as \"slice deviates from its arch\" has no slot, so it lands in `other`. The \"same ten categories\" goal (line 35) would then mostly produce `other` on the review side.\n\nBefore any template change, classify the existing `project-documents/user/reviews/` corpus and measure the `other` share. Make that result a gate on the normalization slice.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:35, 91, 113"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Synthetic and sentinel categories already in the data are not handled",
+   "description": "Persisted reviews already contain categories the model did not choose:\n\n- `review-coverage` for truncated diffs and cut-off output (`src/squadron/review/coverage.py:7`)\n- `merge-step` (`src/squadron/review/task_gate.py:25`)\n- `tooling` (`src/squadron/review/git_utils.py:170`)\n- `uncategorized` for any finding without a category (`src/squadron/review/models.py:401`, written verbatim at `persistence.py:632`)\n\nLine 65 says category \"is `None` on many findings.\" That is true in memory (`review/models.py:84`), but on disk the field carries the literal string `uncategorized`. A read-side mapper that sends unknowns to `other` would count pipeline bookkeeping and \"no category\" as review findings, which inflates the `other` signal that `audit_models`/`models.py:126-128` treats as meaningful. The review prompt's own example also uses `category: error-handling` (`src/squadron/review/review_client.py:80`), which is not in the vocabulary; the enum value is `error-handling-observability` (`models.py:142`).\n\nDefine the sentinel and synthetic categories explicitly, either excluding them or tagging them as system-generated. Fix the prompt example in the same change.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:65, 73, 91"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Current State misstates the review path, and ingest would be a third reader",
+   "description": "Line 65 says review findings are \"never ingested or counted anywhere.\" `src/squadron/review/addressed/models.py:176-208` (`records_from_frontmatter`) already reads the same `findings:` block from review files. A finding without a category is marked `malformed` and fails closed (`addressed/models.py:126-150`). `src/squadron/metrology/identity.py:163-170` says nothing else reads persisted reviews back, which is also stale. A new ingest step would therefore be a third reader of the same frontmatter.\n\nThe normalized record is also unspecified. `AuditFinding` cannot carry a review finding, because `AuditSeverity` is disjoint from review severity (`metrology/models.py:148-159`). Review findings also carry a tri-state `location_verified` (`review/models.py:86-94`) that `AuditFinding` lacks. The addressed judge reads category into its prompt (`addressed/judge.py:65`), so category changes also reach a gate. Correct the Current State, consolidate the readers, and define the normalized review-finding model.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:65, 73"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "LLM-sourced numbers need noise floors that no slice produces",
+   "description": "Line 33 says review signals \"carry their own noise floor,\" and line 75 says LLM numbers are shown \"against their noise floor.\" No anticipated slice measures a review variance series. 320's floors are scoped to commit and audit prompt hash (`metrology/models.py:217-220`, `252-254`), and \"a project never borrows another's number\" (`metrology/models.py:241-250`, `audit_models.py:64-67`). Review counts will therefore show \"no floor measured\" at best. Placing review counts beside the audit floor would be the borrowing 320 forbids.\n\nAdd a review variance series to a slice, or state that review-sourced rollups are floorless and labelled that way.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33, 75, 105-106"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"No composite score\" conflicts with 420's need for scores",
+   "description": "Line 29 says 420 needs \"objective, comparable scores,\" and line 79 says 420 scores implementation replays from this data. Line 111 forbids a composite \"as output,\" and line 57 forbids one \"as an intermediate value.\" The doc never says whether 420 receives a breakdown or a score. If it is a score, it is a composite computed downstream, which the doc's own rule is meant to prevent.\n\nState the 420 interface, either a breakdown per replay or a named exception, and align line 111 with it.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:29, 79, 111"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Length limits and the declared-limits model are undefined, and squadron has none",
+   "description": "- Line 53 says limits come from \"the project's own config,\" but names no schema, key or file. This worktree has no `.squadron.toml`, and squadron's limits are prose at `CLAUDE.md:26`. The keystone's \"project-declared limits, proven on Python against squadron itself\" (line 103) therefore requires squadron to add a config the doc never mentions.\n- \"~300\" and \"~50\" with \"where practical\" define no violation threshold. The length definition (whitespace, comments, docstrings, file versus function) is also unstated. The repo already exceeds the guideline in places: `src/squadron/metrology/audit.py` is 789 lines according to `project-documents/user/analysis/942-analysis.tech-debt-audit.md:68`. Without a tolerance, the report will be dominated by known violations.\n- Line 53 forbids squadron defaults for length, while line 85 invites a \"fixed reference rule set\" for lint. State the principle once and apply it to both.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:53, 85, 103"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"Pluggable adapter\" is a design goal with no contract, registry or language-detection rule",
+   "description": "Line 39 promises pluggable language adapters. The doc names no adapter interface, no registration or discovery mechanism, no rule for detecting \"each language present\" (line 83), no aggregation rule for polyglot projects, and no tool for any metric. The contract is deferred to the keystone (line 103), which is Python-only. The risk that the contract is Python-shaped is only tested in slice 2 (line 104), so the keystone effectively defines the contract from one example.\n\nFor Python, ruff already implements mccabe complexity (C901), so the complexity metric may need no new analyzer. The doc does not say whether to use it or radon, and line 83 notes the two define the metric differently. Sketch the adapter interface and the metric definitions here, and make slice 2 a contract-level acceptance test, not just another adapter.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:39, 83, 103-104"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Coverage is listed as core and as deterministic, but its inputs are unresolved",
+   "description": "Coverage appears in the capability list (line 22) and under the determinism goal (line 33). Line 87 defers whether a snapshot runs tests at all. Running tests means running project code, and squadron's own suite is host-dependent: `pyproject.toml:83-86` defines `network` and `host_cf` markers, the latter for tests that \"need cf's real project registry under the host's home.\" CI does not measure coverage at all (`ci.yml:38` runs bare `uv run pytest`). The keystone's \"proven on squadron itself\" therefore cannot include coverage without new test-environment decisions.\n\nDrop coverage from the keystone and from the determinism claim, or define the test environment (no network, isolated home) as part of the identity.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:22, 33, 87"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "No timeouts or hang policy, and \"never fail the step\" does not mean \"never block the step\"",
+   "description": "Line 95 says a failed snapshot must not fail its pipeline step. The likelier failure is a hang: pytest with network tests, pyright on a large repo, or `uv sync` on a slow index. The design sets no timeout, kill or cancellation policy. The codebase already sets one for its git lookup (`identity.py:56-60`, 5 seconds), so the precedent exists.\n\nAlso undefined: whether one failing tool leaves a partial record. The audit's rule is that a run persists whole or not at all (`metrology/models.py:213-215`). Also undefined: whether the baseline command stops or continues when one of its noise-floor runs fails. State per-tool timeouts, kill behavior and partial-record policy.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:95, 51"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Over-time trend has no cadence, runtime budget or tool-bump policy",
+   "description": "One snapshot per commit (line 71) means running complexity, duplication, lint, type-check and possibly tests over the whole repo for every commit. The doc estimates baseline cost (line 97) but not per-snapshot cost. It does not say whether history is backfilled, sampled at merges, or how far back a trend goes. Each record is one JSON file (`metrology/models.py:261-279`, one file per record), and the doc does not say whether reports index or scan them.\n\nThe trend line also breaks on any tool change, by design (line 59). A routine `uv.lock` bump that moves ruff or pyright therefore resets trends, and the doc does not say how a re-baseline is chosen. Name a cadence and a per-snapshot runtime budget, and state the re-baseline policy for tool bumps.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:71, 75, 95"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The envelope's record_type discriminator is not enforced",
+   "description": "`MetrologyRecord` (`src/squadron/metrology/models.py:261-279`) has six optional payload fields, and this design adds two. `record_type` defaults to `\"sample\"` (line 273), and no validator checks that the populated payload matches the discriminator. A snapshot written without its discriminator would read back as a sample. A record with two payloads set would be accepted. The pattern already depends on convention, and this design adds to it.\n\nAdd a validator as part of the keystone: exactly one payload, matching `record_type`, with a test.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Dependencies: frontmatter omits 323 and 300, and the rollup depends on CF's data format",
+   "description": "The frontmatter (line 8) lists only 100 and 320. The design code-depends on 323's `AuditCategory`, its sync test and its noise-floor records, and on 300's review templates (finding 4). Line 93 lets the slice mapping come from \"cf slice records,\" so squadron's rollup would depend on a context-forge data format. That conflicts with the plan's statement that the context-forge work \"owns everything written in CF formats and must work without squadron installed\" (`project-documents/user/project-guides/001-initiative-plan.squadron.md:60`). Line 77 has CF calling the baseline through 440's probe, but the doc does not say what CF sees when squadron is absent. The 420 and 440 architecture docs are also not in this worktree, so the interfaces 400 promises them are unspecified.\n\nList 323 and 300 as dependencies. Make the slice-mapping source a squadron-owned input, such as git topology or an adapter over cf records. State the no-squadron behavior.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8, 77, 93"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Cut or defer the review normalization and the cross-source rollup, which have no named consumer",
+   "description": "The design has five slices, four capabilities, two record types, a three-copy vocabulary with a sync test extension, a pipeline hook, a cross-source rollup and a baseline command. The most invasive piece, write-time review categorization (a template change, 300 coordination and a sync test extension), serves one cross-source comparison (\"error-handling findings: 4 from review, 2 from audit,\" line 35). No consumer in the doc requires it. 420 needs normalized review findings (line 79), and `raw_category` with `other` would satisfy that.\n\nCandidates to cut or defer:\n\n- Write-time categorization (line 91). Ship read-side mapping with `raw_category` first, and decide write-time after the fit measurement in finding 5.\n- Pipeline-attached fork/merge snapshots (line 95). The doc itself says CLI-on-demand is the baseline. Defer until per-slice before/after is needed.\n- Coverage (line 87). Drop from v1.\n- Over-time trend (line 106). Ship per-slice before/after and the baseline first.\n- A squadron-owned reference lint rule set (line 85). Record the project's own config only.\n\nWhat remains is the snapshot record, the Python adapter and the baseline command, which is what 440 needs.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:101-107, 35, 113"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "The fork/merge hook changes 320's stated invariant that no pipeline writes to the store",
+   "description": "Line 63 describes the store as having \"No pipeline action writes to it.\" The fork/merge hook at line 95 changes that, and the doc does not say so. The store's per-record atomic write (`src/squadron/metrology/store.py:150-155`) makes concurrent slice writes safe per record. State the invariant change in 400 and in 320's reference doc.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:63, 95"
+  }
+ ]
+}

@@ -1,0 +1,128 @@
+{
+ "case": "migratory-152-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Overview: \"at the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k\". `140-arch` (Tier 3 \"250k\") and `140-slices` (\"Tier 3 (250k, NVIDIA CUDA ...)\") both say 250k; 200k appears only in this slice. **VALID**: contradicts its parent and the architecture. Needs: doc alone. Raised by the original review (F001).",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     24
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     5
+    ],
+    "r07": [
+     16
+    ],
+    "r08": [],
+    "r09": [
+     11
+    ],
+    "r10": [
+     4
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Technical Scope item 7 and Technical Decisions: `k_first` \"is removed entirely from the kernel\", configs using it \"raise a `ConfigurationError`\", \"no silent migration\". Risk Mitigation: \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) ... flip the default and remove `k_first` parsing in the final commit\"; Default flip: change the default from `\"k_first\"` to `\"k_nearest\"` as the last commit. But Development Approach step 2 rewrites the inner loop to the two-mode form (`if radius_only ... else k_nearest`), which has no `k_first` branch, while the default and the accepted values still say `k_first` until step 4. Between those commits a default config would silently run `k_nearest`, the silent migration the design forbids. **VALID**: self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     13
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     6
+    ],
+    "r08": [
+     5
+    ],
+    "r09": [
+     7
+    ],
+    "r10": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Walkthrough steps 2-5 use `python -m migratory.bench parity ...` and `python -m migratory.bench run ... --neighbor-mode ... --ticks`. `bench/cli.py` at `4b2edc8` has no subcommands and no `--neighbor-mode` or `--ticks` option (only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-*`), and the slice adds none. **VALID** (minor): the steps cannot run as written. Needs: code.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     1
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [],
+    "r07": [
+     2
+    ],
+    "r08": [
+     7
+    ],
+    "r09": [
+     10
+    ],
+    "r10": []
+   }
+  },
+  {
+   "id": "F4",
+   "text": "Success path raises `ConfigurationError`; the config module defines `ConfigError`. **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     13
+    ],
+    "r04": [
+     12
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [],
+    "r07": [
+     4
+    ],
+    "r08": [
+     10
+    ],
+    "r09": [
+     6
+    ],
+    "r10": []
+   }
+  }
+ ],
+ "note": "F4: r05#5, r07#4 and r09#6 say ConfigurationError does not exist and point to ValueError rather than naming ConfigError; counted as the same defect (nonexistent error type). F2: r03#2 and r06#3 describe the k_first removal contradiction without spelling out the interim silent k_nearest run; counted since the self-contradiction is the core flaw."
+}

@@ -1,0 +1,492 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "WorkflowNavigator sweep sites are the excluded SliceStatus.status union",
+      "description": "The design lists WorkflowNavigator's three sites as `=== 'complete'` checks on NormalizedStatus (lines 36, 75). The code says otherwise. `WorkflowNavigator.ts:312` and `:345` compare `slice.status === 'complete'`, and `:588` returns `status: 'complete'`. `slice` is `status.activeSlice` (`:106`), i.e. `SliceStatus.status` (`types.ts:265-272`). The design excludes that union at line 49, says \"Left untouched\" at line 106, and requires it to \"remain untouched\" in the success criteria at line 136. Sweeping these sites contradicts all three.\n\nTD-3's rationale is also wrong at code level. It calls the `'complete'` overlap \"incidental\" and \"not related\" (line 106). But `WorkflowNavigator.ts:577` gates on `taskResult.inferredStatus === STATUS.Complete` and `:588` writes SliceStatus `'complete'` from that branch. That is a real mapping. The design must either keep the three sites literal and document the 577\u2192588 mapping in TD-3, or drop the exclusion. As written, an implementer cannot satisfy both the table and line 136.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification grep cannot return zero as written",
+      "description": "The command at line 149 uses `grep -roE` without `-n`, so its output is `path:match` with no line numbers. The trailing `grep -v 'introspection/types.ts:[3-6]:'` can never match and excludes nothing, so the four STATUS-definition lines stay in the output. Even with `-n` added, zero is unreachable under the design's own exclusions. The remaining literals would include `types.ts:269` (SliceStatus, in a swept file), `statusNormalizer.ts:9` and `:13` (quoted alias keys that line 48 says must stay literal), `ConsistencyChecker.ts:514` (a comment with three literals), and `ProjectModelBuilder.ts:179` (a comment). The check should exclude comments and enumerate the expected remaining sites instead of requiring \"zero.\"",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-file counts and the after-count do not match the code",
+      "description": "Checked against `packages/core/src`:\n- **ConsistencyChecker.ts:** 36 occurrences, but 3 are in a comment (line 514), 12 are fix-action write values (`detail: { key: 'status', value: \u2026 }`, e.g. lines 368, 384, 403, 480, 546, 728, 744, 825, 841, 914, 978, 994), and 21 are comparisons. The design calls all 36 \"comparisons.\"\n- **statusNormalizer.ts:** 14 value-side entries (lines 5\u201318), not 13. Two quoted alias keys (lines 9, 13), not three. The total of 16 is correct.\n- **types.ts:** 8 occurrences (4 in the STATUS definition, 3 on line 44, 1 on line 269). The table says \"5 sweepable.\" After the retype, none remain sweepable.\n- **WorkflowNavigator.ts:** two comparisons and one assignment, all on SliceStatus (see the FAIL finding).\n- **ProjectModelBuilder.ts:** the only hit is a comment at line 179. The `'unknown'` fallback is at line 181, not 179 (line 50).\n- **Verification figures (lines 150\u2013151):** the pre-sweep total of ~75 is correct. But the \"8 out-of-scope sites\" should be 4 (frontmatterSchema 3 + SliceStatus 1), and \"SliceStatus.status (4) sites\" should be 1. The after-state omits at least six remaining literals (2 keys, 3 comment literals, 1 comment).\n- **Sweep total:** the \"~65\" is the sum of the wrong table values. The code supports about 55 sweep sites (33 + 4 + 14 + 4), or 58 with WorkflowNavigator's three.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:31-41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ConsistencyChecker sweep treats raw frontmatter strings as NormalizedStatus values",
+      "description": "Of ConsistencyChecker.ts's 33 code occurrences:\n- **15 compare raw frontmatter strings,** not normalized values. `fmStatus`, `planStatus` and `archStatus` are `string`, derived from `frontmatter.data.status.toLowerCase()` (e.g. lines 357, 373, 469, 485, 519, 535, 717, 733, 814, 830, 885, 967, 983).\n- **12 are write values** into `fixAction.detail` (typed `Record<string, unknown>`), which are persisted to frontmatter.\n- **6 are typed comparisons** on `inferredStatus` (286, 325, 352, 392, 519, 535).\n\nTD-2 (lines 100\u2013102) says raw frontmatter tokens and `NormalizedStatus` are \"two intentionally distinct vocabularies\" and that conflating them \"would be a correctness bug.\" The sweep rewrites the raw comparisons to `STATUS.*`. That gives no type-level benefit, since `string === literal` compiles either way, but it makes them look like normalized comparisons. The same file also mixes `value: 'in_progress'` (line 530, a raw token, not swept) with swept `value: STATUS.InProgress` (line 368). The design should either sweep only the typed sites or state that the raw comparisons are deliberately treated as NormalizedStatus spellings.",
+      "file_ref": null,
+      "category": "design-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No test assertions use these literals\" is false, and the Value claim overstates the result",
+      "description": "Core tests under `packages/core/tests/introspection/` have 177 matching lines across 12 files. Direct assertions include `taskFileParser.test.ts:48,54,61,73,80` (`expect(result.inferredStatus).toBe('in-progress')`), `WorkflowNavigator.test.ts:89`, and `ArtifactIntrospector.test.ts:79`. CLI and MCP tests also use the literals in fixtures (e.g. `packages/cli/tests/commands/status.test.ts:48`). The conclusion that no test edits are needed still holds, because the values are identical. The stated reason is wrong.\n\nThe Value section (line 23) claims \"every reference is a compiler-checked property access\" and that the \"dozens of scattered sites\" problem is solved. After the sweep, those test literals, `arch.ts:189`, and the other excluded sites stay literal, so changing a spelling still means editing them. The test exclusion should be stated as a deliberate scope choice, and the Value claim narrowed.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"must land together\" sequencing claim is false and contradicts TD-1",
+      "description": "Line 86 says the types.ts and taskFileParser steps \"must land together, or the intermediate state fails to build.\" Line 87 says \"retyping alone would leave `taskFileParser.ts`'s still-bare-string assignments failing to compile.\" Neither holds. `STATUS` is `as const` (`types.ts:2-7`), so `STATUS.Complete` has type `'complete'`, which is assignable to the current union. Bare literals also compile against the retyped `NormalizedStatus`. Each step builds on its own. TD-1 (line 98) itself says the swept assignments \"type-check\u2026 technically sound,\" which contradicts line 87. Remove the pairing constraint, or justify it with a real build failure.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A NormalizedStatus literal in the CLI sits outside the stated scope",
+      "description": "`init.slices.filter((s) => s.status === 'complete')` compares a value that carries normalized status. `ProjectModelBuilder.ts:181` sets doc status from `normalizeStatus(...) ?? 'unknown'`, and `:434` pushes it into `init.slices`. Plan-derived entries come from `deriveEntryStatus` at `:445`. The field is typed `string` (`types.ts:89`), so the compiler gives no help. The design scopes the sweep to `packages/core/src/**` (line 29), says no consumer updates are needed outside core (line 84), and claims every reference becomes a STATUS reference (line 23). It should either add this site or list it under Excluded with a reason.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/arch.ts:189"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The frontmatterSchema exclusion omits that two of its literals are NormalizedStatus values",
+      "description": "The design calls `VALID_STATUSES` \"a different vocabulary\" of raw tokens. But `frontmatterSchema.ts:32` (`'complete'`) and `:34` (`'deprecated'`) are NormalizedStatus values, and the alias block at `:257` assigns `'complete'`. Three of the file's occurrences are NormalizedStatus values. The exclusion may still be right, since sweeping only two members of a raw-token array would mix STATUS references into it. But the design must say so. Otherwise success criterion line 135 (\"no bare NormalizedStatus-value literals remain outside types.ts\") is violated by a file the design calls out of scope.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The walkthrough cannot run from a clean worktree and has no pre-sweep baseline",
+      "description": "From a fresh worktree, `pnpm -r build` (line 156) needs installed dependencies, and the doc has no `pnpm install` step. This worktree has neither `node_modules/.modules.yaml` nor `packages/{core,cli}/dist`. Step 4 (lines 160\u2013164) compares `cf status` and `cf list slices` output \"identical to pre-sweep,\" but no step captures pre-sweep output. The doc also doesn't say which `cf` binary to use. The bin is `packages/cli/dist/index.js` (`packages/cli/package.json:8`), and a globally installed `cf` would silently give the wrong comparison. The walkthrough should install, capture baseline output before any edit, and name the binary.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Step 2's \"temporary typo, then revert\" can discard sweep work",
+      "description": "Step 2 edits a swept source file mid-sweep, then says \"Revert.\" The sweep is uncommitted, so the usual `git checkout -- <file>` would also discard every sweep edit in that file. The doc says nothing about committing or stashing first. The companion task file plans one commit per file (`project-documents/user/tasks/910-tasks.centralize-normalizedstatus-references.md:41,67,82,102`), which would make a revert safe, but the design doesn't rely on that. The step can be dropped: TypeScript already rejects unknown properties on a `const` object.",
+      "file_ref": null,
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight: exclusions restated four times, heavy verification, and per-file gating",
+      "description": "Cuts the design should make:\n- **Exclusion rationale** appears in Technical Scope (lines 45\u201352), TD-2 (100\u2013102), TD-3 (104\u2013106), Integration Points \"Deferred\" (126\u2013129), and success criteria (136). Keep one copy in the Excluded list. Reduce TD-2 and TD-3 to one-line decisions.\n- **Verification step 2** (typo spot-check; see the revert finding) can go.\n- **Verification step 4** (live `cf` diff) should be optional, or cut, since it needs a baseline capture the design doesn't provide.\n- **Migration steps 1\u20135** (lines 86\u201391) give per-file build-and-test gates for a find-and-replace the design itself says is independent after step 1. One sweep plus `pnpm -r build && pnpm -r test` is enough, with an optional mid-point build after ConsistencyChecker.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import convention claim is wrong, and import specs are missing for three files",
+      "description": "The design says statusNormalizer's two imports from `types.ts` match \"the pattern already established in `statusDerivation.ts`.\" `statusDerivation.ts:1` uses a single combined import, `import { STATUS, type NormalizedStatus } from './types.js';`. The design's two-statement form is valid TypeScript, but the claim is wrong. The design also specifies the import only for statusNormalizer (line 62). ConsistencyChecker.ts (which has only `import type` from `./types.js`, lines 8\u201316), taskFileParser.ts (line 2), and slicePlanParser.ts (line 2) also need a value import that the design doesn't specify.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 912 review citation (F005) cannot be located",
+      "description": "The design cites \"the slice 912 code review (F005).\" `F005` appears nowhere under `project-documents/user/`, and no 912 review file exists there. The 1320-line fact is correct (`ConsistencyChecker.ts` ends at line 1320). Cite the review path, or drop the ID. The same citation appears at line 129.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The ProjectModelBuilder fallback is cited at the wrong line",
+      "description": "`'unknown'` is at `packages/core/src/introspection/ProjectModelBuilder.ts:181`, not 179. Line 179 is a comment mentioning `'not-started'`. The conclusion that this is not a STATUS site still holds.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Plan-entry scope for ProjectModelBuilder is not reconciled",
+      "description": "The slice-plan entry for 910 (`project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:27`) names `ProjectModelBuilder.ts` as a site file and says \"~50 sites.\" The design says 0 sites, which is correct: `ProjectModelBuilder.ts:262-265` already uses STATUS. The design should say it reconciles the plan entry so the plan doesn't stay out of date.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A test comment pins a ConsistencyChecker.ts line that is already stale",
+      "description": "The comment cites `ConsistencyChecker.ts:605` as the preAdvance/code guard. Line 605 is `rule: 'review-gate'` inside `buildGateFinding`. The guard is at `ConsistencyChecker.ts:639`. The design's new value import adds a line to ConsistencyChecker.ts and shifts everything below line 8. Update the comment to reference the function name instead.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/ConsistencyChecker.reviewGate.test.ts:119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Per-step test lists miss the ConsistencyChecker review-gate test files",
+      "description": "Step 5 runs only `ConsistencyChecker.test.ts`. `ConsistencyChecker.reviewGate.test.ts` and `ConsistencyChecker.reviewGateWidened.test.ts` also exercise the class. The final full run at line 92 covers them, but the per-step gate does not.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:91"
+    },
+    {
+      "severity": "PASS",
+      "title": "The inferredStatus retype is safe for every consumer checked",
+      "description": "Consumers checked: `packages/cli/src/commands/slice.ts:76,82` (typed `NormalizedStatus | undefined`), `ArtifactIntrospector.ts:122` (into `IntrospectionSummary.currentTasks.inferredStatus`, which is already `NormalizedStatus`), and `WorkflowNavigator.ts:574,659` (typed `NormalizedStatus`). No switch or `Record` is keyed by the narrow union, so widening to include `'deprecated'` compiles. The \"no consumer updates outside core\" claim holds for this change.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:98"
+    },
+    {
+      "severity": "PASS",
+      "title": "statusNormalizer has full alias-level regression coverage",
+      "description": "`statusNormalizer.test.ts` lines 6, 12, 21 and 31 cover all 14 map entries: complete, completed, done; in_progress, in-progress, in progress, active; not_started, not-started, not started, ready, pending, planned; deprecated. A transcription slip in any of the 14 swept values would surface. The design's reliance on existing tests as the regression guard holds for this file.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and principles align with the parent architecture",
+      "description": "The work fits the architecture's scope: \"Pattern consolidation\" and \"Hard-coded values \u2192 \u2026 constants\" (`900-arch.maintenance-and-refactoring.md:22-23`). It meets \"No behavior changes without tests\" (line 37) with the existing suite as the guard, and it states success criteria (line 38). It adds no I/O, so no failure-mode enumeration is needed. The parent defines no NFRs to restate. The frontmatter dependency `[241]` matches the plan entry, and 241 is complete. `STATUS.X` values equal the literals (`types.ts:2-7`), so the sweep is runtime-identical. The `inferredStatus` retype is a within-theme addition justified by TD-1.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:17"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "WorkflowNavigator sweep sites are the excluded SliceStatus.status union",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification grep cannot return zero as written",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Per-file counts and the after-count do not match the code",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:31-41",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "design-integrity",
+      "raw_category": null,
+      "summary": "ConsistencyChecker sweep treats raw frontmatter strings as NormalizedStatus values",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "\"No test assertions use these literals\" is false, and the Value claim overstates the result",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The \"must land together\" sequencing claim is false and contradicts TD-1",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A NormalizedStatus literal in the CLI sits outside the stated scope",
+      "location": "packages/cli/src/commands/arch.ts:189",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The frontmatterSchema exclusion omits that two of its literals are NormalizedStatus values",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "The walkthrough cannot run from a clean worktree and has no pre-sweep baseline",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "operator-walkthrough",
+      "raw_category": null,
+      "summary": "Step 2's \"temporary typo, then revert\" can discard sweep work",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:153",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight: exclusions restated four times, heavy verification, and per-file gating",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Import convention claim is wrong, and import specs are missing for three files",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "The 912 review citation (F005) cannot be located",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The ProjectModelBuilder fallback is cited at the wrong line",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:50",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Plan-entry scope for ProjectModelBuilder is not reconciled",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A test comment pins a ConsistencyChecker.ts line that is already stale",
+      "location": "packages/core/tests/introspection/ConsistencyChecker.reviewGate.test.ts:119",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Per-step test lists miss the ConsistencyChecker review-gate test files",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The inferredStatus retype is safe for every consumer checked",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:98",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "statusNormalizer has full alias-level regression coverage",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope and principles align with the parent architecture",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:17",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-22T23:20:27.848060",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "chars": 15068,
+      "sha256": "9c360e776990626aa7ab7400d36d7d1ac1166afc12da1cccc0fafd9e3b25dccb",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+      "chars": 2487,
+      "sha256": "d7406879f6f1d99ec741ec39489fce4aafd1be5cf33c6abfd078b9f363fde0aa",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "packages/core/src/introspection/types.ts",
+    "packages/core/src/introspection/parsers/statusNormalizer.ts",
+    "packages/core/src/introspection/parsers/taskFileParser.ts",
+    "packages/core/src/introspection/parsers/slicePlanParser.ts",
+    "packages/cli/src/commands/slice.ts",
+    "packages/core/src/introspection/ProjectModelBuilder.ts",
+    "packages/core/src/introspection/WorkflowNavigator.ts",
+    "packages/core/src/introspection/ArtifactIntrospector.ts",
+    "packages/core/src/schema/frontmatterSchema.ts",
+    "packages/core/src/introspection/ConsistencyChecker.ts",
+    "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "packages/cli/src/commands/arch.ts"
+  ],
+  "searches": [
+    "grep '(complete|in-progress|not-started|deprecated)' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/src",
+    "grep '(complete|in-progress|not-started|deprecated)' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/src",
+    "grep inferredStatus in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep \\bSTATUS\\b in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep [\"'\\x60](complete|in-progress|not-started|deprecated)[\"'\\x60] in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep (complete|in-progress|not-started|deprecated) in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/src",
+    "grep const slice\\b|let slice\\b|slice: SliceStatus|SliceStatus in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/src/introspection/WorkflowNavigator.ts",
+    "list_files project-documents/user/slices/{241,912,911}-*.md in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "list_files project-documents/user/**/*900* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "grep TD-6|910 in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/project-documents/user",
+    "grep F005|status: complete|^status:|dependencies:|CLI|STATUS in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/project-documents/user/slices/912-slice.fix-cf-next-and-review-gate-coverage.md",
+    "grep \\bSTATUS\\b|NormalizedStatus|TD-6|^status:|dependencies in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "grep '(complete|in-progress|not-started|deprecated)'|\"(complete|in-progress|not-started|deprecated)\" in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep --project|\\.command\\(['\"]slices|'slices'|\\bbin\\b in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/cli",
+    "list_files {.eslintrc*,eslint.config.*,biome.json,.prettierrc*,tsconfig*.json} in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "grep \"name\"|\"cf\"|\"bin\" in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/cli/package.json",
+    "grep F005|1320|informational in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/project-documents/user",
+    "list_files project-documents/user/reviews/*912* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "grep readFile(Sync)?\\(.*(src|\\.ts)|toMatchSnapshot|toMatchInlineSnapshot|ConsistencyChecker\\.ts|types\\.ts|statusNormalizer\\.ts in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep '(complete|in-progress|not-started|deprecated)'|\"(complete|in-progress|not-started|deprecated)\" in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages",
+    "grep '(complete|in-progress|not-started|deprecated)' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection",
+    "grep readFile|src/|ConsistencyChecker\\.ts in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection/ConsistencyChecker.reviewGate.test.ts",
+    "list_files project-documents/**/*{review,Review,REVIEW}* in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "grep toBe\\(['\"](complete|in-progress|not-started|deprecated)['\"]\\)|status: ['\"](complete|in-progress|not-started|deprecated)['\"] in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection",
+    "grep normalizeStatus\\(['\"](done|ready|pending|planned|active|completed|in progress|not started|in_progress|not_started|deprecated)['\"]|'(done|ready|pending|planned|active|completed|in progress|not started)' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection/statusNormalizer.test.ts",
+    "grep task-file-status|initiative-entry-vs-arch|initiative-plan-status-vs-entries|arch-status-vs-plans|plan-status-vs-entries|plan-vs-frontmatter|frontmatter-vs-computed in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection",
+    "grep status: 'complete'|status === 'complete'|taskProgress|inferredStatus in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection/WorkflowNavigator.test.ts",
+    "grep parseSlicePlan|isChecked|status: ' in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/tests/introspection/slicePlanParser.test.ts",
+    "list_files {node_modules/.modules.yaml,packages/core/node_modules/.bin/vitest,packages/core/dist/index.js,packages/cli/dist/index.js} in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice",
+    "grep status: (SliceModelEntry|isSlice|status|derive)|slices\\.push|normalizeStatus\\(|deriveEntryStatus\\( in /Users/manta/.config/squadron/reading-20261122/wt/context-forge-910-slice/packages/core/src/introspection/ProjectModelBuilder.ts"
+  ],
+  "sections_in_document": 23,
+  "sections_not_covered": [
+    "TD-1: Retype `TaskFileResult.inferredStatus` rather than leave its standalone union",
+    "TD-2: `frontmatterSchema.ts` is a separate vocabulary, not part of this sweep",
+    "TD-3: `SliceStatus.status` is excluded as a distinct union"
+  ],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 20,
+    "in_fences": 0,
+    "in_section": 20,
+    "surviving": 20
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 47,
+  "prompt_tokens": 1316247,
+  "cached_tokens": 1167110,
+  "cache_write_tokens": 149109,
+  "completion_tokens": 110555,
+  "reasoning_tokens": null,
+  "duration_seconds": 465.6275067082606,
+  "cost_usd": 0.31851264,
+  "cost_basis": "provider"
+}
