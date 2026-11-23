@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from squadron.benchmark.recall.report_render import ReportData, ReportRow
+from squadron.benchmark.recall.scoring import RowOutputs
 from squadron.benchmark.recall.scoring_metrics import Bounds
 from squadron.benchmark.recall.scoring_paired import PairedLine
 
@@ -52,6 +53,13 @@ class RowJson(BaseModel):
     dropped: dict[str, int]
     left_out: list[str]
     other_set_entries: int
+    #: ``None`` for a recipe with no category filter (437 D8). The first two are the same
+    #: row scored without the filter; ``not_gating`` lists each finding the filter left out
+    #: (a CONCERN or FAIL with a category outside ``keep_categories``) as
+    #: ``<case>/<run>/<reviewer>/<finding_id>``. Other findings are not listed.
+    findings_per_run_unfiltered: float | None = None
+    recall_unfiltered: BoundsJson | None = None
+    not_gating: list[str] | None = None
 
 
 class PairedJson(BaseModel):
@@ -87,7 +95,7 @@ def _bounds(value: Bounds) -> BoundsJson:
 
 
 def _row(row: ReportRow) -> RowJson:
-    m, o = row.metrics, row.outputs
+    m, o, u = row.metrics, row.outputs, row.unfiltered
     return RowJson(
         label=o.label,
         key=o.key,
@@ -118,7 +126,19 @@ def _row(row: ReportRow) -> RowJson:
         dropped=dict(o.dropped),
         left_out=[f"{case} run {run}" for case, run in o.left_out],
         other_set_entries=m.other_set_entries,
+        findings_per_run_unfiltered=None if u is None else u.findings_per_run,
+        recall_unfiltered=None if u is None else _bounds(u.recall),
+        not_gating=None if u is None else _not_gating(o),
     )
+
+
+def _not_gating(outputs: RowOutputs) -> list[str]:
+    return [
+        f"{pair.case.name}/{pair.run_index}/{reviewer.alias}/{finding.finding_id}"
+        for pair in outputs.pairs
+        for reviewer in pair.reviewers
+        for finding in reviewer.not_gating
+    ]
 
 
 def _paired(line: PairedLine) -> PairedJson:

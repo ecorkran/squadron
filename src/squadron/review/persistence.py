@@ -232,6 +232,20 @@ def resolve_reviewed_sha(cwd: str) -> str | None:
     return sha
 
 
+#: The Findings line of a recipe review with no gating finding; ``{count}`` is how many
+#: findings the category filter left out (437 D6).
+NO_GATING_FINDINGS_LINE = "No gating findings; {count} not gating (see the Recipe section)."
+
+
+def _not_gating_findings_section(count: int) -> list[str]:
+    """The Findings heading for a recipe review whose findings are all not gating.
+
+    Without the heading the review parser scans the whole file, where a "Not gating"
+    table row could read as a finding; with it, the section holds one plain line.
+    """
+    return ["## Findings", "", NO_GATING_FINDINGS_LINE.format(count=count), ""]
+
+
 def _findings_not_parsed_section(reason: str) -> list[str]:
     """Body lines for a degraded review, differing only in why it degraded.
 
@@ -773,6 +787,8 @@ def format_review_markdown(
             if finding.file_ref:
                 lines.append(f"\n-> {finding.file_ref}")
             lines.append("")
+    elif recipe is not None and recipe.not_gating > 0:
+        lines.extend(_not_gating_findings_section(recipe.not_gating))
     elif result.fallback_used:
         # A degraded parse must never render as a clean review. The findings exist in
         # the model's output; squadron could not parse them into the required

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,7 +22,13 @@ from tests.pipeline.actions.dispatch_helpers import make_context as _make_contex
 from tests.pipeline.actions.dispatch_helpers import make_registry as _make_registry
 from tests.pipeline.actions.dispatch_helpers import openrouter_profile as _openrouter_profile
 from tests.pipeline.actions.dispatch_helpers import sdk_profile as _sdk_profile
+from tests.pipeline.actions.line_pass_support import (
+    NOT_GATING_TITLES,
+    prepare_repo,
+    run_line_pass_review,
+)
 from tests.pipeline.conftest import typed_config
+from tests.recipes.support import FakeRecipeSink
 
 
 @pytest.fixture
@@ -859,3 +866,17 @@ async def test_sdk_one_shot_records_prompt_and_settings(
     assert result.metadata["system_prompt_mode"] == "preset+append"
     assert result.metadata["setting_sources"] == "project"
     assert result.metadata["auto_memory"] is auto_memory
+
+
+# --- Slice 437: the reviser never sees a not-gating finding --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reviser_findings_block_holds_no_not_gating_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, patch_config_paths: dict[str, Path]
+) -> None:
+    repo = prepare_repo(tmp_path, monkeypatch)
+    review, _ = await run_line_pass_review(repo, monkeypatch, FakeRecipeSink())
+    block = DispatchAction._findings_block(review)  # pyright: ignore[reportPrivateUsage]
+    assert "x-gate" in block and "h-gate" in block
+    assert not [title for title in NOT_GATING_TITLES if title in block]

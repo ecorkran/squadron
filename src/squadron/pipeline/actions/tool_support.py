@@ -39,6 +39,10 @@ def declares_no_tools(context: ActionContext) -> bool:
     return resolve_allowed_tools(context, ActionType.DISPATCH) == []
 
 
+#: What a step writes to ask for no tools; the isolation message names it.
+NO_TOOLS_DECLARATION = "allowed_tools: []"
+
+
 def tool_isolation_error(
     *,
     step_name: str,
@@ -46,6 +50,7 @@ def tool_isolation_error(
     provider: str,
     route: DispatchRoute,
     capabilities: ProviderCapabilities,
+    declaration: str = NO_TOOLS_DECLARATION,
 ) -> str | None:
     """The error for a no-tools step whose route would still run tools, else ``None``.
 
@@ -53,7 +58,8 @@ def tool_isolation_error(
     step. A provider that reads files itself brings tools of its own, and can run a step
     tool-less only when it honors an empty tool list (the SDK does; Codex does not yet).
     Reading the capability, never the provider's name, covers a new provider without a
-    change here. The message names the property that is missing.
+    change here. The message names the property that is missing and the *declaration* that
+    asked for no tools (a recipe reviewer's ``tools: false`` is one).
     """
     if route is DispatchRoute.SESSION:
         missing = "it resolved to a persistent session, whose tool set is fixed at connect time"
@@ -62,9 +68,9 @@ def tool_isolation_error(
     else:
         return None
     return (
-        f"Step '{step_name}' declares 'allowed_tools: []' but cannot be isolated on model "
+        f"Step '{step_name}' declares '{declaration}' but cannot be isolated on model "
         f"'{model}': {missing}. Use a model whose provider can run without tools, or remove "
-        "'allowed_tools'."
+        f"'{declaration}'."
     )
 
 
@@ -75,6 +81,7 @@ def tool_isolation_failure(
     model: str,
     profile_name: str,
     route: DispatchRoute,
+    declaration: str = NO_TOOLS_DECLARATION,
 ) -> ActionResult | None:
     """The failed result for a no-tools step on a route that runs tools, else ``None``.
 
@@ -89,6 +96,7 @@ def tool_isolation_failure(
         provider=provider_name,
         route=route,
         capabilities=get_provider(provider_name).capabilities,
+        declaration=declaration,
     )
     if error is None:
         return None

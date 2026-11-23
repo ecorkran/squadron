@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 from squadron.core.models import Effort
-from squadron.metrology.recall_run_models import StageKind
+from squadron.metrology.recall_run_models import StageConfig, StageKind
 from squadron.models import aliases
 from squadron.models.aliases import ModelAlias
-from squadron.recipes.recipe import Recipe, required_stages
+from squadron.recipes.recipe import Recipe, ReviewerOptions, required_stages, rules_sha256
 from squadron.recipes.stage_config import (
     COMB_TEMPLATE_NAME,
     StageConfigError,
@@ -66,3 +66,43 @@ def test_planned_stages_follow_required_stages_order() -> None:
     assert [stage_alias(s) for s in stages] == [
         "rev-a", "comb-1", "comb-2", "rev-b", "comb-1", "comb-2",
     ]  # fmt: skip
+
+
+def _with_rules(content: str | None) -> ReviewerOptions:
+    options = ReviewerOptions(rules=None if content is None else "r.md")
+    return options.model_copy(update={"rules_content": content})
+
+
+def test_no_options_gives_the_same_config_as_before() -> None:
+    plain = alias_stage_config("rev-a", REVIEW_HASH)
+    assert plain.rules_hash is None
+    assert alias_stage_config("rev-a", REVIEW_HASH, ReviewerOptions()) == plain
+    assert alias_stage_config("rev-a", REVIEW_HASH, ReviewerOptions()).config_key == plain.config_key
+
+
+def test_stored_config_without_rules_hash_loads_and_keeps_its_key() -> None:
+    stored = alias_stage_config("rev-a", REVIEW_HASH)
+    payload = stored.model_dump(mode="json")
+    del payload["rules_hash"]
+    loaded = StageConfig.model_validate(payload)
+    assert loaded.rules_hash is None
+    assert loaded.config_key == stored.config_key
+
+
+def test_rules_content_and_tools_change_the_key() -> None:
+    plain = alias_stage_config("rev-a", REVIEW_HASH)
+    one = alias_stage_config("rev-a", REVIEW_HASH, _with_rules("one"))
+    two = alias_stage_config("rev-a", REVIEW_HASH, _with_rules("two"))
+    assert len({plain.config_key, one.config_key, two.config_key}) == 3
+    no_tools = alias_stage_config("rev-a", REVIEW_HASH, ReviewerOptions(tools=False))
+    assert no_tools.tool_use is False and plain.tool_use is True
+    assert no_tools.config_key != plain.config_key
+
+
+def test_planned_stages_apply_options_to_that_reviewers_stage_only() -> None:
+    options = _with_rules("line pass rules").model_copy(update={"tools": False})
+    recipe = Recipe(name="r", reviewers=("rev-a", "rev-b"), reviewer_options={"rev-b": options})
+    first, second = planned_stages(recipe, REVIEW_HASH)
+    assert first == alias_stage_config("rev-a", REVIEW_HASH)
+    assert second.tool_use is False
+    assert second.rules_hash == rules_sha256(options)

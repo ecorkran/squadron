@@ -3,6 +3,8 @@
 A candidate is a (finding, bug) pair the location gate cannot decide and no label covers.
 With recipes, the findings are those the recipes keep (upper bound: a finding a comb left
 undecided can still be a hit). Without, every scored finding of the set's stored reviews.
+A recipe's category filter is ignored here: a not-gating finding can still be a hit, and
+recall before the filter needs it labelled (437 D8).
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from squadron.benchmark.recall.label_precedence import ResolvedLabels
 from squadron.benchmark.recall.recall_store import RecallRecordStore
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.report_build import resolved_labels
-from squadron.benchmark.recall.scoring import recipe_outputs
+from squadron.benchmark.recall.scoring import recipe_outputs, unfiltered
 from squadron.benchmark.recall.scoring_select import StageIdentityResolver
 from squadron.metrology.recall_case_models import KnownBug, RealBugCase
 from squadron.metrology.recall_label_models import HitVerdict, LabelerKind, RecallLabels, labeler_name
@@ -77,7 +79,7 @@ def _findings(
     return [
         (pair.case, pair.run_index, row.label, finding)
         for recipe in recipes
-        for row in recipe_outputs(recipe, cases, runs, run_indexes, resolver)
+        for row in recipe_outputs(unfiltered(recipe), cases, runs, run_indexes, resolver)
         for pair in row.pairs
         for reviewer in pair.reviewers
         for finding in reviewer.upper

@@ -5,18 +5,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.cli.commands import review_recipe as cli_review_recipe
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
+from squadron.metrology.review_ingest import IngestResult, ingest_reviews
+from squadron.metrology.store import MetrologyStore
 from squadron.models import aliases
+from squadron.project_rules.render import RULES_SEPARATOR
+from squadron.providers.base import ProviderCapabilities
 from squadron.recipes import recipe_review
-from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR
+from squadron.recipes.recipe_merge import NOT_GATING_HEADING
+from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR, shipped_recipes_dir
 from squadron.review.models import Severity, Verdict
 from squadron.review.persistence import SliceInfo
 from squadron.review.templates import BuiltinReviewTemplate
@@ -237,3 +243,114 @@ def test_no_save_writes_no_file_and_a_record_with_no_file(
     assert _review_files(repo) == []
     ((record, _raw),) = sink.writes
     assert record.review_file is None
+
+
+# --- Slice 437: the shipped haiku-line-pass recipe, end to end -----------------------------
+
+LINE_PASS = "haiku-line-pass"
+STEP_RULES = "Project rule: prefer early returns."
+CORRECT = ReviewCategory.CORRECTNESS.value
+DEBT = ReviewCategory.TEST_DEBT.value
+X_GATE = review_finding("x-gate", Severity.CONCERN, CORRECT)
+X_DEBT = review_finding("x-debt", Severity.CONCERN, DEBT)
+H_GATE = review_finding("h-gate", Severity.FAIL, CORRECT)
+H_OTHER = review_finding("h-other", Severity.CONCERN, ReviewCategory.OTHER.value)
+
+
+def _line_pass_script() -> dict[str, list[Scripted]]:
+    return {
+        "haiku-xhigh": [review_result([X_GATE, X_DEBT])],
+        "haiku": [review_result([H_GATE, H_OTHER], Verdict.FAIL)],
+    }
+
+
+def _run_line_pass(repo: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, ScriptedReviewCall]:
+    (repo / "step.rules.md").write_text(STEP_RULES, encoding="utf-8")
+    scripted = ScriptedReviewCall(_line_pass_script())
+    monkeypatch.setattr(recipe_review, "run_review_with_profile", scripted)
+    result = _code(
+        repo, "--diff", "HEAD~1", "--model", LINE_PASS, "--rules", str(repo / "step.rules.md")
+    )
+    return result, scripted
+
+
+def test_line_pass_recipe_review_file_record_and_calls(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, sink: FakeRecipeSink
+) -> None:
+    result, scripted = _run_line_pass(repo, monkeypatch)
+    assert result.exit_code == 2, result.output
+    (review_file,) = _review_files(repo)
+    text = review_file.read_text(encoding="utf-8")
+    assert "## Recipe" in text and "review haiku-xhigh" in text and "review haiku " in text
+    stage_rows = [line for line in text.splitlines() if line.startswith("| review ")]
+    assert len(stage_rows) == 2  # two review rows, no comb rows
+    assert NOT_GATING_HEADING in text
+    table = text.split(NOT_GATING_HEADING, 1)[1].split("\n## ", 1)[0]
+    assert len([line for line in table.splitlines() if line.startswith("| haiku")]) == 2
+    ((record, _raw),) = sink.writes
+    assert record.keep_categories is not None and ReviewCategory.CORRECTNESS in record.keep_categories
+    by_alias = {call.alias: call for call in scripted.calls}
+    assert by_alias["haiku"].no_tools is True
+    shipped_rules = (shipped_recipes_dir() / "line-pass.rules.md").read_text(encoding="utf-8")
+    rules = by_alias["haiku"].rules_content
+    assert rules is not None and STEP_RULES in rules
+    assert rules.endswith(f"{RULES_SEPARATOR}{shipped_rules}")
+    assert by_alias["haiku-xhigh"].rules_content is not None
+    assert shipped_rules not in (by_alias["haiku-xhigh"].rules_content or "")
+
+
+def test_line_pass_review_ingest_records_no_not_gating_finding(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, sink: FakeRecipeSink, tmp_path: Path
+) -> None:
+    _run_line_pass(repo, monkeypatch)
+    (review_file,) = _review_files(repo)
+    store = MetrologyStore(tmp_path / "ingest-store")
+    ingest_reviews(PROJECT, repo, [review_file], store, IngestResult())
+    (record,) = store.list_code_reviews(PROJECT)
+    summaries = " ".join(finding.summary for finding in record.findings)
+    assert "x-gate" in summaries and "h-gate" in summaries
+    assert "x-debt" not in summaries and "h-other" not in summaries
+
+
+@pytest.mark.parametrize("template", ["slice", "tasks"])
+def test_line_pass_is_refused_on_document_reviews_with_no_call(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, template: str
+) -> None:
+    scripted = ScriptedReviewCall(_line_pass_script())
+    monkeypatch.setattr(recipe_review, "run_review_with_profile", scripted)
+    for name in (
+        "project-documents/user/slices/100-slice.fixture.md",
+        "project-documents/user/architecture/100-arch.fixture.md",
+        "project-documents/user/tasks/100-tasks.fixture.md",
+    ):
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text("# document\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    with_documents = SliceInfo(
+        **{
+            **SLICE,
+            "arch_file": "project-documents/user/architecture/100-arch.fixture.md",
+            "task_files": ["100-tasks.fixture.md"],
+        }
+    )
+    with patch("squadron.cli.commands.review._resolve_slice_number", return_value=with_documents):
+        result = CliRunner().invoke(
+            app, ["review", template, "100", "--cwd", str(repo), "--model", LINE_PASS, "--no-save"]
+        )
+    assert result.exit_code == 1
+    assert f"recipe '{LINE_PASS}'" in result.output and f"template '{template}'" in result.output
+    assert scripted.calls == []
+
+
+def test_tools_false_reviewer_on_a_provider_that_keeps_its_tools_exits_1_with_no_call(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_recipe(repo, "nt", "reviewers: [rev-a]\nreviewer_options:\n  rev-a: {tools: false}\n")
+    scripted = _scripted(monkeypatch)
+    provider = MagicMock()
+    provider.capabilities = ProviderCapabilities(can_read_files=True, honors_empty_tools=False)
+    with patch("squadron.pipeline.actions.tool_support.get_provider", return_value=provider):
+        result = _code(repo, "--diff", "HEAD~1", "--model", "nt", "--no-save")
+    assert result.exit_code == 1
+    assert "reviewer_options.rev-a.tools: false" in result.output
+    assert scripted.calls == []

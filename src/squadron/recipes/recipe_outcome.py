@@ -87,6 +87,8 @@ class ReviewerOutcome:
     source: dict[str, ReviewFinding]
     #: Finding id -> the comb alias that failed while the finding passed through it.
     not_combed: dict[str, str]
+    #: CONCERN/FAIL findings the recipe's category filter did not keep (437 D5, D6).
+    not_gating: tuple[RecallFinding, ...] = ()
 
 
 @dataclass(frozen=True)

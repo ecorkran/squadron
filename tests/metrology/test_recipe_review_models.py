@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.models import RECORD_TYPE_RECIPE_REVIEW, MetrologyRecord
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
 from squadron.metrology.recall_run_models import (
@@ -77,3 +78,15 @@ def test_id_format() -> None:
     record_id = new_recipe_review_id(lambda: NOW)
     assert re.fullmatch(r"rrev-20261119T123005Z-[0-9a-f]{8}", record_id)
     assert new_recipe_review_id(lambda: NOW) != record_id
+
+
+def test_stored_record_without_keep_categories_loads_as_none() -> None:
+    dumped = _record().model_dump(mode="json")
+    del dumped["keep_categories"]
+    assert RecipeReview.model_validate(dumped).keep_categories is None
+
+
+def test_keep_categories_round_trip() -> None:
+    dumped = _record().model_dump(mode="json") | {"keep_categories": ["correctness"]}
+    loaded = RecipeReview.model_validate(dumped)
+    assert loaded.keep_categories == (ReviewCategory.CORRECTNESS,)

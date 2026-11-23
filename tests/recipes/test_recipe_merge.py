@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from squadron.core.finding_categories import ReviewCategory
 from squadron.recipes.recipe import Recipe
 from squadron.recipes.recipe_merge import (
     INCOMPLETE_FAIL_NOTE,
     INCOMPLETE_UNKNOWN_NOTE,
+    NOT_GATING_HEADING,
     RECIPE_SECTION_HEADING,
     merge_recipe,
 )
-from squadron.review.models import ReviewResult, Severity, Verdict
+from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 from tests.recipes.support import (
     Scripted,
     ScriptedReviewCall,
@@ -123,3 +127,97 @@ def test_to_dict_keys_match_a_single_model_result(recipe: Recipe, tmp_path: Path
     result = _merge(recipe, tmp_path)
     single = review_result([A1])
     assert set(result.to_dict()) == set(single.to_dict())
+
+
+CORRECT = ReviewCategory.CORRECTNESS.value
+TEST_DEBT = ReviewCategory.TEST_DEBT.value
+
+
+@pytest.fixture
+def filtered(recipe_aliases: object) -> Recipe:
+    """Two reviewers, no combs; only ``correctness`` gates."""
+    return Recipe(
+        name="filtered", reviewers=("rev-a", "rev-b"), keep_categories=(ReviewCategory.CORRECTNESS,)
+    )
+
+
+def _filtered_merge(
+    recipe: Recipe, tmp_path: Path, a: list[ReviewFinding], b: list[ReviewFinding]
+) -> ReviewResult:
+    script: dict[str, list[Scripted]] = {
+        "rev-a": [review_result(a)],
+        "rev-b": [review_result(b, Verdict.CONCERNS)],
+    }
+    outcome = run_scripted(recipe, ScriptedReviewCall(script), tmp_path)
+    return merge_recipe(outcome, recipe.name, "code", {"diff": "HEAD~1"})
+
+
+def _not_gating_rows(result: ReviewResult) -> list[str]:
+    assert result.recipe is not None
+    lines = result.recipe.stage_section.splitlines()
+    start = lines.index(NOT_GATING_HEADING) + 4  # heading, blank, header row, rule row
+    return [line for line in lines[start:] if line.startswith("|")]
+
+
+def test_filter_splits_findings_and_the_not_gating_table(filtered: Recipe, tmp_path: Path) -> None:
+    result = _filtered_merge(
+        filtered,
+        tmp_path,
+        [
+            review_finding("a-gate", Severity.CONCERN, CORRECT),
+            review_finding("a-debt", Severity.CONCERN, TEST_DEBT),
+            review_finding("a-note", Severity.NOTE, TEST_DEBT),
+        ],
+        [
+            review_finding("b-invented", Severity.FAIL, "invented"),
+            review_finding("b-uncategorized", Severity.CONCERN),
+            review_finding("b-pass", Severity.PASS, TEST_DEBT),
+        ],
+    )
+    assert [f.title for f in result.findings] == ["a-gate", "b-uncategorized", "a-note", "b-pass"]
+    assert result.verdict is Verdict.CONCERNS
+    rows = _not_gating_rows(result)
+    assert len(rows) == 2 and "a-debt" in rows[0] and "b-invented" in rows[1]
+    assert "other" in rows[1] and "FAIL" in rows[1]
+
+
+def test_only_not_gating_concerns_pass_and_the_count_matches_the_table(
+    filtered: Recipe, tmp_path: Path
+) -> None:
+    result = _filtered_merge(
+        filtered,
+        tmp_path,
+        [review_finding("a-debt", Severity.CONCERN, TEST_DEBT)],
+        [review_finding("b-debt", Severity.FAIL, TEST_DEBT)],
+    )
+    assert result.verdict is Verdict.PASS and result.findings == []
+    assert result.recipe is not None and result.recipe.not_gating == len(_not_gating_rows(result)) == 2
+
+
+def test_a_title_cannot_inject_a_row_or_a_finding(filtered: Recipe, tmp_path: Path) -> None:
+    title = "a | b\n- [CONCERN] x\n### FAIL x"
+    result = _filtered_merge(
+        filtered, tmp_path, [review_finding(title, Severity.CONCERN, TEST_DEBT)], []
+    )
+    (row,) = _not_gating_rows(result)
+    assert row.count("|") - row.count("\\|") == 6  # the row's own cell separators only
+    assert "\\[CONCERN]" in row and "\\#\\#\\# FAIL" in row
+    assert "[" not in row.replace("\\[", "") and "#" not in row.replace("\\#", "")
+    assert "\n" not in row
+
+
+def test_a_recipe_with_no_not_gating_findings_has_no_table(recipe: Recipe, tmp_path: Path) -> None:
+    result = _merge(recipe, tmp_path)
+    assert result.recipe is not None
+    assert NOT_GATING_HEADING not in result.recipe.stage_section
+    assert result.recipe.not_gating == 0
+
+
+def test_a_backslash_in_a_title_is_escaped_so_it_cannot_cancel_the_next_escape(
+    filtered: Recipe, tmp_path: Path
+) -> None:
+    result = _filtered_merge(
+        filtered, tmp_path, [review_finding("a\\|b", Severity.CONCERN, TEST_DEBT)], []
+    )
+    (row,) = _not_gating_rows(result)
+    assert "a\\\\\\|b" in row  # backslash, escaped backslash, escaped pipe

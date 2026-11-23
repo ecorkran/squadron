@@ -11,13 +11,16 @@ from typing import Any
 
 import pytest
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.metrology.content_sidecars import ContentSidecars, SidecarKind
 from squadron.metrology.errors import MetrologyIdentityError, MetrologyStoreError
 from squadron.metrology.models import RECORD_TYPE_RECIPE_REVIEW
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
+from squadron.metrology.recall_run_models import StageKind, StageOutcome
 from squadron.metrology.recipe_review_models import RecipeReview
 from squadron.metrology.store import MetrologyStore
 from squadron.recipes.comb_call import ReviewCall, call_comb
+from squadron.recipes.kept_findings import split_by_category
 from squadron.recipes.recipe import Recipe
 from squadron.recipes.recipe_record import (
     MetrologyStoreRecipeSink,
@@ -32,7 +35,7 @@ from squadron.recipes.recipe_review import (
 )
 from squadron.recipes.recipe_runner import RecipeReviewCall
 from squadron.recipes.stage_config import builtin_template
-from squadron.review.models import ReviewResult, Verdict
+from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.templates import ReviewTemplate
 from tests.recipes.support import (
     FakeRecipeSink,
@@ -256,3 +259,65 @@ def test_a_real_cancellation_writes_the_aborted_record(recipe: Recipe, tmp_path:
         asyncio.run(drive())
     ((record, _raw),) = sink.writes
     assert record.aborted == CANCELLED_REASON and record.stages == []
+
+
+CORRECT = ReviewCategory.CORRECTNESS.value
+DEBT = ReviewCategory.TEST_DEBT.value
+
+
+def _filter_script() -> dict[str, list[Scripted]]:
+    return {
+        "rev-a": [
+            review_result(
+                [
+                    review_finding("a-gate", Severity.CONCERN, CORRECT),
+                    review_finding("a-debt", Severity.CONCERN, DEBT),
+                ]
+            )
+        ],
+        # An UNKNOWN verdict: its findings are recorded but the runner uses none of them.
+        "rev-b": [review_result([review_finding("b-gate", Severity.FAIL, CORRECT)], Verdict.UNKNOWN)],
+    }
+
+
+def _record_for(recipe: Recipe, tmp_path: Path, script: dict[str, list[Scripted]]) -> RecipeReview:
+    sink = FakeRecipeSink()
+    _run(recipe, tmp_path, Saver([], tmp_path / "r.md"), sink, script)
+    ((record, _),) = sink.writes
+    return record
+
+
+def test_record_carries_the_filter_or_none(tmp_path: Path, recipe_aliases: object) -> None:
+    with_filter = Recipe(
+        name="f", reviewers=("rev-a", "rev-b"), keep_categories=(ReviewCategory.CORRECTNESS,)
+    )
+    without = Recipe(name="g", reviewers=("rev-a", "rev-b"))
+    script = _filter_script()
+    assert _record_for(with_filter, tmp_path, script).keep_categories == (ReviewCategory.CORRECTNESS,)
+    assert _record_for(without, tmp_path, script).keep_categories is None
+
+
+def test_split_over_the_record_reproduces_the_runners_gating_set(
+    tmp_path: Path, recipe_aliases: object
+) -> None:
+    recipe = Recipe(
+        name="f", reviewers=("rev-a", "rev-b"), keep_categories=(ReviewCategory.CORRECTNESS,)
+    )
+    sink = FakeRecipeSink()
+    request = _request(recipe, ScriptedReviewCall(_filter_script()), tmp_path)
+    output = asyncio.run(
+        run_recipe_review(request, save=Saver([], tmp_path / "r.md"), sink=sink, context=CONTEXT)
+    )
+    ((record, _),) = sink.writes
+    from_record = [
+        finding.title
+        for stage in record.stages
+        if stage.kind is StageKind.REVIEW and stage.outcome is StageOutcome.OK
+        for finding in split_by_category(stage.findings, record.keep_categories)[0]
+    ]
+    gating = [f.title for f in output.result.findings]
+    assert from_record == gating == ["a-gate"]
+    unknown_stage = record.stages[1]
+    assert unknown_stage.outcome is not StageOutcome.OK and [
+        f.title for f in unknown_stage.findings
+    ] == ["b-gate"]

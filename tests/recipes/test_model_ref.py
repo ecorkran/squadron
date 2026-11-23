@@ -168,3 +168,39 @@ def test_haiku_xhigh_is_an_alias_in_squadrons_own_checkout(monkeypatch: pytest.M
         "haiku-xhigh", profile_source=False, search_dirs=production_recipe_dirs(REPO_ROOT)
     )
     assert ref == AliasRef("haiku-xhigh")
+
+
+@pytest.fixture
+def option_dirs(tmp_path: Path) -> list[Path]:
+    project = tmp_path / "options"
+    _write(project, "filtered", "reviewers: [rev-a]\nkeep_categories: [correctness]\n")
+    _write(
+        project, "linepass", "reviewers: [rev-a, rev-b]\nreviewer_options:\n  rev-b: {tools: false}\n"
+    )
+    return [project]
+
+
+def _validate(name: str, dirs: list[Path], template: str, *, has_diff: bool) -> None:
+    validate_recipe_review(
+        _ref(name, dirs),
+        template=builtin_template(template),
+        has_diff=has_diff,
+        explicit_profile=None,
+        no_tools=False,
+    )
+
+
+@pytest.mark.parametrize("template", ["slice", "tasks", "arch", "code"])
+@pytest.mark.parametrize("name", ["filtered", "linepass"])
+def test_filter_and_no_tools_reviewer_are_refused_without_a_diff(
+    option_dirs: list[Path], name: str, template: str
+) -> None:
+    with pytest.raises(ReviewModelError) as raised:
+        _validate(name, option_dirs, template, has_diff=False)
+    message = str(raised.value)
+    assert f"recipe '{name}'" in message and f"template '{template}'" in message
+
+
+def test_code_review_with_a_diff_passes_the_option_refusals(option_dirs: list[Path]) -> None:
+    _validate("filtered", option_dirs, "code", has_diff=True)
+    _validate("linepass", option_dirs, "code", has_diff=True)

@@ -13,6 +13,33 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261123
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
+### Slice 437: Line-Pass Pair as the Code Gate — Implementation Complete (Phase 6)
+
+- **Branch** `437-slice.line-pass-pair-as-the-code-gate`, 13 commits on `main`'s head (`3ebe886c` pins, `93638f99` recipe options, `7d6ae2cc` stage identity, `6b27bc97` split and call options, `e8ade825` runner, `aef62ca8` Not gating table, `530f6d3c` record and refusals, `f835affc` benchmark refusal, `007a7be7` scoring and real-work, `b1ad97d1` shipped recipe, `f37820a3` hand-run test, `e24ca8b9` pipeline defaults, `585a837c` end-to-end tests, `9d597937` docs) plus the closing commit. Not merged, not pushed.
+- **Delivered:** `reviewer_options` (`tools`, `rules`) and `keep_categories` on recipes; both in `recipe_hash`/`config_key` only when set (13 recipes pinned before the change, pins unchanged); `split_by_category`; the "Not gating" table and `RecipeReview.keep_categories`; report before/after-filter columns, `not_gating` in the JSON report and "Not gating/review" in the real-work table; `#393` refusals in `sq benchmark recall run` and the report; shipped `haiku-line-pass` and `line-pass.rules.md` (wheel carries both); `P6`, `implement`, `implement-plan`, `review` default to it.
+- **Verified:** `ruff`, `pyright` 0 errors; full pytest 11854 passed, 1 failed: `tests/models/test_aliases.py::test_only_fixed_effort_builtins_set_effort`, because the `neon-medium` alias (commit `1f85c8cf`, before this branch) sets an effort the pinned list lacks; nothing in this slice touches it. Live walkthrough steps 1-6 run (outputs in the slice design); step 7, the 50-PR benchmark run, is the PM's.
+- **Surprise (step 5):** in a revise loop the reviser's fix is uncommitted when the round's review runs, and the diff both reviewers get is the committed one. The tool-using `haiku-xhigh` read the working tree and still filed the committed defect; the no-tools line pass cannot see the working tree at all. With `--max 1` the fixture ended FAIL after the round although the reviser had fixed the sign. Not changed here; later rounds were not run.
+- **Pending:** Phase 7 code review and merge; PM's full benchmark run of `haiku-line-pass`.
+
 ### Slice 437: Line-Pass Pair as the Code Gate — Task Breakdown Complete
 
 - **Document:** `project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md` (24 tasks, 252 lines); frontmatter validates. Built from the design as revised after its review (CONCERNS; resolution in the review file).

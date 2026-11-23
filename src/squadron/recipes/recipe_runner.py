@@ -1,7 +1,8 @@
 """Run a recipe's stages in order, one call at a time (slice 434, D3-D5).
 
 Per reviewer, in recipe order: its review stage (the step's own template, inputs and
-rules, with the reviewer alias), then its comb chain. A ``ProviderError`` or an
+rules, the reviewer's own ``reviewer_options`` (tools, rules file; 437) and its alias), then
+its comb chain. A ``ProviderError`` or an
 unusable answer fails the stage (D5's first table); anything else propagates, with the
 finished stages already in the caller's ``RecipeProgress``. The runner runs no ``git``
 of its own: ``changed_files`` comes from the caller's scope check.
@@ -34,6 +35,7 @@ from squadron.recipes.kept_findings import (
     comb_input,
     decisions_by_finding,
     pass_through,
+    split_by_category,
 )
 from squadron.recipes.recipe import Recipe, RequiredStage, required_stages
 from squadron.recipes.recipe_outcome import (
@@ -45,6 +47,7 @@ from squadron.recipes.recipe_outcome import (
     recall_findings,
     stage_usage,
 )
+from squadron.recipes.reviewer_options import reviewer_call_options
 from squadron.recipes.stage_config import RecipePlan
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.templates import ReviewTemplate
@@ -192,7 +195,7 @@ async def _run_reviewer(run: _Run, reviewer: str) -> ReviewerOutcome:
     review = call.review_call(
         call.template,
         dict(call.inputs),
-        **call.options,
+        **reviewer_call_options(call.options, run.recipe.reviewer_options.get(reviewer)),
         profile=model.profile,
         model=model.model,
         model_allows_tools=model.allows_tools,
@@ -229,7 +232,8 @@ async def _run_chain(
     run: _Run, reviewer: str, findings: tuple[RecallFinding, ...], result: ReviewResult
 ) -> ReviewerOutcome:
     split = comb_input(findings)
-    chain_in: tuple[RecallFinding, ...] = split.scored
+    gating, not_gating = split_by_category(split.scored, run.recipe.keep_categories)
+    chain_in: tuple[RecallFinding, ...] = gating
     steps: list[CombStep] = []
     not_combed: dict[str, str] = {}
     combs = run.recipe.combs
@@ -242,10 +246,11 @@ async def _run_chain(
     source = {f.finding_id: original for f, original in zip(findings, result.findings, strict=True)}
     return ReviewerOutcome(
         reviewer=reviewer,
-        kept=chain_result(split.scored, steps),
+        kept=chain_result(gating, steps),
         uncombed=split.unscored,
         source=source,
         not_combed=not_combed,
+        not_gating=not_gating,
     )
 
 

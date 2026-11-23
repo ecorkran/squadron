@@ -243,7 +243,7 @@ def load_review_rules(
             rules_content = (
                 template_rules
                 if rules_content is None
-                else f"{template_rules}\n\n---\n\n{rules_content}"
+                else f"{template_rules}{RULES_SEPARATOR}{rules_content}"
             )
 
     # Rules sent to every review (the guide's, then the project's), then the project

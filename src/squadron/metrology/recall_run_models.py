@@ -80,13 +80,26 @@ class StageConfig(BaseModel):
     template_hash: str | None
     tool_use: bool | Unknown | None
     max_output_tokens: int | Unknown | None
+    #: sha256 of the reviewer's own rules file (437 D4); ``None`` with no reviewer rules.
+    rules_hash: str | None = None
 
     @property
     def config_key(self) -> str:
-        """sha256 of the five identity fields; alias and configured effort never enter."""
-        return _sha256_json(
-            [self.model, self.profile, self.template_hash, self.tool_use, self.max_output_tokens]
-        )
+        """sha256 of the identity fields; alias and configured effort never enter.
+
+        ``rules_hash`` is included only when set, so a stage with no reviewer rules keeps
+        the key it had before the field existed.
+        """
+        fields: list[object] = [
+            self.model,
+            self.profile,
+            self.template_hash,
+            self.tool_use,
+            self.max_output_tokens,
+        ]
+        if self.rules_hash is not None:
+            fields.append(self.rules_hash)
+        return _sha256_json(fields)
 
 
 class StageUsage(BaseModel):

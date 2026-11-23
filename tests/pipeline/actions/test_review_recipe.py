@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,19 +29,28 @@ from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.usage_capture import UsageCapture
-from squadron.providers.base import USAGE_KEY
+from squadron.project_rules.render import RULES_SEPARATOR
+from squadron.providers.base import USAGE_KEY, ProviderCapabilities
 from squadron.recipes import recipe_review
 from squadron.recipes.model_ref import RecipeRef
 from squadron.recipes.recipe import load_recipe
+from squadron.recipes.recipe_merge import NOT_GATING_HEADING
 from squadron.recipes.recipe_outcome import RecipeStageResult
-from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR
+from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR, shipped_recipes_dir
 from squadron.recipes.stage_config import builtin_template
 from squadron.review.models import ReviewResult, Severity, Verdict
-from squadron.review.persistence import REVIEWS_DIR
+from squadron.review.persistence import NO_GATING_FINDINGS_LINE, REVIEWS_DIR
+from tests.pipeline.actions.line_pass_support import (
+    STEP_RULES,
+    X_DEBT,
+    prepare_repo,
+    run_line_pass_review,
+)
 from tests.recipes.conftest import RECIPE_ALIASES
 from tests.recipes.support import (
     RECIPE_NAME,
     RECIPE_TEXT,
+    REVIEWERS,
     FakeRecipeSink,
     Scripted,
     ScriptedReviewCall,
@@ -490,3 +499,90 @@ async def test_tool_less_recipe_step_is_refused_before_any_call(
     result = await _execute(_context(repo, FakeRecipeSink(), model=RECIPE_NAME, allowed_tools=[]))
     assert not result.success and "tool-less review" in (result.error or "")
     assert scripted.calls == []
+
+
+@pytest.mark.asyncio
+async def test_tools_false_reviewer_on_a_provider_that_keeps_its_tools_is_refused_before_any_call(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reviewer = REVIEWERS[0]
+    text = f"{RECIPE_TEXT}reviewer_options:\n  {reviewer}: {{tools: false}}\n"
+    (repo / PROJECT_RECIPES_DIR / f"{RECIPE_NAME}.yaml").write_text(text, encoding="utf-8")
+    scripted = _scripted(monkeypatch)
+    provider = MagicMock()
+    provider.capabilities = ProviderCapabilities(can_read_files=True, honors_empty_tools=False)
+    with patch("squadron.pipeline.actions.tool_support.get_provider", return_value=provider):
+        result = await _execute(_context(repo, FakeRecipeSink(), model=RECIPE_NAME))
+    assert not result.success
+    assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
+    assert f"reviewer_options.{reviewer}.tools: false" in (result.error or "")
+    assert scripted.calls == []
+
+
+# --- Slice 437: the shipped haiku-line-pass recipe through the action -----------------------
+
+
+@pytest.fixture
+def line_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, patch_config_paths: dict[str, Path]
+) -> Path:
+    return prepare_repo(tmp_path, monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_line_pass_recipe_file_record_and_calls(
+    line_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sink = FakeRecipeSink()
+    result, scripted = await run_line_pass_review(line_repo, monkeypatch, sink)
+    assert result.success and result.verdict == Verdict.FAIL.value
+    (review_file,) = _review_files(line_repo)
+    text = review_file.read_text(encoding="utf-8")
+    assert "## Recipe" in text and NOT_GATING_HEADING in text
+    assert len([line for line in text.splitlines() if line.startswith("| review ")]) == 2
+    table = text.split(NOT_GATING_HEADING, 1)[1]
+    assert "x-debt" in table and "h-other" in table
+    record = _record(sink)
+    assert record.keep_categories is not None and record.review_file == str(review_file)
+    by_alias = {call.alias: call for call in scripted.calls}
+    shipped = (shipped_recipes_dir() / "line-pass.rules.md").read_text(encoding="utf-8")
+    step_rules = by_alias["haiku-xhigh"].rules_content
+    assert step_rules is not None and STEP_RULES in step_rules
+    assert by_alias["haiku"].no_tools is True
+    assert by_alias["haiku"].rules_content == f"{step_rules}{RULES_SEPARATOR}{shipped}"
+
+
+@pytest.mark.asyncio
+async def test_failed_line_pass_with_a_gating_finding_warns_and_fails(
+    line_repo: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING, logger="squadron.recipes.recipe_runner")
+    sink = FakeRecipeSink()
+    result, _ = await run_line_pass_review(
+        line_repo, monkeypatch, sink, haiku=[provider_error("line pass down")]
+    )
+    assert result.success and result.verdict == Verdict.FAIL.value
+    assert any("haiku" in r.getMessage() and "line pass down" in r.getMessage() for r in caplog.records)
+    text = _review_files(line_repo)[0].read_text(encoding="utf-8")
+    assert "harness_failure" in text and "recipeComplete: false" in text
+    record = _record(sink)
+    assert not record.complete
+    assert [s.outcome for s in record.stages if s.alias == "haiku"] == [StageOutcome.HARNESS_FAILURE]
+    assert _recipe_metadata(result)["complete"] is False
+
+
+@pytest.mark.asyncio
+async def test_failed_line_pass_with_only_not_gating_findings_is_unknown(
+    line_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sink = FakeRecipeSink()
+    result, _ = await run_line_pass_review(
+        line_repo,
+        monkeypatch,
+        sink,
+        **{"haiku-xhigh": [review_result([X_DEBT])], "haiku": [provider_error("line pass down")]},
+    )
+    assert not result.success and result.verdict == Verdict.UNKNOWN.value
+    text = _review_files(line_repo)[0].read_text(encoding="utf-8")
+    assert NO_GATING_FINDINGS_LINE.format(count=1) in text.split("## Findings", 1)[1]
+    assert _record(sink).verdict is Verdict.UNKNOWN

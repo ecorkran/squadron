@@ -25,6 +25,15 @@ from squadron.review.templates import ReviewTemplate
 _CLOSE_MATCHES = 3
 #: The template input a comb needs: combs are written for a code change (D4).
 DIFF_INPUT = "diff"
+#: Refusals for a review with no diff input (437 D7); ``{template}`` is the template name.
+KEEP_CATEGORIES_NO_DIFF = (
+    "keep_categories is the code review's category filter and needs a diff; "
+    "template '{template}' has no diff input here"
+)
+NO_TOOLS_REVIEWER_NO_DIFF = (
+    "reviewer '{reviewer}' has tools: false and would get only the prompt; it needs a diff, "
+    "and template '{template}' has no diff input here"
+)
 
 
 class ReviewModelError(ValueError):
@@ -102,6 +111,19 @@ def check_recipe_members(recipe: Recipe) -> None:
                 raise _refuse(recipe, f"{role} '{alias}': {exc}") from exc
 
 
+def _refuse_without_diff_inputs(recipe: Recipe, template: ReviewTemplate, has_diff: bool) -> None:
+    """The filter and a no-tools reviewer only make sense on a review that has a diff (D7)."""
+    if has_diff:
+        return
+    if recipe.keep_categories is not None:
+        raise _refuse(recipe, KEEP_CATEGORIES_NO_DIFF.format(template=template.name))
+    for reviewer, options in recipe.reviewer_options.items():
+        if not options.tools:
+            raise _refuse(
+                recipe, NO_TOOLS_REVIEWER_NO_DIFF.format(reviewer=reviewer, template=template.name)
+            )
+
+
 def validate_recipe_review(
     ref: RecipeRef,
     *,
@@ -111,8 +133,8 @@ def validate_recipe_review(
     no_tools: bool,
 ) -> None:
     """Raise ``ReviewModelError`` naming the recipe and member when the recipe cannot run
-    as this review: unknown member alias, ``pool: true``, judge template, combs with no
-    diff, an explicit profile, or a tool-less review."""
+    as this review: unknown member alias, ``pool: true``, judge template, combs, a category
+    filter or a no-tools reviewer with no diff, an explicit profile, or a tool-less review."""
     recipe = ref.recipe
     check_recipe_members(recipe)
     if recipe.pool:
@@ -128,6 +150,7 @@ def validate_recipe_review(
             recipe,
             f"comb '{recipe.combs[0]}' needs a diff; template '{template.name}' has no diff input here",
         )
+    _refuse_without_diff_inputs(recipe, template, has_diff)
     if explicit_profile is not None:
         raise _refuse(
             recipe,

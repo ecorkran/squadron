@@ -2,7 +2,10 @@
 
 Findings: reviewer 1's kept, reviewer 2's kept, then the NOTE/PASS findings in reviewer
 order; each names its reviewer (and a failed comb it passed through) in its description.
-Dropped findings appear nowhere: the reviser reads the review file. The verdict is
+Dropped findings appear nowhere. The reviser's feedback is built from the review
+action's findings (``ReviewResult.findings``), not read from the review file. Findings
+the category filter did not keep (437 D5, D6) are not in that list: they appear only in
+the "Not gating" table of the Recipe section, where nothing acts on them. The verdict is
 ``verdict_from_findings`` over the merged findings, except that an incomplete recipe
 cannot pass: incomplete with nothing kept is UNKNOWN, incomplete with a CONCERN/FAIL
 kept is FAIL.
@@ -41,7 +44,13 @@ INCOMPLETE_UNKNOWN_NOTE = (
     "The verdict is UNKNOWN because the recipe is incomplete (a stage failed) and no "
     "finding was kept; an incomplete recipe cannot pass."
 )
+#: The heading of the not-gating table, after the stage table (437 D6).
+NOT_GATING_HEADING = "### Not gating"
+_NOT_GATING_COLUMNS = ("Reviewer", "Category", "Severity", "Location", "Title")
 _NO_VALUE = "—"
+#: Characters a table cell escapes so the review parser, which scans the whole file when
+#: the Findings section holds no finding, never reads a cell as a finding (437 D6).
+_ESCAPED_CELL_CHARS = ("\\", "|", "[", "#")
 
 
 def _marked(finding: ReviewFinding, reviewer: str, failed_comb: str | None) -> ReviewFinding:
@@ -100,8 +109,45 @@ def _cost(stage: RecipeStageResult) -> str:
     return f"${cost:.4f}" if cost is not None else "unpriced"
 
 
+def _cell(value: str | None) -> str:
+    """A table cell: a backslash before every ``\\``, ``|``, ``[`` and ``#``; one line."""
+    if not value:
+        return _NO_VALUE
+    text = " ".join(value.split())
+    return "".join(f"\\{char}" if char in _ESCAPED_CELL_CHARS else char for char in text)
+
+
+def not_gating_count(outcome: RecipeOutcome) -> int:
+    return sum(len(reviewer.not_gating) for reviewer in outcome.reviewers)
+
+
+def _not_gating_table(outcome: RecipeOutcome) -> list[str]:
+    rows = [
+        (
+            reviewer.reviewer,
+            finding.category.value if finding.category is not None else None,
+            finding.severity,
+            finding.location,
+            finding.title,
+        )
+        for reviewer in outcome.reviewers
+        for finding in reviewer.not_gating
+    ]
+    if not rows:
+        return []
+    lines = [
+        "",
+        NOT_GATING_HEADING,
+        "",
+        "| " + " | ".join(_NOT_GATING_COLUMNS) + " |",
+        "|" + "---|" * len(_NOT_GATING_COLUMNS),
+    ]
+    lines.extend("| " + " | ".join(_cell(value) for value in row) + " |" for row in rows)
+    return lines
+
+
 def render_stage_section(outcome: RecipeOutcome, recipe_name: str, verdict: Verdict) -> str:
-    """The review file's "Recipe" section: one row per stage, then failure reasons."""
+    """The review file's "Recipe" section: one row per stage, the not-gating table, then failures."""
     lines = [
         RECIPE_SECTION_HEADING,
         "",
@@ -121,6 +167,7 @@ def render_stage_section(outcome: RecipeOutcome, recipe_name: str, verdict: Verd
             _cost(stage),
         )
         lines.append("| " + " | ".join(cells) + " |")
+    lines.extend(_not_gating_table(outcome))
     failed = [s for s in outcome.stages if s.outcome is not StageOutcome.OK]
     if failed:
         lines.append("")
@@ -168,5 +215,10 @@ def merge_recipe(
         tool_calls=_stage_tool_calls(results),
         injected_files=next((r.injected_files for r in results if r.injected_files is not None), None),
         usage=totals.tokens,
-        recipe=RecipeReviewInfo(name=recipe_name, complete=outcome.complete, stage_section=section),
+        recipe=RecipeReviewInfo(
+            name=recipe_name,
+            complete=outcome.complete,
+            stage_section=section,
+            not_gating=not_gating_count(outcome),
+        ),
     )

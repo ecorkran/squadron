@@ -17,7 +17,12 @@ from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, judge_verdict
 from squadron.pipeline.actions.review_fold import fold_review_parts
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
-from squadron.pipeline.actions.review_recipe import RecipePart, RecipePartAborted, run_recipe_part
+from squadron.pipeline.actions.review_recipe import (
+    RecipePart,
+    RecipePartAborted,
+    recipe_isolation_failure,
+    run_recipe_part,
+)
 from squadron.pipeline.actions.tool_support import (
     DispatchRoute,
     resolve_allowed_tools,
@@ -331,6 +336,16 @@ class ReviewAction:
                     profile_name=model.profile_name,
                     route=DispatchRoute.AGENT,
                 )
+            )
+        ):
+            return refusal
+        # Off the loop: it resolves each member alias (alias file reads).
+        if recipe is not None and (
+            refusal := await asyncio.to_thread(
+                recipe_isolation_failure,
+                recipe.recipe,
+                action_type=self.action_type,
+                step_name=context.step_name,
             )
         ):
             return refusal

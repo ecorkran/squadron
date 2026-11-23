@@ -12,14 +12,16 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.metrology.recall_run_models import CombVerdict, StageKind, StageOutcome
 from squadron.metrology.recipe_review_models import RecipeReview, RecipeStage
+from squadron.recipes.kept_findings import split_by_category
 from squadron.review.models import SCORED_SEVERITIES, Verdict
 
 COLUMNS = (
-    "Recipe", "Reviews", "Incomplete (aborted)", "Raw findings/review", "Kept/review",
-    "Dropped/review", "Undecided/review", "Verdicts", "Cost/review (unpriced)",
+    "Recipe", "Reviews", "Incomplete (aborted)", "Raw findings/review", "Not gating/review",
+    "Kept/review", "Dropped/review", "Undecided/review", "Verdicts", "Cost/review (unpriced)",
 )  # fmt: skip
 EFFORT_DIFFERS = "effort differs"
 CONFIG_DIFFERS = "config differs"
@@ -34,6 +36,8 @@ class ChainCounts:
     kept: int
     dropped: int
     undecided: int
+    #: Findings the recipe's category filter left out (437 D8); not in kept, dropped or undecided.
+    not_gating: int = 0
 
 
 @dataclass
@@ -45,9 +49,16 @@ class RealWorkRow:
     flags: list[str] = field(default_factory=list[str])
 
 
-def _reviewer_counts(review: RecipeStage, combs: Sequence[RecipeStage]) -> ChainCounts:
-    """Fate of one reviewer's scored findings: DROP stops, UNDECIDED is kept and stops."""
-    status = {f.finding_id: "kept" for f in review.findings if f.severity in SCORED_SEVERITIES}
+def _reviewer_counts(
+    review: RecipeStage,
+    combs: Sequence[RecipeStage],
+    keep: tuple[ReviewCategory, ...] | None,
+) -> ChainCounts:
+    """Fate of one reviewer's scored findings: not gating by the filter, else DROP stops,
+    UNDECIDED is kept and stops."""
+    scored = [f for f in review.findings if f.severity in SCORED_SEVERITIES]
+    gating, not_gating = split_by_category(scored, keep)
+    status = {f.finding_id: "kept" for f in gating}
     for comb in combs:
         for finding_id, decision in comb.decisions.items():
             if status.get(finding_id) != "kept":
@@ -59,22 +70,25 @@ def _reviewer_counts(review: RecipeStage, combs: Sequence[RecipeStage]) -> Chain
     tally = Counter(status.values())
     undecided = tally["undecided"]
     # Kept has D5's one meaning: every comb decided KEEP, or left it undecided.
-    return ChainCounts(len(status), tally["kept"] + undecided, tally["dropped"], undecided)
+    return ChainCounts(
+        len(scored), tally["kept"] + undecided, tally["dropped"], undecided, len(not_gating)
+    )
 
 
 def chain_counts(record: RecipeReview) -> ChainCounts:
     """Summed over reviewers; a reviewer whose review stage failed contributes nothing."""
-    totals = ChainCounts(0, 0, 0, 0)
+    totals = ChainCounts(0, 0, 0, 0, 0)
     for review in record.stages:
         if review.kind is not StageKind.REVIEW or review.outcome is not StageOutcome.OK:
             continue
         combs = [s for s in record.stages if s.kind is StageKind.COMB and s.reviewer == review.reviewer]
-        one = _reviewer_counts(review, combs)
+        one = _reviewer_counts(review, combs, record.keep_categories)
         totals = ChainCounts(
             totals.raw + one.raw,
             totals.kept + one.kept,
             totals.dropped + one.dropped,
             totals.undecided + one.undecided,
+            totals.not_gating + one.not_gating,
         )
     return totals
 
@@ -139,6 +153,7 @@ def _row_cells(row: RealWorkRow) -> list[str]:
         str(reviews),
         f"{incomplete} ({aborted})",
         _per_review(sum(c.raw for c in counts), reviews),
+        _per_review(sum(c.not_gating for c in counts), reviews),
         _per_review(sum(c.kept for c in counts), reviews),
         _per_review(sum(c.dropped for c in counts), reviews),
         _per_review(sum(c.undecided for c in counts), reviews),

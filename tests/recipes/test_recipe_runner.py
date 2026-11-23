@@ -8,11 +8,13 @@ from pathlib import Path
 
 import pytest
 
+from squadron.core.finding_categories import ReviewCategory
 from squadron.core.models import Effort
 from squadron.metrology.identity import template_behavior_hash
 from squadron.metrology.recall_run_models import CombVerdict, StageKind, StageOutcome
+from squadron.project_rules.render import RULES_SEPARATOR
 from squadron.recipes.comb_call import COMB_ALLOWED_TOOLS, call_comb
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions
 from squadron.recipes.recipe_outcome import RecipeOutcome, RecipeProgress
 from squadron.recipes.recipe_runner import RecipeReviewCall, run_recipe
 from squadron.recipes.stage_config import builtin_template, plan_recipe, planned_stages
@@ -253,3 +255,104 @@ def test_failed_stage_keeps_the_spend_its_error_reported(recipe: Recipe, tmp_pat
 def test_failed_stage_that_reported_nothing_spent_nothing(recipe: Recipe, tmp_path: Path) -> None:
     outcome = _run(recipe, ScriptedReviewCall(_script(**{"rev-a": [provider_error()]})), tmp_path)
     assert not outcome.stages[0].made_call
+
+
+LINE_PASS_RULES = "read every changed line"
+CORRECT = ReviewCategory.CORRECTNESS.value
+TEST_DEBT = ReviewCategory.TEST_DEBT.value
+
+
+def _options_recipe() -> Recipe:
+    """rev-b is a no-tools line pass with its own rules; only correctness gates."""
+    line_pass = ReviewerOptions(tools=False, rules="line.md").model_copy(
+        update={"rules_content": LINE_PASS_RULES}
+    )
+    return Recipe(
+        name="line",
+        reviewers=("rev-a", "rev-b"),
+        reviewer_options={"rev-b": line_pass},
+        keep_categories=(ReviewCategory.CORRECTNESS,),
+    )
+
+
+def _filter_script(**overrides: list[Scripted]) -> dict[str, list[Scripted]]:
+    script: dict[str, list[Scripted]] = {
+        "rev-a": [
+            review_result(
+                [
+                    review_finding("a-gate", Severity.CONCERN, CORRECT),
+                    review_finding("a-debt", Severity.CONCERN, TEST_DEBT),
+                    review_finding("a-note", Severity.NOTE, TEST_DEBT),
+                ]
+            )
+        ],
+        "rev-b": [
+            review_result(
+                [
+                    review_finding("b-gate", Severity.FAIL, CORRECT),
+                    review_finding("b-invented", Severity.FAIL, "made-up-category"),
+                    review_finding("b-uncategorized", Severity.CONCERN),
+                ],
+                Verdict.FAIL,
+            )
+        ],
+    }
+    script.update(overrides)
+    return script
+
+
+@pytest.mark.usefixtures("recipe_aliases")
+def test_reviewer_with_options_gets_its_own_call_options(tmp_path: Path) -> None:
+    scripted = ScriptedReviewCall(_filter_script())
+    _run(_options_recipe(), scripted, tmp_path)
+    first, second = scripted.calls
+    assert (first.alias, first.no_tools, first.rules_content) == ("rev-a", None, "rules")
+    assert second.alias == "rev-b"
+    assert second.no_tools is True
+    assert second.rules_content == f"rules{RULES_SEPARATOR}{LINE_PASS_RULES}"
+
+
+@pytest.mark.usefixtures("recipe_aliases")
+def test_kept_and_not_gating_partition_the_concern_and_fail_findings(tmp_path: Path) -> None:
+    outcome = _run(_options_recipe(), ScriptedReviewCall(_filter_script()), tmp_path)
+    rev_a, rev_b = outcome.reviewers
+    assert [f.title for f in rev_a.kept] == ["a-gate"]
+    assert [f.title for f in rev_a.not_gating] == ["a-debt"]
+    assert [f.title for f in rev_a.uncombed] == ["a-note"]  # NOTE is never filtered
+    assert [f.title for f in rev_b.kept] == ["b-gate", "b-uncategorized"]
+    assert [f.title for f in rev_b.not_gating] == ["b-invented"]
+    assert set(rev_b.source) == {"F1", "F2", "F3"}  # the id map still covers every finding
+
+
+@pytest.mark.usefixtures("recipe_aliases")
+def test_failed_line_pass_warns_and_makes_the_recipe_incomplete(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING, logger=LOGGER)
+    scripted = ScriptedReviewCall(_filter_script(**{"rev-b": [provider_error("line pass down")]}))
+    outcome = _run(_options_recipe(), scripted, tmp_path)
+    failed = outcome.stages[1]
+    assert (failed.reviewer, failed.outcome) == ("rev-b", StageOutcome.HARNESS_FAILURE)
+    assert not outcome.complete
+    assert outcome.reviewers[1].kept == ()
+    warnings = _warnings(caplog)
+    assert len(warnings) == 1 and "rev-b" in warnings[0]
+
+
+@pytest.mark.usefixtures("recipe_aliases")
+def test_recipe_with_no_options_and_no_filter_calls_with_the_step_options(
+    recipe: Recipe, tmp_path: Path
+) -> None:
+    scripted = ScriptedReviewCall(_script())
+    outcome = _run(recipe, scripted, tmp_path)
+    reviews = [c for c in scripted.calls if not c.alias.startswith("comb")]
+    assert all(c.no_tools is None and c.rules_content == "rules" for c in reviews)
+    assert all(r.not_gating == () for r in outcome.reviewers)
+
+
+def test_scripted_review_call_rejects_a_keyword_the_real_call_does_not_take() -> None:
+    scripted = ScriptedReviewCall({"rev-a": [review_result([])]})
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        asyncio.run(
+            scripted(builtin_template("code"), {}, profile="p", alias="rev-a", no_such_option=1)
+        )

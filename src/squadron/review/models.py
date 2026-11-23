@@ -195,6 +195,9 @@ class RecipeReviewInfo:
     name: str
     complete: bool
     stage_section: str
+    #: How many findings the recipe's category filter left out of ``findings`` (437 D6);
+    #: they are listed only in ``stage_section``'s "Not gating" table.
+    not_gating: int = 0
 
 
 @dataclass(frozen=True)

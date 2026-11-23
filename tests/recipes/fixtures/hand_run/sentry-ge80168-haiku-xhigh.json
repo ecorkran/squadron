@@ -1,0 +1,61 @@
+{
+ "verdict": "FAIL",
+ "findings": [
+  {
+   "severity": "FAIL",
+   "title": "MetricAlertDetectorHandler is abstract and cannot be instantiated",
+   "description": "The class now subclasses `StatefulDetectorHandler` with only `pass`. The base class still declares four abstract members that nothing implements: `counter_names`, `get_dedupe_value`, `get_group_key_values`, and `build_occurrence_and_event_data`, which this diff adds at `src/sentry/workflow_engine/processors/detector.py:166-170`. Constructing the handler therefore raises `TypeError`.\n\nThis path is reachable in production. `MetricAlertFire` (`grouptype.py:18-27`) registers itself through `GroupType.__init_subclass__` (`src/sentry/issues/grouptype.py:163-165`). `import_grouptype()` imports `sentry.incidents.grouptype` for every installed app, and `sentry.incidents.apps.Config` is in INSTALLED_APPS (`src/sentry/conf/server.py:395`). A `metric_alert_fire` detector would therefore raise from `Detector.detector_handler` (`src/sentry/workflow_engine/models/detector.py:86`). The previous implementation returned `[]`. I found no code that creates such detectors and no test that covers this path, so the impact is latent today. The TODO on line 10 (\"This will be a stateful detector when we build that abstraction\") is also now stale.\n\nFix: implement the four abstract members, or revert to `DetectorHandler[QuerySubscriptionUpdate]` with `evaluate` returning `{}` until the stateful abstraction is ready.",
+   "location": "src/sentry/incidents/grouptype.py:11-12",
+   "category": "correctness"
+  },
+  {
+   "severity": "FAIL",
+   "title": "TestEvaluateGroupKeyValue.test_dedupe will fail on its first assertion",
+   "description": "The expected result is built with `build_mock_occurrence_and_event(handler, \"val1\", 6, ...)` (lines 536-538), so its occurrence fingerprint is `[f\"{id}:val1\"]` (helper line 255). The call under test uses group key `\"group_key\"` and value 10 (lines 547-553), so the handler produces a fingerprint of `[f\"{id}:group_key\"]`. `IssueOccurrence` is a `@dataclass(frozen=True)` (`src/sentry/issues/issue_occurrence.py:66-67`), so its generated `__eq__` compares `fingerprint`. The `== expected_result` assertion at line 559 is therefore false.\n\nFix: build the expected occurrence with `\"group_key\"` and the value the test actually passes (10).",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py:536-560",
+   "category": "test-debt"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "Test helper ignores `value`, and several tests pass mismatched values",
+   "description": "`build_mock_occurrence_and_event` accepts `value` but never uses it; the occurrence and event data do not contain it. Several tests pass a value different from the one the handler evaluates and still pass:\n- `test_results_on_change`: input 100, expected built with 6 (lines 488-491).\n- `test_dedupe`: input 8, expected built with 6 (lines 508-511).\n- The `TestEvaluateGroupKeyValue` case in the finding above.\n\nAs written, the tests cannot detect a regression where the group value stops reaching the occurrence, and they misdescribe their own inputs. Either put `value` into the mock's output so it is asserted, or remove the parameter and make the test inputs match.",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py:244-275",
+   "category": "test-debt"
+  },
+  {
+   "severity": "CONCERN",
+   "title": "StatefulDetectorHandler.evaluate docstring describes the old return type",
+   "description": "The docstring says `evaluate` \"returns a list of `DetectorEvaluationResult`\". The method now returns `dict[DetectorGroupKey, DetectorEvaluationResult]` (signature at lines 226-228, return at 243-244). Update the docstring to say the results are keyed by group key.",
+   "location": "src/sentry/workflow_engine/processors/detector.py:229-233",
+   "category": "documentation-drift"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Duplicate-key error log removed from process_detectors",
+   "description": "The removed block logged \"Duplicate detector state group keys found\" and skipped the duplicate, which the original comment says should be investigated. Returning a dict makes duplicates impossible in the return value, and `StatefulDetectorHandler` builds its dict from unique group keys (lines 238 and 243), so stateful handlers cannot trigger this. A non-stateful handler that builds the dict from a list would now overwrite entries silently. If such handlers are expected, add a check where the dict is built.",
+   "location": "src/sentry/workflow_engine/processors/detector.py:58-62",
+   "category": "error-handling-observability"
+  },
+  {
+   "severity": "NOTE",
+   "title": "assert_has_calls does not verify the call count",
+   "description": "`assert_has_calls(..., any_order=True)` passes even if extra calls were made. Add `assert mock_produce_occurrence_to_kafka.call_count == 2`.",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py:206-222",
+   "category": "test-debt"
+  },
+  {
+   "severity": "NOTE",
+   "title": "Redundant setUp override",
+   "description": "`TestProcessDetectors.setUp` only calls `super().setUp()`. It can be removed.",
+   "location": "tests/sentry/workflow_engine/processors/test_detector.py:125-126",
+   "category": "architectural-decay"
+  },
+  {
+   "severity": "PASS",
+   "title": "PriorityLevel(new_status) conversion is correct",
+   "description": "`DetectorPriorityLevel` is defined from `PriorityLevel` values (`src/sentry/workflow_engine/types.py:8-12`) and both are IntEnums, so `PriorityLevel(new_status)` resolves by value. The conversion only runs on the `else` branch, where the status is LOW, MEDIUM, or HIGH. The `Detector.group_type` extraction (`src/sentry/workflow_engine/models/detector.py:58-64`) preserves the previous `detector_handler` behavior. I also traced the other expectations in `TestEvaluate`, `TestProcessDetectors.test_state_results`, and the multi-group test against the handler code, and they match.",
+   "location": "src/sentry/workflow_engine/processors/detector.py:300",
+   "category": "correctness"
+  }
+ ]
+}
