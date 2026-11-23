@@ -2,7 +2,7 @@
 docType: reference
 project: squadron
 dateCreated: 20261113
-dateUpdated: 20261115
+dateUpdated: 20261123
 status: draft
 ---
 
@@ -482,3 +482,77 @@ Notes:
 - The subset table is 22 flaws from one run each. Differences of one or two flaws are noise; only the large gaps (hy4, mimo, minimax31-flash and qwen38-max against glm53, luna and qwen38-27b) carry weight.
 - Precision is not measured. hy4 and minimax31-flash raise 7.4 and 9.2 findings per review against haiku-xhigh's 13.9.
 - Two cases (squadron-197-tasks, squadron-917-tasks) return a rule-based FAIL in 1-2 s for every model without calling it, and no model found their flaws.
+
+## 21. Code review on a public benchmark (2026-11-22)
+
+Full tables, error analysis and scripts: [20261122-martian/RESULTS.md](20261122-martian/RESULTS.md). This section is the short form.
+
+**Method:** Martian's Code Review Bench (commit `23a35d0`): 50 public PRs, 139 bug-type golden comments (the "strict" profile). `sq review code` at each PR's head in a sandbox, findings converted to harness entries, judged by Claude Sonnet 4.5 through OpenRouter, from finding titles. One run per entry unless two are shown. Recall is golden comments found. Precision counts every finding that matches no golden comment as a false flag, including real defects the annotators did not list.
+
+| Entry | $/review | Recall | Precision | Critical + high (of 66) | False flags |
+|---|---|---|---|---|---|
+| haiku-xhigh, run 1 | $0.12 | 64.7% | 25.7% | 52 | 260 |
+| haiku-xhigh, run 2 | $0.12 | 59.7% | 23.8% | 47 | 266 |
+| haiku-xhigh run 1, behavior categories only (filtered afterwards) | $0.12 | 60.4% | 37.0% | 49 | 143 |
+| haiku-xhigh told to report behavior defects only | $0.12 | 53.2% | 37.6% | 43 | 123 |
+| fable-high | $1.43 | 64.0% | 27.5% | 52 | 235 |
+| sol-r | $0.13 | 43.9% | 43.0% | 40 | 81 |
+| plain haiku, no tools, line pass (`rules-line-pass.md`) | $0.01 | 41.7% | 47.5% | 32 | 64 |
+| **haiku-xhigh + line pass, behavior filter on both, run 1** | $0.13 | 69.1% | 33.4% | 55 | 191 |
+| **the same pair, run 2 of each reviewer** | $0.13 | 66.9% | 34.8% | 52 | 174 |
+| haiku-xhigh + sol-r | $0.25 | 66.2% | 21.7% | | 332 |
+| haiku-xhigh + sol-r after luna-r comb, shipped prompt | | 61.2% | 29.8% | 51 | 200 |
+| the same with the truth-only comb prompt | | 64.0% | 29.4% | 52 | 214 |
+| haiku-xhigh + sol-r after luna-r then opus-high (the recipe shipped until #389) | | 43.9% | 36.7% | 37 | 105 |
+
+Outside tools on the same judge, from the harness's stored results: augment 61.9% / 49.4%, copilot 61.9% / 31.4%, coderabbit 60.4% / 31.8%, cubic 59.7% / 52.9%, qodo-extended 58.3% / 53.6%, greptile 50.4% / 44.9%, bugbot 46.0% / 52.0%, devin 44.6% / 66.0%, claude-code 42.4% / 34.3%.
+
+- **The pair is the best squadron entry and it repeats.** It beat its own haiku-xhigh run both times, by 4 and 7 points of recall and 8 and 11 of precision. Its two runs differ by 2 points of recall; haiku-xhigh's by 5. Critical items still swing with the haiku-xhigh half (11 and 8 of 12). Either pair run finds 105 of 139 (75.5%). It is not built as a recipe: slice 437.
+- **Run-to-run spread for one reviewer is about five points of recall and four critical items.** Read every single-run row with that.
+- **fable-high ties haiku-xhigh at twelve times the cost.**
+- **Filter categories afterwards; do not tell the reviewer to leave them out.** Same precision, ten fewer hits when told.
+- **The opus-high comb drops true findings for being unimportant:** 29 of the 85 real hits luna-r had kept, 5 of them critical; in 28 of the 29 its reason agreed the claim was true. The comb prompt asked which findings "should be fixed before merge". The truth-only prompt (now the shipped `comb.yaml`, 6778d02a) dropped 10, all as disputes of fact.
+- **The benchmark's precision understates true precision.** Three truth-only verifiers from three families (opus-high, sol-r, fable-high) checked haiku-xhigh's 230 behavior findings. All three kept 166: 72 hits and 93 that match no golden comment. Agreement orders the findings (45% matching the key at 3 of 3, 12% at 0 of 3) but does not separate them. Nobody has checked the 93 by hand.
+- **Greptile's own one-bug-per-PR list:** haiku-xhigh finds 30 of 50.
+- **Decided (PM, 2026-11-22):** stop shipping recipes that end in an opus-high comb (#389, done in 32089d9d and 6778d02a); do not drop real findings to raise a benchmark's precision.
+- **Not done:** Opus 4.5 and GPT-5.2 as judges on a final entry. Every number here is from one judge model.
+
+## 22. Re-cut of the stored review data (2026-11-22)
+
+Detail and scripts: [20261122-recut/README.md](20261122-recut/README.md). No new model calls: the 1,281 graded design reviews of sections 16-20 and the grid 2 code grades, joined with each review's recorded tool calls, tokens and time. Agent grades.
+
+- **Reading decides the flaws that need the code.** Each of the 82 flaws is tagged by what finding it needs: 35 the code, 29 the document alone, 18 the document and its parent. On document-alone flaws every Claude config hits 61-79%. On code-needing flaws: sonnet 17%, opus-high 26%, haiku-xhigh 33%, fable-high 46%. By tool calls in the review: 0-3 calls 8%, 4-7 18%, 8-15 37%, 16-30 47%.
+- **Severity labels do not sort document findings:** 74-100% of real hits are labelled CONCERN or NOTE, so keeping FAIL only loses most of them. On code (grid 2) FAIL is 87% REAL for haiku-xhigh and CONCERN 17%.
+- **Different reviewers beat repeats of one:** four cheap reviewers (haiku-xhigh, minimax31-flash, hy4, mimo) find 32 of 39 material flaws for $0.53, 71% when the set is picked on half the cases and scored on the other half; haiku-xhigh three times finds 28.
+- **Votes rank, they do not filter,** and an opus-high comb on document reviews costs $1 a call.
+
+## 23. Document reviews on the current templates (2026-11-22)
+
+Detail and scripts: [20261122-reading/README.md](20261122-reading/README.md).
+
+**Method:** the 43 mined cases of section 16 reviewed again on squadron 0.24.37, whose slice, tasks and arch templates changed on 2026-11-21 (#382: the whole document in the prompt, criteria that say to open the code, a per-section list of what was checked). 258 reviews. Compared with the stored 0.24.31 reviews of the same four reviewers. 18 Opus agents graded old and new reviews blind in the same piles; the stored reviews' new grades match their 2026-11-16 grades on 169 hits, with 2 dropped and 7 added.
+
+| Reviewer | Need code (35): stored to new | All (82) | Material (39) | Median tool calls | $/review |
+|---|---|---|---|---|---|
+| haiku-xhigh | 13 to 27 and 24 | 42 to 62 and 57 | 20 to 30 and 23 | 11 to 42 | $0.23 to $0.33 |
+| sonnet-high | 7 to 26 and 24 | 36 to 57 and 54 | 18 to 27 and 24 | 5 to 26 | $0.47 to $0.45 |
+| opus-high | 9 to 26 | 43 to 64 | 19 to 29 | 8 to 30 | $0.94 to $1.25 |
+| fable-high | 19 to 32 | 55 to 67 | 26 to 30 | 16 to 40 | $2.86 to $3.06 |
+
+By document kind, all flaws found, stored to new:
+
+| Reviewer | Arch (19) | Slice design (32) | Tasks (31) |
+|---|---|---|---|
+| haiku-xhigh | 11 to 12 and 12 | 15 to 29 and 25 | 16 to 21 and 20 |
+| sonnet-high | 12 to 11 and 10 | 14 to 26 and 26 | 10 to 20 and 18 |
+| opus-high | 13 to 14 | 13 to 30 | 17 to 20 |
+| fable-high | 15 to 15 | 18 to 30 | 22 to 22 |
+
+- **The earlier document-review numbers (sections 14-20) are from the old templates and are stale for the four reviewers above.** The other configs in those sections have not been rerun.
+- **The gain is the reading:** flaws that need the code doubled or tripled; flaws findable from the document alone did not move.
+- **The reviewers are now close.** sonnet-high was the weakest and is within a few flaws of haiku-xhigh. haiku-xhigh on the current templates finds more than fable-high did on the old ones at a ninth of the cost.
+- **The gain is in slice designs and task files. Architecture reviews did not move.** They also read less (sonnet-high 5 to 6 tool calls there), and against this key reading little cost them nothing: 13 of the 19 architecture flaws are in the document or its parent. The architecture key is too small to say more.
+- **Two documents were never reviewed by a model** (`squadron-197-tasks`, `squadron-917-tasks`: the task gate returns its own FAIL), so the scores are in effect out of 78 flaws in both versions.
+- **Sets, over those 78:** haiku-xhigh twice 68 ($0.66); haiku-xhigh + sonnet-high 67 ($0.78); haiku-xhigh + fable-high 72 ($3.39); fable-high alone 67 ($3.06).
+- **Precision is not measured.** Findings raised rose about 60% (haiku-xhigh 14 to 22 a review, sonnet-high 7 to 12). How many of the added findings are real is the open question.
+- **Limits:** one stored run against one or two new ones; two squadron versions, so it does not say which template change did the work; agent grades.
