@@ -603,6 +603,44 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Lithuanian TOTP instructions replaced with Italian text",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Simplified Chinese account string written in Traditional Chinese",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Anchor pattern matches any tag whose name starts with \"a\"",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "verifySafeHtml can throw StringIndexOutOfBoundsException when the common prefix and suffix overlap",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Italian text in the Lithuanian login messages file",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Traditional Chinese characters in the Simplified Chinese account messages file",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/37634": {
@@ -1479,6 +1517,38 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Client-credentials and UMA tokens are never labelled with their grant",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "AccessTokenContext null-checks the wrong field",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "isAccessTokenId returns false when the grant shortcut matches, so the check is inverted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Grant shortcut is read from the wrong character offset in isAccessTokenId",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Constructor null-checks grantType twice and never checks rawTokenId",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/38446": {
@@ -2095,6 +2165,38 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Recovery codes are stored in plaintext in user storage",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Federated recovery codes are never consumed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Old local codes stay valid after regeneration into user storage",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Exhausted-code removal acts on the wrong store",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "getCredentials can NPE and swallows its error",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/36882": {
@@ -2423,6 +2525,14 @@
     "sq-haikuv2-t": [
       {
         "text": "Test-image build fails for any base image that predates `rolling-updates`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Feature-disabled path reuses verdict exit code 4",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -3189,6 +3299,50 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Removing a client throws when V1 and V2 admin permissions are both enabled",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Inter-client token exchange under V2 now throws instead of denying",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`getClientsWithPermission` returns the type name \"Clients\" and never returns per-client grants",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Realms created before this change lack the `Clients` resource type and new scopes, and the per-client check dereferences null",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Client removal does not clean up V2 per-client grants",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Display name for client permission resources is always null",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "JUnit 4 `fail` import in a JUnit 5 test class",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/37038": {
@@ -3743,6 +3897,32 @@
     "sq-haikuline-t": [
       {
         "text": "canManage() grants group management to callers who only hold VIEW permission on groups",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "V2 group-view lookup collects Resource UUIDs instead of group IDs",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "GroupPermissionsV2.canManage() allows VIEW-only grants to create groups",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "/groups/count endpoint is reachable by view-only holders and returns unfiltered totals",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "V2 canManage() grants group management permissions to callers who only hold VIEW permission on groups",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -4411,6 +4591,26 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Equal `order()` values make provider selection depend on classpath order",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "DER decoder breaks its `IOException` contract on malformed input",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`getBouncyCastleProvider()` returns a JDK KeyStore provider, not BouncyCastle",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/40940": {
@@ -4913,6 +5113,32 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "getSubGroupsCount() can now return null, contradicting the GroupModel contract",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Null handling for a vanished group is inconsistent across the same class",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Possible null return from `getSubGroupsCount` relies on an unverified `modelSupplier` field",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Removal of `groupMatchesSearchOrIsPathElement` may break compilation or leave imports unused",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/keycloak-greptile/pull/1": {
@@ -5395,6 +5621,38 @@
       },
       {
         "text": "Removed `events.clear()` before the first passkey login in the external-key test",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "UsernameForm calls a no-arg `isConditionalPasskeysEnabled()` that does not exist",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "First-login conditional passkeys are disabled, which breaks existing tests",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "PasswordForm's error path now shows passkey UI that its first challenge does not",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "UsernameForm calls `isConditionalPasskeysEnabled()` with no arguments, but the only definition in the diff takes a `UserModel`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`challenge()` gate is inverted relative to the code it replaces",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -6265,6 +6523,50 @@
       },
       {
         "text": "CLI default of `1` overrides the factory's one-process-per-shard default",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Hung spawned flusher is never killed; its replacement runs alongside it",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "--flusher-processes accepts 0 and negative values",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The shard metric tag means different things across metrics",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Metric tag key shards is inconsistent with shard used elsewhere in the same change",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "isinstance(process, multiprocessing.Process) is false for spawn-context processes, so the kill is skipped",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "break in join() skips terminating the remaining flusher processes",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "CLI default of 1 overrides the factory's one-process-per-shard default",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -7631,6 +7933,122 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Replay error details are zipped against an unordered, sparse nodestore result",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Caller-supplied `field` parameter silently drops `error_ids`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mutual-exclusion validators use truthiness, so `0` bypasses them",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "One bad report rejects the whole batch",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Fixed type allowlist drops new report types",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Hidden attributes are hidden only while searching",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Dashboard table flag branch renders hardcoded empty data",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Attribute-keys query key omits the organization slug",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Attribute-keys hook changed retry and loading behavior and dropped `environment`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "\"Project not found\" appears while projects are still loading",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`get_environment_info` swallows all exceptions and logs them at info level",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Issue titles are interpolated into markdown link text",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Single-element `dedupedYAxes` wrappers remain in eight places",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Error events are zipped against dict values, so errors get paired with the wrong event IDs",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Feature-flagged dashboard table ignores the real data and always renders an empty table",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Hidden-attribute filter only runs when a search query is present",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "AI summary shows \"Project not found\" while the project is still loading",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Truthiness checks treat `age: 0` and `timestamp: 0` as absent",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Broad `except Exception` in `get_environment_info` hides failures at info level",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1": {
@@ -8561,6 +8979,62 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "get_item_key calls math.floor/ceil on a datetime, causing TypeError on every non-empty optimized page",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unguarded member.has_global_access breaks the default path for org-token callers",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative cursor offsets on the advanced branch are passed straight to the ORM slice and crash",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative next-cursor offsets are now silently clamped in the shared BasePaginator",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "value_from_cursor returns the raw epoch-ms integer instead of a datetime",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Role-gated, unvalidated offset bypasses a guard that other paginators apply",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative-offset branch slices the queryset with a negative start, which Django rejects",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "BasePaginator comment says negative offsets are allowed, but the code clamps them to zero",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Superusers and global-access members can request out-of-bounds pagination through an opt-in query flag",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/grafana/grafana/pull/97529": {
@@ -9159,6 +9633,32 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Removed post-Stop guard lets RPCs run after shutdown",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "BuildIndex no longer serializes builds for the same key",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "TotalDocs reads the index map without the lock, and now runs at startup",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Pre-existing data race on the shared err and counter in index-init workers",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/getsentry/sentry/pull/80168": {
@@ -9555,6 +10055,20 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "MetricAlertDetectorHandler is abstract and cannot be instantiated",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "MetricAlertDetectorHandler has a pass body that leaves the new abstract method unimplemented",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/getsentry/sentry/pull/77754": {
@@ -9905,6 +10419,20 @@
       },
       {
         "text": "`to_dict()` puts a datetime into task kwargs that may not serialize",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "AssignmentSource.queued is evaluated once at import time, causing every AssignmentSource to share one timestamp",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "to_dict() puts a datetime into task kwargs that may not serialize",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -10865,6 +11393,32 @@
       },
       {
         "text": "Racy assertion on total_items immediately after submit",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Helper method may not exist on the new Kafka test base class",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Topic deletion result is never checked and exceptions are swallowed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Shared queue pool is shut down by each strategy's close(), so later assignments drop messages",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "shutdown() abandons queued work, violating 'graceful' and 'no item is lost' claims",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -12063,6 +12617,74 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Optimized audit-log path returns 500 for any non-empty result set",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Audit-log GET raises AttributeError for API-key callers without membership",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Span-buffer key type changes from SET to ZSET with no migration or key rename",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Segments over 1000 spans are silently truncated",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative cursor offsets are clamped or crash, contrary to the comments",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative-offset branch in `OptimizedCursorPaginator` always errors",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`ZUNIONSTORE` sums scores for members present in both sources",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`get_item_key` applies `math.floor`/`math.ceil` to a datetime attribute",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Negative-offset branch slices the queryset with a negative start index",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Admin-only pagination mode relies on an unverified queryset guarantee",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`enable_advanced_features` kwarg may not be forwarded by `self.paginate`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/3": {
@@ -12939,6 +13561,44 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Substring match upsamples negated and compound `event.type:error` queries",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`transformAliasToInputFormat=1` silently zeroes the upsampled series",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Eligibility uses the outer dataset and raw request query, not what actually runs",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Only the literal `count()` is rewritten",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Test factory swallows exceptions",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`upsampled_count()` is emitted by the transform but registered only in the discover dataset config",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/grafana/grafana/pull/103633": {
@@ -13421,6 +14081,20 @@
     "sq-haikuline-t": [
       {
         "text": "Test comment says \"Allow\" but the fixture denies dash1",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Denial cache key ignores identity type, so anonymous and renderer requests share denial entries",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Denial key uses an ambiguous `_` delimiter and reuses the user-permission prefix",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -14143,6 +14817,38 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "OAuth `state` is a public constant, allowing installer check to be bypassed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Installer check is skipped when no Integration row exists yet",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`metadata[\"sender\"]` lookup raises KeyError for rows without sender",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Installer is compared by a reusable login, not an immutable ID",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Token exchange and user lookup failures either crash or are silently swallowed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/keycloak/keycloak/pull/32918": {
@@ -14577,6 +15283,20 @@
     "sq-haikuline-t": [
       {
         "text": "Test cleanup removes a hardcoded \"alias\" IDP instead of the IDPs the test created",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Login-cache invalidation skips BROKER_PUBLIC changes on realm-level IDPs",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Invalidation decision incorrectly depends on organization state because the original model is org-aware",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -15115,6 +15835,32 @@
       },
       {
         "text": "go.sum drops `h1:` content hashes for modules that may still be required",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "enableSqlExpressions always returns false; the flag check is inverted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "SQL expressions now fail on every path: a silent regression of working functionality",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "SQL database stub returns \"not implemented\" for every operation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "sql_command.go uses the sql package without an added import in this diff",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -16051,6 +16797,38 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "Time-based cleanup logs an `err` that is always nil at that point",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Tag cleanup logs an `err` that is always nil at that point",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Per-batch progress logs are emitted at Error level and include full ID lists",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Success-path bookkeeping logged at Error level on every batch, with full ID lists",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Bind-parameter limits are not handled for non-SQLite drivers",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
       {
         "text": "Time-based cleanup logs an `err` that is always nil at that point",
         "path": null,
@@ -17233,6 +18011,74 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Legacy writes run on the caller's request context and can be cancelled",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Legacy errors in the goroutines are discarded without logging",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Storage-side failures are recorded in the legacy histogram, and a legacy call is recorded in the storage histogram",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Delete no longer deletes from legacy when storage returns NotFound",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Update now hands legacy the raw `objInfo` instead of the object storage persisted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Dry-run requests still run the legacy write",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Delete builds a contextual logger but passes the unscoped `d.Log` into the context",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Delete passes `name` where the kind value belongs to the storage duration metric",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Update records a storage failure as a legacy duration",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "DeleteCollection records the legacy goroutine duration with the storage recorder",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Update test references `updatedObjInfoObj` while the removed commented test used `UpdatedObjInfoObj`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/grafana/grafana/pull/106778": {
@@ -18157,6 +19003,74 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Delete and Pause are missing from the list-view More menu",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Silence notifications is a no-op in the list view",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Federated-group guard dropped from useAllAlertRuleAbilities",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "GrafanaRuleListItem in FilterView is missing its key",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Grafana list links lose the returnTo param",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Export and Pause gating diverges from the ruler path for recording rules",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Silent null with a context-free warning on every render",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "useRulerRuleAbility receives a possibly-undefined rule after RuleProps was made optional",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Grafana prom rule passed where a ruler DTO is expected in the unknown-rule fallback",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The view link no longer carries the returnTo parameter",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Deleted GrafanaRuleLoader.tsx may still have importers",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/grafana/grafana/pull/107534": {
@@ -18547,6 +19461,26 @@
       },
       {
         "text": "Split paths apply template variables twice, causing ad hoc values containing $name to be incorrectly replaced with dashboard variable values",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Template variables and ad-hoc filters are applied twice on the split paths",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Reordered filter in the sharded path can hang the query on an empty expression",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "$__auto in the sharded path is now resolved per time chunk",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -19223,6 +20157,44 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "A rejected device is admitted on its next request",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The device limit is a soft limit under concurrency",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Three definitions of the same 30-day window, with mismatched names",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Frontend type for `anonymousDeviceLimit` does not match the backend contract",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`updateDevice` reassigns the captured `args` slice inside the session closure, so a retry would prepend the query twice",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Zero rows affected is always reported as `ErrDeviceLimitReached`, which misstates the cause and can deny login for existing devices",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/9": {
@@ -19703,6 +20675,38 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Fallback locales are only loaded on the web-request path",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "An unguarded SiteSetting read now sits inside every fallback-enabled lookup",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "set_locale depends on a duck-typed method that the stock fallbacks object lacks",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "I18n.ensure_loaded! is called on the module, but the method is defined on the backend",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Added call changes the return value of the method it sits in",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/grafana/grafana/pull/76186": {
@@ -20051,6 +21055,26 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "TestLogger.FromContext discards the receiver and returns a fresh logger",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Test function name still references the old middleware",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "New Logger interface method may be unimplemented by other types",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
       {
         "text": "TestLogger.FromContext discards the receiver and returns a fresh logger",
         "path": null,
@@ -21539,6 +22563,110 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Migration raises on fresh installs and any DB without an `embed_category` row",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Legacy URL-form host entries are migrated unnormalized and silently stop matching",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Migration interpolates host values into SQL without escaping",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`EmbeddableHost` before_validation crashes on a nil host",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Host validation accepts values the matcher can never match and rejects valid domains",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Duplicate hosts are allowed, and the lookup has no ordering",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Topics from unlisted hosts are created with no category instead of the old `embed_category`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Admin endpoints return 500 on an unknown id or missing params, and `destroy` ignores failures",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The `_ids` branch of `_hydrateEmbedded` writes undefined entries and crashes on null",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Edit buffer is not cleared after a successful save, so re-editing shows the un-normalized input",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "A failed delete produces no feedback",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Fabricator contents are in the wrong files",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Host lookup compares a lowercased column against a non-lowercased input",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`before_validation` crashes when `host` is nil",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Fabricator contents are swapped between the two files",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The embedding `update` action persists nothing",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Migration assumes an `embed_category` row exists and builds SQL by string interpolation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/7": {
@@ -22061,6 +23189,62 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "Mobile modal length-counter light-mode lightness changed from 70% to 30%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Desktop topic-post reply-count light-mode lightness changed from 30% to 70%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Desktop user-card `.name` light-mode lightness changed from 30% to 50%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mobile user-card `.name` light-mode lightness changed from 30% to 50%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mobile topic-post `h3` light-mode lightness changed from 20% to 50%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Topic-meta link light and dark values are both inverted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mobile topic heading light value changed from 20% to 50%",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mobile custom-message hint is inverted and inconsistent with desktop",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Group member name loses its hierarchy and has the wrong dark value",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
       {
         "text": "Mobile modal length-counter light-mode lightness changed from 70% to 30%",
         "path": null,
@@ -23063,6 +24247,74 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "add_members returns 500 for existing members and can partially apply",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "remove_member bypasses Group#remove, leaving user_count and primary_group_id stale",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "totalPages is off by one at exact multiples, and \"next\" can reach an empty page",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "findMembers clamps against a stale total, so deleting the last row on the final page leaves an empty page",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The public members page shows only the first 50 members, with no pager",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "GroupsController#members trusts limit and offset: negative values return 500, and limit is uncapped",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Add and remove failures are silent in the admin UI",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "create drops alias_level, which the JS sends",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "totalPages adds an extra page when the member count is an exact multiple of the limit",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "next clamps the offset to user_count, which can land past the last page",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Remove-member link checks automatic against the member object, not the group",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/3": {
@@ -23679,6 +24931,32 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Blocklist lookup is case-sensitive, so mixed-case addresses bypass it",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Validator mutates match counters, so each attempt is counted twice",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Domain restriction regex has no end anchor, so suffix domains pass the whitelist",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`rejectedEmails` is one array shared across all controller instances",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/5": {
@@ -24027,6 +25305,38 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "The `align-items` mixin declares `-ms-align-items`, which is not a real CSS property",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The `align-items` mixin declares `-webkit-align-items`, which is not a standard prefixed property",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The `order` mixin declares `-webkit-order`, which is not a real CSS property",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Long docked-header titles overflow instead of truncating on desktop",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Mobile small-action custom-message offset was not updated",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
       {
         "text": "The `align-items` mixin declares `-ms-align-items`, which is not a real CSS property",
         "path": null,
@@ -24585,6 +25895,26 @@
       },
       {
         "text": "include_website_name lacks the `?` suffix, so its website.present? guard never runs and website_name: null is serialized for users with no website",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "website_name bypasses the TL0-anonymous restriction on website",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "include_website_name is missing its `?` and is never called",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Profile header label does not update after the website is edited",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -26005,6 +27335,86 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Imported feed content is cooked as raw HTML without sanitization",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "URL is interpolated into HTML without escaping",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Embed view has an invalid ERB statement",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "One bad feed item aborts the whole poll, and the import check races",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Failed post creation is not detected",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Host guard passes host-less input to `open`, and remote fetches have no timeout or size cap",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Protocol-relative URLs are rewritten to the wrong host",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Origin check in the embed script is a substring test",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Deleted topics permanently 404 their embed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Disqus importer has regressions",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Migrations use `force: true`, and a shipped migration was edited",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Migration default sets every existing post to raw_html cooking",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Stray `if` after `end` in the best-posts template",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/1": {
@@ -26719,6 +28129,44 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Emoji resize job calls a `downsize` signature that no longer exists",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Client limits are hardcoded and no longer follow the settings",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Conversion failures are ignored and the upload proceeds unchanged",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Truncated API downloads can now be \"repaired\" into a valid-looking image",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Animated-thumbnail setting is reused for uploaded originals",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`downsize` is defined twice, so the second definition silently replaces the first",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/2": {
@@ -27373,6 +28821,50 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "`unsubscribe` dereferences a `TopicUser` that may be nil",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Triple-stash renders the translated string as unescaped HTML",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Template path does not match the route name",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Unsubscribe is not durable; auto-tracking reverts it on the next read",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unsubscribe route and template names don't match, so the page likely renders empty",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Missing TopicUser row raises NoMethodError and a 500",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unsubscribe changes state on GET, outside CSRF protection",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
       {
         "text": "`unsubscribe` dereferences a `TopicUser` that may be nil",
         "path": null,
@@ -28173,6 +29665,50 @@
       },
       {
         "text": "sed -i '' syntax works only on BSD/macOS sed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Cache status bypasses the calendar-cache feature gate",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Authorization denial surfaces as a 500",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Hardcoded `en-US` date format ignores the user's locale",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Empty 8rem action column left behind for delegated calendars",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Script writes `.env` relative to the working directory",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Script exits 0 on failure",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`sed -i ''` syntax works only on BSD/macOS sed",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -28999,6 +30535,74 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Busy times are skipped for any slot inside a date override",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Any weekday with more than one working-hours row rejects every slot",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Multiple date-override rows on the same date reject the whole date",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Date-override guard uses an identity comparison and server-local date formatting",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "End-of-slot check compares the slot start, not the slot end",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Early-morning overrides can land on the wrong invitee day",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "New `timeZone` is typed optional but treated as required",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Working-hours check computes the slot end from `slotStartTime`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Comparing two dayjs objects with `===` is always false",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Working-hours `find` marks a slot unavailable when any single entry excludes it",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`toString()` round-trip before `dayjs` parsing is fragile",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/calcom/cal.com/pull/14943": {
@@ -29545,6 +31149,50 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Unguarded DB write in `catch` can abort the batch and cause duplicate SMS",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Reminders for locked accounts are deleted after about two cron runs",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Reminders that can never send keep retrying until their send date",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Delete predicate is unscoped and the comment is now wrong",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Counter is a read-modify-write, not an atomic increment",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Retry cleanup clause is not scoped to SMS reminders",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unguarded database update in the catch block can abort the loop",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/calcom/cal.com/pull/22345": {
@@ -29897,6 +31545,20 @@
     "sq-haikuline-t": [
       {
         "text": "getBaseConditions checks authConditions for truthiness, making the filter-only branch unreachable",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Single-term fragments are returned without parentheses, so top-level OR can escape composition",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Loosened constructor type lets invalid scope/teamId combinations compile and silently return no rows",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -31389,6 +33051,140 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Google refresh stores the SafeParse wrapper as the credential key",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Zoho Bigin sends the credential ID as the user ID to the sync endpoint",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "parseRefreshTokenResponse minimum schema rejects every real token response",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Sync-mode return shape breaks Google, Zoho Bigin, Zoho CRM, and HubSpot",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Salesforce service uses prisma without importing it",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Salesforce token check relies on statusText and contains dead code",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Placeholder \"refresh_token\" overwrites the stored refresh token",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Parse helper discards the zod error, and the Office 365 diagnostic log was removed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Zoom passes \"zoomvideo\" as the app slug",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Webhook compares the secret with !==",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Webhook throws on bad input and returns 500 instead of a 4xx",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Decrypted credential payload is stored without schema validation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "APP_CREDENTIAL_SHARING_ENABLED exposes the encryption key value",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Outbound sync request carries no authentication",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Google Calendar stores the safeParse wrapper object as the credential key instead of the parsed tokens",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "refreshOAuthTokens returns a raw Response in sync mode, but callers read token fields from it",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Zoho Bigin passes credentialId where every other call site passes credential.userId",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Office365 video adapter uses the Microsoft Teams app slug",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Computed-key schema does not express \"any numeric property\"",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Missing refresh_token is replaced with the literal string \"refresh_token\"",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Salesforce checks response.statusText !== \"OK\" instead of response.ok",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "APP_CREDENTIAL_SHARING_ENABLED is a string or undefined, not a boolean",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/calcom/cal.com/pull/7232": {
@@ -32405,6 +34201,80 @@
       },
       {
         "text": "PrismaPromise import in workflows.tsx is now unused",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Type-only names imported as values, violating `consistent-type-imports`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Cron cancel loop has no per-reminder error isolation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Cron cancel loop DB deletes never run on error",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Reminder-cancel DB writes are no longer awaited, and their errors are swallowed",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`deleteScheduledEmailReminder` has three behaviors under a name that says \"delete\"",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Reschedule path leaves stale reminder rows that point at cancelled batches",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "try/catch around un-awaited async calls catches nothing",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "immediateDelete branch cancels the email but leaves the WorkflowReminder row behind",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Cron cancel loop sends null referenceIds to the provider",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Deletes are lost if an earlier cancel request throws",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "try/catch in handleNewBooking cannot catch the errors it is meant to handle",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "deleteScheduledSMSReminder skips the row delete when the Twilio cancel fails",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -33705,6 +35575,104 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Team admins are rejected by an AND between admin and owner checks",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Blacklist is bypassed by upper-case letters and plus-addressing",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Calendar update failures are swallowed and the handler reports success",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Email send failure is caught, logged without the error, and discarded",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Server accepts duplicate and case-variant guests, creating duplicate attendee rows",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Existing attendees in the request receive a full new-booking confirmation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Add-guests emails ignore event-type email-disable settings",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "No booking status or time check on the server",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Any attendee can email arbitrary addresses, with no size cap or rate limit",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Permission error uses a translation key that doesn't exist",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Raw translation key used as the email HTML title",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Organizer add-guests email ignores EMAIL_FROM_NAME",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Dialog error state is stale, and the error fallback can never show",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Hardcoded English tooltip in a localized component",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Team admin and owner check combined with `&&` instead of `||`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Email notifications receive the raw input list instead of the filtered list",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/calcom/cal.com/pull/10600": {
@@ -34805,6 +36773,62 @@
     "sq-haikuline-t": [
       {
         "text": "BackupCode component is incorrectly named 'TwoFactor' in BackupCode.tsx",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Backup-code login skips the password check whenever a non-empty `totpCode` is posted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Backup-code consumption is a non-atomic read-modify-write",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Backup-code input is not type-checked or normalized",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Dismissing the backup-codes step skips `onEnable` and leaves the UI inconsistent",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The enable modal's password reveal toggle does not work",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "An empty backup-code submission on login fails silently",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The copy button reports success without checking the clipboard write",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The backup-code component is named `TwoFactor`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "New BackupCode component is named `TwoFactor` in BackupCode.tsx",
         "path": null,
         "line": null,
         "source": "extracted"
@@ -36249,6 +38273,86 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Google Meet booking with no destination calendar throws a TypeError",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Google update and delete fallback lookup can never match",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Google insert routes credential-less destinations to primary and leaves the patch unguarded",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Office365, Lark, and CalDAV adapters ignore the per-credential destination",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Organization slug condition inverted",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "loadUsers catch exposes raw Prisma errors and swallows the rest without logging",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Team destination calendars are silently dropped when the organizer has none",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Booking webhook payload changes shape and gains an unused field",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Organization slug condition is inverted after the `!` was dropped",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unguarded `.integration` access will throw when there is no destination calendar",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Google `updateEvent` searches for the calendar using the falsy `externalCalendarId`",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Google `deleteEvent` has the same falsy-lookup problem",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "The `|| []` fallback for `eventType.users` was dropped",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/calcom/cal.com/pull/8087": {
@@ -36771,6 +38875,44 @@
         "line": null,
         "source": "extracted"
       }
+    ],
+    "sq-haiku-line-lane-t": [
+      {
+        "text": "Reschedule cleanup loses error handling after `forEach(async ...)` because promises are not awaited",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Recurring-event calendar deletes are not awaited by the cancellation",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`forEach(async ...)` drops the deleteEvent promise and escapes the surrounding try/catch in reschedule",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Async `forEach` in handleCancelBooking pushes into `updatedBookings` after the handler may have moved on",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "`appStore` entries are now Promises, which breaks any synchronous consumer",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      },
+      {
+        "text": "Unawaited `getCalendar` promise is stored in a returned object typed as a resolved Calendar",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
     ]
   },
   "https://github.com/getsentry/sentry/pull/80528": {
@@ -36855,6 +38997,14 @@
       }
     ],
     "sq-haikuline-t": [
+      {
+        "text": "get_monitor_environment_context builds a modified config copy but returns the unmodified original",
+        "path": null,
+        "line": null,
+        "source": "extracted"
+      }
+    ],
+    "sq-haiku-line-lane-t": [
       {
         "text": "get_monitor_environment_context builds a modified config copy but returns the unmodified original",
         "path": null,

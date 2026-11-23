@@ -96,7 +96,15 @@ Unions of separately judged entries (strict recall of 139):
 | run 1 + fable-high | $1.55 | 72.7% (101) | 495 |
 | new-rules run + line pass | $0.13 | 64.7% (90) | 187 |
 | run 1 + run 2 + fable-high | $1.67 | 74.1% (103) | |
+| run 1 behavior-lane filtered + line pass | $0.13 | 71.2% (99) | 207 |
 
+The last row judged as one entry (`sq-haiku-line-lane-t`: both reviewers' findings, behavior-lane categories only, 343 titles):
+
+| Entry | $/review | Recall | Precision | Critical | Critical + High | Low | False flags |
+|---|---|---|---|---|---|---|---|
+| haiku-xhigh run 1 + line pass, behavior-lane filter on both | $0.13 | 69.1% (96) | 33.4% | 11/12 | 55/66 | 6/18 | 191 |
+
+- Judged as one entry the pair holds up: 6 more hits than haiku-xhigh run 1 alone, 3 more critical or high, and 69 fewer false flags. The union row filters only haiku-xhigh's findings; the judged entry also filters the line pass's (113 of its 134 kept), so the two differ by more than the judge run.
 - Telling the reviewer to leave out the rules categories gives the same precision as filtering those categories out afterwards, and ten fewer hits. One run each, so part of that gap may be run-to-run spread.
 - The no-tools line pass costs a cent, takes 20 seconds, and has the best precision of any squadron entry. It adds 11 golden comments to run 1, as many as fable-high did for $1.43. It does not close the low-severity gap (5 of 18).
 - The new-rules run plus the line pass reaches run 1's recall with 187 false flags in place of 260.
@@ -147,11 +155,11 @@ Greptile names one bug per PR. Matching those 50 to the judged golden comments, 
 Every review, comb and judge run started on 2026-11-22 finished and is in this file. Not done:
 
 - Opus 4.5 and GPT-5.2 judges on a final entry (`judge.sh` with `anthropic/claude-opus-4.5` and `openai/gpt-5.2`). Every number here is from one judge model.
-- haiku-xhigh + line pass judged as one entry. The union above compares two separately judged entries.
-- The shipped comb prompt (`src/squadron/data/templates/comb.yaml`) is unchanged; see the comment on #389.
-- Recipe fix #389 is committed as 32089d9d.
+- A second run of the judged pair. It is one run of each reviewer, and a second haiku-xhigh run differed by five points of recall.
 
-The harness checkout and the 50 sandboxes are in a scratch folder and can be rebuilt (`setup.py`, then clone the harness, add entries with `convert.py`). The judge results are copied to `harness-results/`; copy again after each judge run.
+Done after that list was written: the pair judged as one entry (table above), and the shipped comb prompt (`src/squadron/data/templates/comb.yaml`) now carries the truth-only wording (6778d02a; the recipe fix is 32089d9d; both #389).
+
+The harness checkout and the 50 sandboxes are in `~/.config/squadron/martian-20261122/` (copied there from the session scratch folder so a reboot does not clear them) and can be rebuilt (`setup.py`, then clone the harness, add entries with `convert.py`). The judge results are copied to `harness-results/`; copy again after each judge run.
 
 ## Related results from the same day
 
