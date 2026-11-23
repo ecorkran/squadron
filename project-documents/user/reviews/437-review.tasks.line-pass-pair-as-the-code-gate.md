@@ -6,7 +6,7 @@ slice: line-pass-pair-as-the-code-gate
 conventionsSource: none
 projectRules: [general.md]
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md
 aiModel: claude-haiku-5-5
@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261123
 dateUpdated: 20261123
-reviewedSha: 92cce870f3b078e7bd540d76911a3c4df784b8a5
-reviewedBlob: 56cf19e67fcde8f635f15b3a1c3b6069f6ccaff5
+reviewedSha: 0515650c49a02e1e53ed6e02d14fd3fad8f92867
+reviewedBlob: 2200a7d5ccc8bc734f0e1b3ab7eb09f33fa21ab3
 reviewedBlobCurrent: false
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 79
+toolCallsMade: 103
 injected:
   - key: input
     path: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md"
-    chars: 27064
-    sha256: e1a5334bddf13e0592a096534c4a3dc1e80c3104bb91fad3bbd59022564d0c1e
+    chars: 31837
+    sha256: f3722a1dbaba19931da7e772e4f12c82263dccc3fcbad4d7871a0f96b3452ddd
     whole: true
   - key: against
     path: "project-documents/user/slices/437-slice.line-pass-pair-as-the-code-gate.md"
@@ -32,310 +33,351 @@ injected:
     whole: true
 filesRead:
   - "src/squadron/recipes/recipe.py"
-  - "src/squadron/recipes/recipe_record.py"
-  - "src/squadron/recipes/kept_findings.py"
   - "src/squadron/recipes/recipe_runner.py"
-  - "src/squadron/recipes/stage_config.py"
-  - "src/squadron/core/finding_categories.py"
+  - "src/squadron/recipes/kept_findings.py"
   - "src/squadron/recipes/recipe_outcome.py"
   - "src/squadron/recipes/comb_call.py"
+  - "src/squadron/recipes/stage_config.py"
   - "src/squadron/recipes/model_ref.py"
-  - "src/squadron/recipes/recipe_merge.py"
-  - "src/squadron/pipeline/actions/review_recipe.py"
   - "src/squadron/cli/commands/review_recipe.py"
-  - "src/squadron/metrology/recipe_review_models.py"
-  - "src/squadron/review/persistence.py"
+  - "src/squadron/pipeline/actions/review_recipe.py"
   - "src/squadron/review/parsers.py"
-  - "src/squadron/pipeline/actions/review.py"
-  - "src/squadron/benchmark/recall/real_work.py"
+  - "src/squadron/review/persistence.py"
+  - "src/squadron/recipes/recipe_merge.py"
+  - "src/squadron/recipes/recipe_record.py"
   - "tests/recipes/support.py"
-  - "tests/recipes/conftest.py"
+  - "src/squadron/metrology/recipe_review_models.py"
+  - "src/squadron/benchmark/recall/real_work.py"
   - "src/squadron/benchmark/recall/scoring.py"
+  - "src/squadron/benchmark/recall/stage_runner.py"
   - "src/squadron/benchmark/recall/run_plan.py"
-  - "docs/PIPELINES.md"
-  - "tests/cli/commands/test_run.py"
+  - "src/squadron/benchmark/recall/label_candidates.py"
+  - "src/squadron/benchmark/recall/report_json.py"
   - "tests/review/test_review_template_defaults.py"
-  - "src/squadron/cli/commands/review.py"
+  - "tests/benchmark/recall/test_recipe.py"
+  - "src/squadron/data/pipelines/P6.yaml"
+  - "tests/recipes/test_import_boundary.py"
+  - "tests/recipes/test_stage_config.py"
+  - "src/squadron/review/review_client.py"
+  - "src/squadron/data/models.toml"
+  - "project-documents/user/reference/review-recall-results/20261122-martian/convert.py"
+  - "src/squadron/core/finding_categories.py"
+  - "src/squadron/metrology/review_category_map.py"
+  - "src/squadron/pipeline/actions/dispatch.py"
+  - "tests/cli/commands/test_run.py"
+  - "docs/PIPELINES.md"
+  - "README.md"
+  - "src/squadron/pipeline/loader.py"
+  - "src/squadron/pipeline/classification.py"
+  - "src/squadron/pipeline/prompt_renderer.py"
+  - "src/squadron/pipeline/actions/review.py"
+  - "tests/pipeline/test_classification.py"
 searches:
-  - "grep class StageConfig|def config_key|class RecallFinding|class StageKind|tool_use|rules_hash|category in /Users/manta/source/repos/manta/squadron/src/squadron/metrology/recall_run_models.py"
-  - "grep no_tools|rules_content|model_allows_tools|def run_review_with_profile in /Users/manta/source/repos/manta/squadron/src/squadron"
-  - "grep RULES_SEPARATOR in /Users/manta/source/repos/manta/squadron/src/squadron"
-  - "grep No specific findings|## Findings|recipe\\b|RecipeReviewInfo|stage_section in /Users/manta/source/repos/manta/squadron/src/squadron/review"
-  - "grep recipe|classify_review_model|resolve_review_model_ref|has_diff in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/classification.py"
-  - "grep Known recipes|haiku-solr-luna|haiku-sol-luna|SHIPPED|the_two in /Users/manta/source/repos/manta/squadron/tests"
-  - "grep _FINDING_RE\\s*=|_HEADING_RE\\s*=|_CATEGORY_RE\\s*=|_LOCATION_RE\\s*=|def _count_finding_matches|def _mask_fences|_SEVERITY_MAP\\s*= in /Users/manta/source/repos/manta/squadron/src/squadron/review/parsers.py"
-  - "grep degraded\\s*=|fallback_used\\s*=|fallback_used:|findings_section_located in /Users/manta/source/repos/manta/squadron/src/squadron/review"
-  - "list_files src/squadron/data/recipes/* in /Users/manta/source/repos/manta/squadron"
-  - "list_files project-documents/user/reference/review-recall-recipes/* in /Users/manta/source/repos/manta/squadron"
-  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/**/* in /Users/manta/source/repos/manta/squadron"
-  - "list_files tests/recipes/**/*.py in /Users/manta/source/repos/manta/squadron"
-  - "list_files tests/benchmark/recall/**/*.py in /Users/manta/source/repos/manta/squadron"
-  - "list_files src/squadron/data/pipelines/*.yaml in /Users/manta/source/repos/manta/squadron"
-  - "grep review-model|^\\s*model:|template: code|template: slice|template: tasks in /Users/manta/source/repos/manta/squadron/src/squadron/data/pipelines"
-  - "grep def reviewer_output|def expand_pending|def _reviewer_counts|Kept/review|Raw findings/review|def stage_outputs|ConfigFor|def live_stage_config|class StageIdentityResolver|def resolve\\(|def candidates|def label_candidates|not_gating in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark"
-  - "grep load_user_aliases in /Users/manta/source/repos/manta/squadron"
-  - "grep ^\\s*(\\[aliases\\.|\\[)?\"?(haiku|haiku-xhigh|sol|luna|sol-r|solr|sonnet|sonnet-high|opus|opus-high|haiku-opus|mimo|sol-opus)\"?\\]?\\s*(=|$) in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
-  - "grep reviewers:|combs:|pool:|^\\s+- |^\\s+\\w+: \\[ in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-recipes"
-  - "grep luna-r|opus-high\\]|^\\[aliases\\.opus-high in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
-  - "grep COLUMNS|Kept/review|Raw findings/review|Incomplete \\(aborted\\)|\\| Recipe \\| in /Users/manta/source/repos/manta/squadron/tests"
-  - "grep class \\w*(Error|Refus)\\w*\\(|refus|expand_pending\\(|bound in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
-  - "grep expand_pending|bound|RunRefused|Refused|class .*Error in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
-  - "grep def matching_reviews|def matching_chains|def identity_of|resolver\\.resolve in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
-  - "grep feedback in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/actions/dispatch.py"
-  - "grep def entry_key|def run_record_id|model_dump|_sha256_json\\( in /Users/manta/source/repos/manta/squadron/src/squadron/metrology/recall_run_models.py"
-  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/{*.md,*.py,out/*haiku-line*} in /Users/manta/source/repos/manta/squadron"
-  - "grep Exit\\(code=2\\)|exit_code=2|code=2|Exit\\(2\\) in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
-  - "grep def _findings_block|def _latest_review in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/actions/dispatch.py"
-  - "grep ^  \"[a-zA-Z_]+\":|\"verdict\"|\"severity\"|\"category\"|/Users/|/tmp/|sandbox in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out/keycloak-ke36882-haiku-xhigh-1.json"
-  - "grep CONCERN|FAIL|category|other|def |import in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/convert.py"
-  - "grep def test_standalone_review_default_matches_the_pipeline|def test_implement_plan_params_and_shape|def test_recipe_no_longer_shipped_is_refused_at_the_pre_run_check|standalone code review|runs P6|P6's reviewer in /Users/manta/source/repos/manta/squadron/tests"
-  - "grep review-model|matching `P6`|defaults to `haiku-xhigh`|haiku-xhigh in /Users/manta/source/repos/manta/squadron/docs/PIPELINES.md"
-  - "grep ^#+ .*[Rr]ecipe|^## \\[Unreleased\\]|haiku-xhigh in /Users/manta/source/repos/manta/squadron"
-  - "grep \\b437\\b|\\b18\\b.*(slice|line) in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
-  - "grep template: code in /Users/manta/source/repos/manta/squadron/src/squadron/data/pipelines"
+  - "list_files src/squadron/recipes/*.py in ."
+  - "list_files src/squadron/data/recipes/* in ."
+  - "list_files project-documents/user/reference/review-recall-recipes/* in ."
+  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/** in ."
+  - "list_files tests/recipes/**/* in ."
+  - "list_files tests/benchmark/recall/*.py in ."
+  - "grep def config_key|class StageConfig|class RecallFinding|class StageKind|def content_key|SCORED_SEVERITIES in /Users/manta/source/repos/manta/squadron/src"
+  - "grep no_tools|rules_content|def run_review_with_profile in /Users/manta/source/repos/manta/squadron/src/squadron/review/review_client.py"
+  - "grep model_allows_tools|no_tools|rules_content|run_recipe\\(|RecipeReviewCall\\(|options= in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep _locate_section|re\\.compile|_BULLET|_HEADING|def parse_findings|def _scan|Findings Not Parsed|No specific findings|No gating in /Users/manta/source/repos/manta/squadron/src/squadron/review"
+  - "grep if result\\.findings:|fallback_used|degraded|No specific findings|Findings Not Parsed|stage_section|recipe\\b|## Findings|## Recipe|def  in /Users/manta/source/repos/manta/squadron/src/squadron/review/persistence.py"
+  - "grep class RecipeReviewInfo|stage_section|not_gating|class ReviewFinding|category|raw_category in /Users/manta/source/repos/manta/squadron/src/squadron/review/models.py"
+  - "grep def |^class |^[A-Z_]+ =  in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall/scoring.py"
+  - "grep def entry_matches|def matching_reviews|def matching_chains|def identity_of|class StageIdentityResolver|def resolve|def live_stage_config|ConfigFor|class PendingStage|def review_argv|def comb_input_findings|def expand_pending|class RecallRefusal|def planned_stages|def _pair_variants in /Users/manta/source/repos/manta/squadron/src"
+  - "grep def entry_matches|def matching_reviews|def matching_chains|def identity_of|class StageIdentityResolver|def live_stage_config|^ConfigFor|class ConfigFor|class PendingStage|def review_argv|def comb_input_findings|def expand_pending|class RecallRefusal|class StageIdentity\\b|def resolve\\( in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep expand_pending\\(|bound|RecallRefusal|def recall_run|def run\\( in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
+  - "grep expand_pending\\(|bound_line|def bound|print_bound|\\.bound\\(|typer\\.echo\\(.*bound in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep class RowJson|class BoundsJson|findings_per_run|recall_|EXPECTED_ROW|not_gating|def |label_candidates|candidates in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
+  - "grep EXPECTED_ROW|BoundsJson|RowJson|def test_ in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/test_report_json_schema.py"
+  - "grep SHIPPED|test_shipped_recipes_are_the_two|Known recipes|haiku-xhigh|review-model|review_model|test_standalone_review_default_matches_the_pipeline|test_implement_plan_params_and_shape|standalone code review|P6's reviewer|test_review_model_recipe_passes_the_pre_run_check|test_recipe_no_longer_shipped in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep review-model|implement_plan_params|def test_implement_plan|\\\"model\\\"|P6|implement-plan in /Users/manta/source/repos/manta/squadron/tests/pipeline/test_builtin_pipelines.py"
+  - "grep review-model|model:|template:|comment|^#|haiku-xhigh in /Users/manta/source/repos/manta/squadron/src/squadron/data/pipelines"
+  - "grep review-model|review_model|template\\.model|default_model_code|def _resolve_code_model|resolve_review_model in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
+  - "grep RULES_SEPARATOR\\s*=|class ReviewCategory|def map_historical_category|def shipped_recipes_dir|def production_recipe_dirs|def known_recipe_names|def find_recipe|def _find_path in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "list_files tests/{cli/test_benchmark_recall_run.py,pipeline/actions/test_review_recipe.py,metrology/test_recipe_review_models.py,review/test_persistence.py,pipeline/test_classification.py,pipeline/test_builtin_pipelines.py,pipeline/test_loader.py,benchmark/recall/test_label_candidates.py,cli/test_review_max_cl\u2026 in ."
+  - "grep \"--diff\"|\"--cwd\"|\"--no-save\"|\"--max\"|\"--files\"|exit_code == 1|dry.run|\"--dry-run\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
+  - "grep \"--diff\"|\"--cwd\"|\"--max\"|\"--files\"|\"--verbose|\"-v\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
+  - "grep ^\\s*(reviewers|combs|name): in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-recipes"
+  - "grep ^\\[|^name\\s*=|^\\[\\[ in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
+  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/{rules-line-pass.md,convert.py,RESULTS.md} in ."
+  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/out/*-haiku-line-1.json in ."
+  - "grep \"(category|severity|verdict|findings|raw_category)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out/cal.com-ca7232-haiku-line-1.json"
+  - "grep architectural-decay|OTHER|\"other\"|def map_historical_category|_HISTORICAL|_ALIASES|=\\s*\"[a-z-]+\" in /Users/manta/source/repos/manta/squadron/src/squadron/metrology/review_category_map.py"
+  - "grep feedback.*review|def _feedback|def build_feedback|feedback_text|review_feedback|findings_feedback|\\.findings\\b in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/actions"
+  - "grep haiku-xhigh|\"P6\"|'P6'|implement\\.yaml|review-model.*default|params\\[.review-model.\\] in /Users/manta/source/repos/manta/squadron/tests"
   - "grep haiku-xhigh|review-model in /Users/manta/source/repos/manta/squadron/tests"
-  - "grep Param \\| Default|^#+ .*P6|`P6` in /Users/manta/source/repos/manta/squadron/docs/PIPELINES.md"
-  - "grep line-pass|line pass|haiku-xhigh|\\| *18 *\\||^1[5-9]\\.|18\\. in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
-  - "grep in step|P456|P56|\"P6\"|implement-plan in /Users/manta/source/repos/manta/squadron/tests/pipeline/test_builtin_pipelines.py"
-  - "grep \"template_hash\"|\"recipe_hash\"|\"tool_use\"|model_dump\\(\\)\\s*==|config_key\\\"?\\s*:|\"max_output_tokens\" in /Users/manta/source/repos/manta/squadron/tests"
-  - "grep split\\(|cells|\\[\\d\\]|== \\[|header|Recipe \\| in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/test_real_work.py"
-  - "grep json|schema|keys|SCHEMA in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/test_report_json_schema.py"
-  - "grep RecipePart\\(|rules_content= in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/actions/review.py"
-  - "grep package-data|package_data|include|artifacts|\\[tool\\.hatch|\\[tool\\.setuptools|\\[build-system\\]|force-include|\\*\\*/\\*|data/ in /Users/manta/source/repos/manta/squadron/pyproject.toml"
-  - "grep shipped_recipes_dir\\(\\)|def shipped_recipes_dir|iterdir|glob\\( in /Users/manta/source/repos/manta/squadron/src/squadron"
-  - "grep \"--dry-run\"|\"--no-save\"|\"--cwd\"|\"--real-work\"|\"--max\"|\"--diff\"|\"--files\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
-  - "grep def review_argv|def live_stage_config|alias_stage_config\\( in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark"
-  - "list_files project-documents/user/reference/review-recall-results/20261122-martian/RESULTS.md in /Users/manta/source/repos/manta/squadron"
-  - "grep \"category\": \"other\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out"
-  - "grep \"real-work\"|\"--real-work\"|\"--dry-run\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
+  - "grep \"P6\"|'P6'|implement\\.yaml|\"implement\"|load_pipeline\\(\"P6|classify_pipeline\\( in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep (include|package-data|package_data|artifacts|force-include|\\.yaml|\\.md|\\.toml|data/) in /Users/manta/source/repos/manta/squadron/pyproject.toml"
+  - "grep real.work|real_work|\"--cwd\"|\"--dry-run\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/benchmark_recall.py"
+  - "grep \\[aliases\\.|\\[\\[|^- \\[|^\\| 18|437|haiku-xhigh in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
+  - "list_files project-documents/user/slices/43*.md in ."
   - "grep real-work|real_work in /Users/manta/source/repos/manta/squadron/src/squadron/cli"
-  - "grep model_dump|model_fields|recipe_hash\\(|_reviewer_counts|chain_counts in /Users/manta/source/repos/manta/squadron/tests"
-sectionsInDocument: 26
-sectionsCovered: 26
+  - "grep ^\\s*(\\d+\\.|- \\[.\\]|\\*\\*\\d+)\\s.*(43[0-9]|18\\.)|^\\s*(1[5-9]|2[0-9])\\.\\s in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
+  - "list_files {DEVLOG.md,CHANGELOG.md,docs/PIPELINES.md,README.md,project-documents/DEVLOG*.md,project-documents/user/DEVLOG*} in ."
+  - "grep \\(437\\)|^18\\. |uv run sq|cd <fixture>|--cwd|Walkthrough|step 5|5\\. \\*\\* in /Users/manta/source/repos/manta/squadron/project-documents/user/slices/434-slice.recipe-reviews-in-pipelines.md"
+  - "grep ^1[6-9]\\. |^2[0-2]\\.  in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
+  - "grep ^[0-9]+\\. \\[.\\] \\*\\*\\((43[0-9]|18)\\)[^*]*\\*\\* in /Users/manta/source/repos/manta/squadron/project-documents/user/architecture/420-slices.model-benchmark.md"
+  - "grep review-model|haiku-xhigh|Recipe reviews|##  in /Users/manta/source/repos/manta/squadron/docs/PIPELINES.md"
+  - "grep haiku-xhigh in /Users/manta/source/repos/manta/squadron/README.md"
+  - "grep def _classify_or_exit|ReviewModelError|Exit\\(code=|typer\\.Exit in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
+  - "list_files tests/{cli,recipes,pipeline}/**/*recipe*.py in ."
+  - "grep exclude|only-include|\\[tool\\.hatch|\\[tool\\.setuptools|package-data|PROJECT_RECIPES_DIR\\s*=|SHIPPED_RECIPES_SUBDIR\\s*= in /Users/manta/source/repos/manta/squadron"
+  - "grep ^## |Unreleased in /Users/manta/source/repos/manta/squadron/CHANGELOG.md"
+  - "grep \"max_output_tokens\"\\s*:|model_dump\\(\\)\\s*==|\\.model_fields|\"tool_use\"\\s*:|\"template_hash\"\\s*: in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep RecipeRef|run_recipe_part|resolve_review_model_ref|classify_review_model|RecipePart\\( in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep review|ReviewAction|REVIEW in /Users/manta/source/repos/manta/squadron/src/squadron/pipeline/steps/phase.py"
+  - "grep require_known_model|resolve_model_alias|get_all_aliases\\(\\)|BUILTIN|builtin_pipeline_names|for name in .*PIPELINE in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep \"category\": \"(error-handling|testing|test-coverage|design|design-principles|structure|dry|project-conventions|consistency|typing|performance|security|documentation|concurrency|observability|style|code-quality|bug|logic)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out"
+  - "grep \"category\": \"(?:error-handling|testing|test-coverage|design|design-principles|structure|dry|project-conventions|consistency|typing|performance|security|documentation|concurrency|observability|style|code-quality|bug|logic)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out"
+  - "grep \"category\": \"(architectural-decay|correctness|other)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out"
+  - "grep \"category\": (null|\"\") in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261122-martian/out"
+sectionsInDocument: 27
+sectionsCovered: 27
 effort: xhigh
-turns: 80
-promptTokens: 4463314
-cachedTokens: 4197751
-cacheWriteTokens: 265511
-completionTokens: 138157
-durationSeconds: 565.0
-costUsd: 0.705506
+turns: 104
+promptTokens: 13395264
+cachedTokens: 13037877
+cacheWriteTokens: 357267
+completionTokens: 181109
+durationSeconds: 752.6
+costUsd: 1.32549
 costBasis: provider
 runId: run-20261123-p5-55b85c9e
 squadronVersion: 0.24.37
 findings:
   - id: F001
-    severity: fail
-    category: correctness
-    summary: "Task 10's empty-Findings rule does not keep the Not-gating table out of the parser"
-    location: "src/squadron/review/parsers.py:775-778"
+    severity: concern
+    category: spec-defect
+    summary: "Task 3's keep_categories check is unreachable as written"
+    location: "src/squadron/recipes/recipe.py:41"
   - id: F002
-    severity: fail
-    category: correctness
-    summary: "Task 5 misdescribes `recipe_hash`; the literal change alters every recipe's hash"
-    location: "src/squadron/recipes/recipe_record.py:102-105"
+    severity: concern
+    category: safety
+    summary: "Loader-set rules fields can be set from YAML"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:65"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Task 2's pin test iterates the shipped directory, so Task 17 breaks it"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:52"
+    category: missing-mechanism
+    summary: "Task 16 leaves the \"before the filter\" numbers without a mechanism"
+    location: "src/squadron/benchmark/recall/label_candidates.py:77-84"
   - id: F004
     severity: concern
-    category: correctness
-    summary: "The degraded branch overrides the new rule for an UNKNOWN recipe with only not-gating findings"
-    location: "src/squadron/review/persistence.py:789-800"
+    category: granularity
+    summary: "Task 16 is too large for one task"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:192"
   - id: F005
     severity: concern
-    category: correctness
-    summary: "\"Matches no stored entry\" needs a named skip, because the resolver must not change"
-    location: "src/squadron/benchmark/recall/scoring_select.py:49-55"
+    category: spec-gap
+    summary: "Task 19 does not say where the expected file lives or what it looks like"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:227"
   - id: F006
     severity: concern
-    category: test-infrastructure
-    summary: "Task 9's scripted call cannot record `no_tools` or `rules_content`"
-    location: "tests/recipes/support.py:84-111"
+    category: granularity
+    summary: "Task 22 is one task spanning six scenarios and names no file"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:250"
   - id: F007
     severity: concern
-    category: scope
-    summary: "Task 15 changes a pinned JSON schema and leaves the change open"
-    location: "tests/benchmark/recall/test_report_json_schema.py:21-25"
+    category: verification
+    summary: "Task 24 step 6 cannot produce a row as written"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:274-278"
   - id: F008
     severity: concern
-    category: error-handling
-    summary: "Task 3's unknown-category refusal cannot name the value through the existing error path"
-    location: "src/squadron/recipes/recipe.py:69-73"
+    category: docs
+    summary: "Task 23 leaves two stale passages in docs/PIPELINES.md"
+    location: "docs/PIPELINES.md:305"
   - id: F009
     severity: concern
-    category: scope
-    summary: "Task 3 is too large for one task"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:60"
+    category: process
+    summary: "Task 10 changes a design rule inside an implementation task"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:148"
   - id: F010
     severity: concern
-    category: scope
-    summary: "Task 10 bundles separable work, including the part the first FAIL blocks"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:133"
+    category: format
+    summary: "Numbered sub-items in Tasks 3 and 4 have no checkboxes"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:68"
   - id: F011
-    severity: concern
-    category: coverage
-    summary: "No test runs the pipeline action path and checks the review shape"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:229"
-  - id: F012
-    severity: concern
-    category: docs-accuracy
-    summary: "Task 22 names a row that does not exist and points at one that must stay"
-    location: "docs/PIPELINES.md:1026-1033"
-  - id: F013
-    severity: note
-    category: clarity
-    summary: "Task 13 does not name the existing refusal type"
-    location: "src/squadron/benchmark/recall/refusal.py:6"
-  - id: F014
-    severity: note
-    category: clarity
-    summary: "Task 16 must thread the categories into `_reviewer_counts`"
-    location: "src/squadron/benchmark/recall/real_work.py:48"
-  - id: F015
-    severity: note
-    category: duplication
-    summary: "Two places compute the same rules hash"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:84"
-  - id: F016
-    severity: note
-    category: coverage
-    summary: "Task 12 names no test for the arch refusal"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:157"
-  - id: F017
     severity: note
     category: sequencing
-    summary: "Task 1 requires a clean tree that the snapshot does not have"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:47"
+    summary: "Task 9 must split the findings before `_run_chain` runs"
+    location: "src/squadron/recipes/recipe_runner.py:228-249"
+  - id: F012
+    severity: note
+    category: spec-precision
+    summary: "Task 12 and D6's record derivation must count only OK review stages"
+    location: "src/squadron/recipes/recipe_runner.py:211-223"
+  - id: F013
+    severity: note
+    category: traceability
+    summary: "A design criterion names a P6 table row that does not exist"
+    location: "docs/PIPELINES.md:983"
+  - id: F014
+    severity: note
+    category: spec-precision
+    summary: "Task 11 does not say which `if result.findings:` it means"
+    location: "src/squadron/review/persistence.py:765"
+  - id: F015
+    severity: note
+    category: traceability
+    summary: "Shared-name rules from the Context Summary are not carried into the tasks"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:40"
+  - id: F016
+    severity: note
+    category: granularity
+    summary: "Two small tasks could merge into their neighbours"
+    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:166"
+  - id: F017
+    severity: pass
+    category: verified
+    summary: "The D6 escaping rule defeats the parser's patterns"
+    location: "src/squadron/review/parsers.py:91-110"
   - id: F018
-    severity: note
-    category: docs-accuracy
-    summary: "The P6 comment rewrite must also remove the existing figures"
-    location: "src/squadron/data/pipelines/P6.yaml:8-16"
+    severity: pass
+    category: verified
+    summary: "Reviser feedback comes from the action's findings"
+    location: "src/squadron/pipeline/actions/dispatch.py:897-958"
   - id: F019
-    severity: note
-    category: clarity
-    summary: "Four tasks name no test file"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:146"
+    severity: pass
+    category: verified
+    summary: "Task 2's pins are feasible"
+    location: "src/squadron/recipes/stage_config.py:86-95"
   - id: F020
-    severity: note
-    category: clarity
-    summary: "Task 23 says to remove the Draft text from a heading, but it is a paragraph"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:256"
+    severity: pass
+    category: verified
+    summary: "A tool-less recipe review is already refused"
+    location: "src/squadron/recipes/model_ref.py:136-139"
   - id: F021
-    severity: note
-    category: verification
-    summary: "Task 24's grep check is not a mechanical test"
-    location: "project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md:262"
+    severity: pass
+    category: verified
+    summary: "review-model feeds only code steps; loader and classification refusals line up"
+    location: "src/squadron/data/pipelines/P6.yaml:28"
   - id: F022
     severity: pass
-    category: verification
-    summary: "Code claims that check out"
-    location: "src/squadron/pipeline/actions/review_recipe.py:124-128"
+    category: verified
+    summary: "The check-off target for Task 25 exists"
+    location: "project-documents/user/architecture/420-slices.model-benchmark.md:236"
+  - id: F023
+    severity: pass
+    category: verified
+    summary: "Stored outputs are clean for Tasks 19 and 20"
+    location: "project-documents/user/reference/review-recall-results/20261122-martian/out"
+  - id: F024
+    severity: pass
+    category: verified
+    summary: "A finding with no category stays gating"
+    location: "src/squadron/metrology/review_category_map.py:48-49"
 ---
 
 # Review: tasks — slice 437
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-haiku-5-5
 
 ## Findings
 
-### [FAIL] Task 10's empty-Findings rule does not keep the Not-gating table out of the parser
+### [CONCERN] Task 3's keep_categories check is unreachable as written
 
-Task 10 (lines 137, 141) and Task 21 (line 233) rely on design D6 (lines 213–214): with no gating finding, write `## Findings` and the "No gating findings" line so the parser does not scan the table. The heading does not do that. `_locate_section` returns `None` when the Findings span holds no finding-shaped text but the document does (parsers.py:775–778), which is this case. `_extract_findings` then scans the whole response (parsers.py:816–817). The bullet alternative of `_FINDING_RE` is not line-anchored (parsers.py:100), so the `- [CONCERN] ` inside a table title matches. Its body runs to the next `## ` heading or end of text (parsers.py:102–107). The D6 parser test at line 141 therefore parses a finding, and the ingest assertion at line 233 fails the same way. The plan needs a decision: escape finding-shaped text in table cells and test that, or change the guard, which also changes real-review ingest and needs its own tests.
+`keep_categories` is typed `tuple[ReviewCategory, ...] | None`, so pydantic checks each value before any `mode="after"` validator runs. Task 3 puts the explicit check "in a validator" (task file line 70). The only model validator is `_checks` (recipe.py:41-49, mode "after"). For a bad value the enum error fires first and reads "Input should be …" without the input, so the explicit ValueError never runs. Refusal 3's test (task file line 76, which asserts the bad value appears) would fail. Specify `field_validator("keep_categories", mode="before")` that checks raw values against `ReviewCategory` and names both the bad value and the valid ones.
 
-### [FAIL] Task 5 misdescribes `recipe_hash`; the literal change alters every recipe's hash
+### [CONCERN] Loader-set rules fields can be set from YAML
 
-Task 5 (line 84) says `recipe_hash` "dumps `name`, `reviewers`, `pool`, `combs` as today". It does not. It dumps `recipe.model_dump(mode="json")` (recipe_record.py:104), which is every field of `Recipe`. Once Task 3 adds `reviewer_options` and `keep_categories` as fields, every recipe's dump gains `"keep_categories": null` and `"reviewer_options": {}`, which changes every pin in Task 2. A recipe with options would also dump `rules_path` and `rules_content` from the nested `ReviewerOptions`, which Task 5 says must never appear. Task 5 should say to build the four-key canonical dict explicitly, adding the two optional keys only when set. Task 2's pins would catch a literal implementation, but the instruction points the implementer the wrong way.
+`rules_path` and `rules_content` are declared fields of `ReviewerOptions`, so `extra="forbid"` does not reject them. A recipe with `reviewer_options: {haiku: {rules_content: "…"}}` and no `rules` passes validation. Refusals 1–5 (lines 68–72) do not cover it, and nothing in Tasks 4–8 does either. Task 8's `reviewer_call_options` and Task 4's `rules_sha256` would then send and hash text that never came from a file. Refuse those keys in YAML with a before-validator, or keep the loader-set values on a separate type.
 
-### [CONCERN] Task 2's pin test iterates the shipped directory, so Task 17 breaks it
+### [CONCERN] Task 16 leaves the "before the filter" numbers without a mechanism
 
-Task 2 (line 52) asks for "every recipe in the shipped directory (`shipped_recipes_dir()`, 2 files)". Task 17 (line 199) says the pins still pass because the new recipe "is not pinned". Read literally, the directory loop finds `haiku-line-pass` with no recorded value and fails at the Task 17 commit. Task 24 (line 261) requires the file to stay unmodified after Task 2, so the fix cannot wait. Task 2 should name the 13 files explicitly: 2 shipped and 11 reference.
+`findings_per_run_unfiltered`, `recall_unfiltered`, the `not_gating` list and the label candidates all need reviewer output computed without `keep`. Today `_findings` reads `reviewer.upper` (line 83), which a filter shrinks, and `recipe_outputs` builds rows through `_pair_variants`, which Task 16 makes filter. The task does not say how to get the unfiltered set. `ReviewerOutput` (scoring.py:43-51) also has no field for the not-gating findings the JSON list needs. Name the approach: an unfiltered pass with `recipe.model_copy(update={"keep_categories": None})`, and a `not_gating` tuple on `ReviewerOutput` set in `reviewer_output`.
 
-### [CONCERN] The degraded branch overrides the new rule for an UNKNOWN recipe with only not-gating findings
+### [CONCERN] Task 16 is too large for one task
 
-persistence.py checks `result.findings` (line 765), then `fallback_used` (776), then `degraded` (789), and only then writes "No specific findings." (800). Task 10 (line 137) places the new rule where that last line is, so it is never reached in this case. Task 21's case "only not-gating findings from haiku-xhigh → verdict UNKNOWN" (line 237) makes `degraded` true (persistence.py:613). The file then gets "## Findings Not Parsed" and "No verdict and no findings could be extracted", which is false for a recipe whose findings were extracted. With no `## Findings` heading, the parser problem above also applies. The new rule must come before the degraded branch, and Task 21 should assert the saved section.
+It spans scoring, the JSON schema, report build, report render, label candidates and four test modules. Split it into (a) scoring: `reviewer_output` keep, `_pair_variants`, the unfiltered pass, `ReviewerOutput.not_gating`, label candidates; and (b) report: the three JSON keys, `EXPECTED_ROW`, build, render.
 
-### [CONCERN] "Matches no stored entry" needs a named skip, because the resolver must not change
+### [CONCERN] Task 19 does not say where the expected file lives or what it looks like
 
-`entry_matches` compares `identity_of(entry)` with `resolver.resolve(alias, kind)`. `live_stage_config` (src/squadron/benchmark/recall/stage_identity.py:35) passes no options, so the line-pass reviewer's identity equals plain `haiku`'s, and a stored tool-enabled `haiku` entry would match. D8 (design line 234) forbids changing `resolve`. Task 14 (line 168) should name where the skip goes. `_pair_variants` (scoring.py:141–159) has `recipe` and can return no variants for a reviewer with options.
+Task 19 says "Write the expected file once", and Task 20 asserts against "the expected file" (line 232). Neither gives a path or a structure. Name the path under `tests/recipes/fixtures/hand_run/` and its shape: per PR and reviewer, the ordered list of titles. Also state that the five PRs' categories must be `ReviewCategory` values, since Task 20 asserts it (line 233).
 
-### [CONCERN] Task 9's scripted call cannot record `no_tools` or `rules_content`
+### [CONCERN] Task 22 is one task spanning six scenarios and names no file
 
-`CallRecord` holds alias, template, `allowed_tools`, cwd and inputs. `__call__` keeps no other keyword. Task 9 (line 126) and Task 21 (line 232) assert `no_tools=True` and the rules text on the scripted call, but no task names this file as one to change.
+Line 251 says "the review CLI tests" without naming a file; `tests/cli/test_review_recipe.py` is the existing module. The task bundles the CLI run, the action path, the reviser check, two failed-line-pass cases and two refusals. The design's criterion that the call arguments hold "from both entry points' options dicts" (design line 324) is checked only for the CLI (`no_tools=True`, line 253). Nothing asserts the action path's call arguments. Name the file, split the task (CLI run and refusals; action path, reviser and failure modes), and assert `no_tools` and rules content on the action path as well.
 
-### [CONCERN] Task 15 changes a pinned JSON schema and leaves the change open
+### [CONCERN] Task 24 step 6 cannot produce a row as written
 
-The test's docstring says "The report --json schema is fixed for slice 433", and it asserts the top-level keys and `$defs`. Task 15 (line 175) says to update the test "if the schema is pinned". It is pinned. The per-finding gating mark is a schema change. The task must decide where the mark lives and update the pinned sets.
+434's walkthrough step 4 sets `sq config set metrology.project_id <id> --project` (434 slice, Verification Walkthrough step 4, around line 451), and warns that a repo with no git remote and no recorded id gets `recipe record: not written`. Task 24's fixture repo (line 276) has neither, so step 6 (line 278) has no records to count. Copy the config line into step 4 of Task 24.
 
-### [CONCERN] Task 3's unknown-category refusal cannot name the value through the existing error path
+### [CONCERN] Task 23 leaves two stale passages in docs/PIPELINES.md
 
-`load_recipe` builds the `RecipeError` from `error["msg"]` only (recipe.py:72). A pydantic enum error's message lists the valid values but, as I read it, does not echo the bad input. Task 3 (line 68) requires the message to name the value. The task should require an explicit check in the validator, or carry the error's input through, and Task 4's test should assert the value appears.
+Line 305 lists the shipped recipes as `haiku-solr-luna` and `haiku-sol-luna`, and says each "runs two reviewers and one `luna-r` comb". Line 313 lists the refusals and lacks the two new D7 refusals. Task 23 (lines 266–270) names neither passage, and its grep check (line 270) looks only for `haiku-xhigh`, so it will not catch them. Add both edits to Task 23.
 
-### [CONCERN] Task 3 is too large for one task
+### [CONCERN] Task 10 changes a design rule inside an implementation task
 
-Task 3 covers the model, seven refusals, the rules-file read with its four failures, the recipe-file UTF-8 handling, and possibly a helper module. Split it: 3a for the model fields, `keep_categories` and the combs refusal; 3b for the rules-file read and its refusals. Each part can then be tested on its own.
+Line 148 has Task 10 edit the design's D6 cell rule. The design (line 212) escapes only `|`, and the task widens that to `|`, `[` and `#`. Until Task 10 runs, the task and the design disagree, and the change skips the planning cadence. Put it in its own planning commit before Task 10. Also say that every `#` in a cell is escaped: `_FINDING_RE` matches `###` anywhere (parsers.py:94), so escaping only the first `#` leaves a match.
 
-### [CONCERN] Task 10 bundles separable work, including the part the first FAIL blocks
+### [CONCERN] Numbered sub-items in Tasks 3 and 4 have no checkboxes
 
-Task 10 covers the table, the docstring fix, the `RecipeReviewInfo` field, the persistence rule and four test groups, including the parser test. Split it: 10a for the table, field, docstring and merge tests; 10b for the persistence rule and the parser test.
+Task 3's refusals (lines 68–72) and Task 4's refusal cases (lines 81–85) are numbered `1.` to `5.` lines. The convention requires a `[ ]` on every item and subitem, and task-checker cannot tick these. Make each one a `- [ ]` subitem.
 
-### [CONCERN] No test runs the pipeline action path and checks the review shape
+### [NOTE] Task 9 must split the findings before `_run_chain` runs
 
-Design line 351 requires `sq review code --model haiku-line-pass` and a P6 run to produce the same shape: one review file with the Recipe section and one `recipe_review` record. Task 21 asserts the CLI path (lines 230–233) and the reviser's feedback. Task 23 step 5 is the CLI with `--max`. The action path (`run_recipe_part` in `pipeline/actions/review_recipe.py`) is never asserted to write the file and the record. Add that assertion to the existing `tests/pipeline/actions/test_review_recipe.py`.
+`_run_chain` passes `split.scored` (CONCERN and FAIL) to `chain_result`, which returns all of them when there are no combs (kept_findings.py:81-82). If Task 9 only computes `not_gating` and leaves `kept` alone, the filter does nothing. Task 9's test (line 140) would catch that, but the task should say the split runs first, so `kept` holds only gating findings.
 
-### [CONCERN] Task 22 names a row that does not exist and points at one that must stay
+### [NOTE] Task 12 and D6's record derivation must count only OK review stages
 
-There is no "P6 parameter table" with a `review-model` default. The one default row (line 1030) sits in the plan-batch parameter table, which describes slices-plan and tasks-plan. Those keep `haiku-xhigh`, since their templates are not code reviews. The sentence to change is at line 1059, in the implement-plan section ("same params as the plan batches above"). Task 22 should name that row and say the slices-plan and tasks-plan defaults stay.
+An UNKNOWN-verdict stage is recorded as CONFIG_FAILURE with its findings attached, but the runner uses none of them. D6 says the gating set "is derived from the two with split_by_category" (design line 218), and Task 12's test (line 171) says it reproduces the runner's set. Those differ for such a stage. `real_work.chain_counts` already restricts to OK stages (real_work.py:68-70). Say so in Task 12 and in the design sentence.
 
-### [NOTE] Task 13 does not name the existing refusal type
+### [NOTE] A design criterion names a P6 table row that does not exist
 
-The run's refusals are `RecallRefusal`. `expand_pending` (run_plan.py:87) runs before the bound is built and printed (benchmark_recall_run.py:77–80, 119–121), so the ordering in Task 13 holds. The task should name the class.
+The docs criterion (design line 348) asks for "its P6 parameter table row for review-model" to be corrected. The Built-in Pipelines table lists parameter names without defaults (lines 971–993), so there is no such row. Task 23 neither edits nor records this. Record that the criterion is met by the `implement-plan` sentence and the batch-table row.
 
-### [NOTE] Task 16 must thread the categories into `_reviewer_counts`
+### [NOTE] Task 11 does not say which `if result.findings:` it means
 
-`_reviewer_counts(review, combs)` takes only stages. `chain_counts(record)` has the record, so Task 16 (line 183) should say to pass `keep_categories` through `chain_counts` and `_row_cells`. The new column also appears in every real-work table, so "a record without the field gives today's row" is not literally true.
+`persistence.py` has two `if result.findings:` blocks: the frontmatter one (line 699) and the body one (line 765). The new branch belongs after the body one and before `elif result.fallback_used` (line 776). Say "body".
 
-### [NOTE] Two places compute the same rules hash
+### [NOTE] Shared-name rules from the Context Summary are not carried into the tasks
 
-Task 5 (line 84) and Task 6 (lines 93–94) both compute sha256 of `rules_content`. One helper in the recipes package should serve both, since the general rules forbid duplicated logic.
+Line 40 requires the #392 and #393 messages, the "Not gating" heading and the "No gating findings" line to each be one constant per message site. Tasks 3, 10, 11, 13 and 14 do not mention the constants. Add that requirement to each of them.
 
-### [NOTE] Task 12 names no test for the arch refusal
+### [NOTE] Two small tasks could merge into their neighbours
 
-Design D7 (line 226) refuses the recipe on `arch` reviews as well. Task 12 tests `slice`, `tasks` and `code`. Add `arch`, or record why it is left out.
+Task 12 is three lines of work and shares a commit with Task 13. Tasks 14 and 15 are small and already share a commit. Merging 12 into 13 and 14 into 15 would give each task its own unit of work without changing the commits.
 
-### [NOTE] Task 1 requires a clean tree that the snapshot does not have
+### [PASS] The D6 escaping rule defeats the parser's patterns
 
-The start-of-conversation git status lists the task file as modified and uncommitted, so `git status --short` is not clean. The planning commit should come before Task 1.
+`_FINDING_RE` matches the bullet form `-\s+\[SEV]`, the heading form `###\s+` and the bold form `\*\*\[SEV]\*\*`, none line-anchored. An escaped `[` breaks the bullet and bold forms. An escaped `#` breaks the heading form when every `#` is escaped. With every cell escaped, `_locate_section` (parsers.py:747-780) finds the Findings section empty and the whole-file fallback does not run. Task 11's parse test would pass.
 
-### [NOTE] The P6 comment rewrite must also remove the existing figures
+### [PASS] Reviser feedback comes from the action's findings
 
-The comment above `review-model` contains "64.7%" and "52 of the 66", plus recipe names. Task 20 (line 219) says "no numbers" but does not say to delete the old comment.
+`feedback: review` builds its block from the prior review action's `findings` (`_findings_block`), not from the file. Task 10's docstring correction is therefore needed: recipe_merge.py:3-5 still says "the reviser reads the review file". Task 22's reviser test checks the right thing.
 
-### [NOTE] Four tasks name no test file
+### [PASS] Task 2's pins are feasible
 
-Tasks 11 (lines 146–152), 15 (173–180), 17 (195–197) and 20 (225) list tests without a file path, so a junior would have to choose one. Name the files.
+Every reviewer and comb alias in the 13 pinned files (`haiku-xhigh`, `sol`, `sol-r`, `luna`, `luna-r`, `opus-high`, `mimo`, `sonnet`, `sonnet-high`, `haiku`) is built into models.toml, so `load_user_aliases` returning `{}` does not break them. The `planned_stages(recipe, hash)` signature matches the call Task 2 makes.
 
-### [NOTE] Task 23 says to remove the Draft text from a heading, but it is a paragraph
+### [PASS] A tool-less recipe review is already refused
 
-"Draft; refined after implementation." is the first body paragraph of the Verification Walkthrough (design line 356). The heading itself is "Verification Walkthrough".
+`validate_recipe_review` refuses `no_tools` on a recipe. A step's no-tools path therefore cannot reach `reviewer_call_options`, and Task 8's `no_tools` override cannot re-enable tools on such a step.
 
-### [NOTE] Task 24's grep check is not a mechanical test
+### [PASS] review-model feeds only code steps; loader and classification refusals line up
 
-`grep -rn keep_categories src/squadron` lists call sites, not comparisons. Checking that a category is compared only inside `split_by_category` needs a search for membership tests on the category. I did not locate "entry 18" in the 420 architecture file, so that check is unverified.
+P6 lines 28 and 45, implement.yaml 19 and 36, implement-plan.yaml 31 and 48, and review.yaml 11–12 use only `template: code`. P56 and P456 keep `haiku-xhigh`, as the design says. Loader validation passes `template=None` (loader.py:491-499), so Task 13's refusals do not run there. Classification passes `has_diff` from the template (classification.py:470), so `code` passes and `slice` and `tasks` are refused.
 
-### [PASS] Code claims that check out
+### [PASS] The check-off target for Task 25 exists
 
-Verified: the CLI options dict (cli/commands/review_recipe.py:80–84) carries `no_tools` and the action's (review_recipe.py:124–128) does not, as Task 8 says. `run_review_with_profile` takes `no_tools` and `rules_content` (review/review_client.py:147–157), and `RULES_SEPARATOR` is at project_rules/render.py:29. Both entry points pass the assembled rules. The 2 shipped and 11 reference recipes exist. The reference aliases (`luna-r`, `sol-r`, `opus-high`, `mimo`) are built-in (data/models.toml). The martian artifacts exist: rules-line-pass.md, convert.py, RESULTS.md, and haiku-line-1 outputs, some with `"category": "other"`. Review exits 2 on FAIL (cli/commands/review.py:471–472). `--real-work`, `--no-save`, `--max`, `--diff`, `--cwd` and `run --dry-run` exist. The reviser reads `review.findings` (dispatch.py:897–951), so Task 10's docstring fix is accurate. The wheel packages `src/squadron` (pyproject.toml:72), and recipe discovery globs `*.yaml` (recipe_search.py:50), so the `.md` rules file ships without being read as a recipe. The test names that Tasks 17 and 20 cite exist.
+`18. [ ] **(437) Line-Pass Pair as the Code Gate**` is present and unchecked.
+
+### [PASS] Stored outputs are clean for Tasks 19 and 20
+
+A search of the haiku outputs found no historical category strings from the mapping table and no null categories. The five PRs can therefore meet Task 19's rule and Task 20's assertion.
+
+### [PASS] A finding with no category stays gating
+
+`map_historical_category(None)` returns `(None, None)`, so `RecallFinding.category` stays None, and Task 7's "no category is gating" rule needs no special case.
 
 ### Run Digest
 
-- Response length: 23133 chars
+- Response length: 29666 chars
 - Response is newline-free: no
-- Tool calls made: 79
+- Tool calls made: 103
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -343,40 +385,13 @@ Verified: the CLI options dict (cli/commands/review_recipe.py:80–84) carries `
 - Settings sources: none
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 80
-- Tokens — prompt / cached / cache write / completion / reasoning: 4463314 / 4197751 / 265511 / 138157 / not computed
-- Duration: 565.0 s
-- Cost: $0.71 (provider)
+- Turns: 104
+- Tokens — prompt / cached / cache write / completion / reasoning: 13395264 / 13037877 / 357267 / 181109 / not computed
+- Duration: 752.6 s
+- Cost: $1.33 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 22
+- Finding-shaped matches — whole response: 24
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 22
-- Finding-shaped matches — surviving validation: 22
-
-## Resolution
-
-Task file revised 20261123 after this review. No further review was run.
-
-- **Task 10's empty-Findings rule does not keep the table out of the parser** — Applied: table cells escape `|`, `[` and `#`, so no cell holds finding-shaped text and the Findings span is kept (Task 10, which also adds this to design D6). The parser guard is unchanged.
-- **Task 5 misdescribes `recipe_hash`** — Applied: Task 5 builds the canonical dict explicitly instead of `model_dump`.
-- **Task 2's pin test iterates the shipped directory** — Applied: the 13 files are named.
-- **The degraded branch overrides the new rule** — Applied: Task 11 puts the branch before `fallback_used` and `degraded`; Tasks 11 and 22 assert the saved section for UNKNOWN.
-- **"Matches no stored entry" needs a named skip** — Applied: `_pair_variants` (Task 15).
-- **Task 9's scripted call cannot record `no_tools` or `rules_content`** — Applied: `CallRecord` gains both (Task 9).
-- **Task 15 leaves the pinned JSON schema open** — Applied: three named `RowJson` fields and the `EXPECTED_ROW` update (Task 16).
-- **Task 3's unknown-category refusal cannot name the value** — Applied: explicit validator check; the test asserts the value.
-- **Task 3 is too large** — Applied: split into Task 3 (fields, category refusals) and Task 4 (rules file read).
-- **Task 10 bundles separable work** — Applied: split into Task 10 (table, field, docstring) and Task 11 (persistence, parser test).
-- **No test runs the pipeline action path** — Applied: Task 22, `tests/pipeline/actions/test_review_recipe.py`.
-- **Task 22 names a row that does not exist** — Applied: Task 23 names the `implement-plan` sentence and keeps the plan-batch row.
-- **Task 13 does not name the refusal type** — Applied: `RecallRefusal` (Task 14).
-- **Task 16 must thread the categories** — Applied: through `chain_counts`; the record-without-field case shows 0 (Task 17).
-- **Two places compute the rules hash** — Applied: `rules_sha256` (Task 4), used by Tasks 5 and 6.
-- **Task 12 names no arch test** — Applied: `arch` added (Task 13).
-- **Task 1 requires a clean tree** — Applied: Task 1 commits the task file first if it is listed.
-- **The P6 comment rewrite must remove the existing figures** — Applied: Task 21 replaces the whole block.
-- **Four tasks name no test file** — Applied: files named in Tasks 12, 16, 18, 21.
-- **Task 23's Draft text is a paragraph** — Applied: Task 24 deletes the sentence from the paragraph.
-- **Task 24's grep check is not mechanical** — Applied: Task 25 greps for membership tests on `keep_categories`. Entry 18 (437) is at line 236 of `user/architecture/420-slices.model-benchmark.md`; no change.
-- **Code claims that check out** (pass) — No change.
+- Finding-shaped matches — in findings section: 24
+- Finding-shaped matches — surviving validation: 24
