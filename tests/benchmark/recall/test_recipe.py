@@ -28,7 +28,14 @@ COMMITTED = {
     "haiku-sol-pool",
     "haiku-mimo-opus",
     "haiku-opus",
+    # Shipped until #389; kept here to reproduce stored benchmark results.
+    "haiku-sol-opus",
+    "haiku-sol-luna-opus",
+    "haiku-solr-luna-opus",
 }
+SHIPPED = {"haiku-sol-luna", "haiku-solr-luna"}
+#: The comb no shipped recipe may use: it dropped a third of the real findings (#389).
+REMOVED_COMB = "opus-high"
 
 
 def _write(tmp_path: Path, text: str, stem: str = "r") -> Path:
@@ -79,8 +86,16 @@ def test_every_committed_recipe_loads() -> None:
         assert load_recipe(path).name == stem
 
 
+def test_shipped_recipes_are_the_two_with_no_opus_high_comb() -> None:
+    """The opus-high comb dropped real findings; no shipped recipe ends in it (#389)."""
+    shipped = {path.stem: load_recipe(path) for path in SHIPPED_DIR.glob("*.yaml")}
+    assert set(shipped) == SHIPPED
+    assert all(recipe.name == stem for stem, recipe in shipped.items())
+    assert not [stem for stem, recipe in shipped.items() if REMOVED_COMB in recipe.combs]
+
+
 def test_d11_recipe_is_fan_out_then_luna_r_then_opus_high() -> None:
-    recipe = load_recipe(SHIPPED_DIR / "haiku-sol-luna-opus.yaml")
+    recipe = load_recipe(RECIPES_DIR / "haiku-sol-luna-opus.yaml")
     assert (recipe.reviewers, recipe.pool, recipe.combs) == (
         ("haiku-xhigh", "sol"),
         False,
@@ -89,16 +104,15 @@ def test_d11_recipe_is_fan_out_then_luna_r_then_opus_high() -> None:
 
 
 def test_recipe_name_resolves_to_committed_file() -> None:
-    assert (
-        resolve_recipe("haiku-sol-opus", benchmark_recipe_dirs(REPO_ROOT))
-        == SHIPPED_DIR / "haiku-sol-opus.yaml"
-    )
-    assert load_recipe(
-        resolve_recipe("haiku-solr-luna-opus", benchmark_recipe_dirs(REPO_ROOT))
-    ).reviewers == (
+    """A benchmark name is found in the reference directory, a shipped one after it."""
+    dirs = benchmark_recipe_dirs(REPO_ROOT)
+    assert resolve_recipe("haiku-sol-opus", dirs) == RECIPES_DIR / "haiku-sol-opus.yaml"
+    assert resolve_recipe("haiku-sol-luna", dirs) == SHIPPED_DIR / "haiku-sol-luna.yaml"
+    assert load_recipe(resolve_recipe("haiku-solr-luna-opus", dirs)).reviewers == (
         "haiku-xhigh",
         "sol-r",
     )
+    assert load_recipe(resolve_recipe("haiku-solr-luna", dirs)).reviewers == ("haiku-xhigh", "sol-r")
 
 
 def test_recipe_ref_with_path_or_suffix_is_used_as_given(tmp_path: Path) -> None:
@@ -107,5 +121,7 @@ def test_recipe_ref_with_path_or_suffix_is_used_as_given(tmp_path: Path) -> None
 
 
 def test_unknown_recipe_name_lists_known_names() -> None:
-    with pytest.raises(RecipeError, match="no recipe named 'nope'; known: .*haiku-sol-opus"):
+    # A shipped name (the comma keeps it from matching haiku-sol-luna-opus), then a benchmark one.
+    known = "known: .*haiku-sol-luna, .*haiku-sol-opus"
+    with pytest.raises(RecipeError, match=f"no recipe named 'nope'; {known}"):
         resolve_recipe("nope", benchmark_recipe_dirs(REPO_ROOT))

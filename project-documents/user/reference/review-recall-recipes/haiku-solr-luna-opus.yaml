@@ -1,3 +1,4 @@
+# Kept for reproducing stored benchmark results; no longer shipped (#389).
 # D11 with sol-r (OpenRouter) in place of sol, so it runs without Codex credits.
 name: haiku-solr-luna-opus
 reviewers: [haiku-xhigh, sol-r]

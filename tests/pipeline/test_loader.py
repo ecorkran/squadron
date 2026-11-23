@@ -549,7 +549,7 @@ class TestValidateReviewModel:
     def test_shipped_recipe_passes(self) -> None:
         from squadron.pipeline.loader import validate_pipeline
 
-        assert validate_pipeline(self._review("haiku-sol-opus"), cwd=".") == []
+        assert validate_pipeline(self._review("haiku-sol-luna"), cwd=".") == []
 
     def test_alias_still_passes(self) -> None:
         from squadron.pipeline.loader import validate_pipeline

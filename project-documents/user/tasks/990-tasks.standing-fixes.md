@@ -8,7 +8,7 @@ dependencies: []
 projectState: Standing container for multi-step fixes. Add a task group per issue.
 status: complete
 dateCreated: 20261011
-dateUpdated: 20261121
+dateUpdated: 20261122
 ---
 
 # Tasks: Standing Fixes
@@ -203,3 +203,17 @@ Part 3 (per-finding outcomes) stays open on #374.
 - [x] Fixture: amoeba slice 260's task file and design as they entered review round 3, with the valid defects of rounds 3 and 4 as the answer key
 - [x] Run the review before and after Parts A–C on the fixture, 3 samples each, same model; record defects found per round in the issue
 - [x] If one round does not find the answer key, split the review by task group and by focus (slices 435/436 shapes) and measure again. Done 20261121 with six reviewers by section (7 of 17) and by focus (10 of 17); table in #383
+
+## #389 Stop shipping recipes that end in an opus-high comb
+
+The comb prompt (`data/templates/comb.yaml`) is a separate, later step and is not changed here.
+
+- [x] `src/squadron/data/recipes/` holds exactly `haiku-sol-luna.yaml` (reviewers `haiku-xhigh`, `sol`) and `haiku-solr-luna.yaml` (reviewers `haiku-xhigh`, `sol-r`), both `pool: false`, `combs: [luna-r]`, each with a comment naming what it needs and the 2026-11-22 removal of the opus-high stage
+- [x] `haiku-sol-opus`, `haiku-sol-luna-opus` and `haiku-solr-luna-opus` moved with `git mv` to `project-documents/user/reference/review-recall-recipes/`, content unchanged but for a first-line comment; `sq benchmark recall` still resolves them by name (`benchmark_recipe_dirs` searches that directory first)
+- [x] A pipeline or `sq review --model` naming one of the three outside this repo fails before the run starts: `unknown model alias '<name>' ... Known recipes: haiku-sol-luna, haiku-solr-luna.` No alias, fallback or shim
+- [x] Tests that used the old shipped names updated: shipped-recipe tests use the new names; stage counts re-derived (14 cases x 2 reviewers x 2 stages = 56, was 84); the two-comb chain and stored-result tests read the moved copies
+- [x] New test: the shipped recipe names are exactly `haiku-sol-luna` and `haiku-solr-luna`, and none has `opus-high` among its combs (failed before the change)
+- [x] README.md, docs/PIPELINES.md, the `P6.yaml` comment and the recall runbook name the new recipes and credit no opus-high comb
+- [x] CHANGELOG bullet
+- [x] `ruff format`, `ruff check`, `pyright` (0 errors) and the recall, pipeline, recipes, stats and benchmark CLI tests pass
+- **Commit**: `fix: stop shipping recipes that end in an opus-high comb (#389)`

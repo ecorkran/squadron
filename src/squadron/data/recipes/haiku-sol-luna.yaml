@@ -1,0 +1,6 @@
+# haiku-xhigh and sol review, then luna-r combs each. sol needs Codex credits; luna-r needs
+# OPENROUTER_API_KEY. The opus-high stage was removed 2026-11-22: it dropped real findings (#389).
+name: haiku-sol-luna
+reviewers: [haiku-xhigh, sol]
+pool: false
+combs: [luna-r]

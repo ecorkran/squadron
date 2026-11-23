@@ -302,12 +302,12 @@ A `template` name that is not registered fails before the first step runs, namin
 
 A review step's `model`, a pipeline's `review-model`, and `sq review --model` also take a **recipe** name. A recipe runs several reviewers on the same work, then has comb models mark each reviewer's CONCERN and FAIL findings KEEP or DROP; the kept findings become one review with one verdict, one review file and the same revise loop. The review file's frontmatter has `aiModel: <recipe>` and `aiRecipe: true`, and its body has a "Recipe" table with each stage's outcome, counts and cost. Every recipe review also writes a `recipe_review` record to the metrology store; `sq benchmark recall report --real-work` summarizes them.
 
-Squadron finds a recipe by name in `project-documents/user/recipes/<name>.yaml`, then in the shipped recipes: `haiku-solr-luna-opus` (needs `OPENROUTER_API_KEY`), `haiku-sol-luna-opus` (needs Codex credits) and `haiku-sol-opus`. A project file with a shipped name overrides it, with a WARNING naming both files. To add one, write a YAML file whose `name` matches its file name:
+Squadron finds a recipe by name in `project-documents/user/recipes/<name>.yaml`, then in the shipped recipes: `haiku-solr-luna` (needs `OPENROUTER_API_KEY`) and `haiku-sol-luna` (needs Codex credits and `OPENROUTER_API_KEY`). Each runs two reviewers and one `luna-r` comb. A project file with a shipped name overrides it, with a WARNING naming both files. To add one, write a YAML file whose `name` matches its file name:
 
 ```yaml
 name: my-recipe
 reviewers: [haiku-xhigh, sol]   # each reviews the work in order
-combs: [luna-r, opus-high]      # optional; each filters what the previous kept
+combs: [luna-r]                 # optional list; each comb filters what the previous kept
 ```
 
 A name that is both a model alias and a recipe is an error; rename the recipe. These are refused before any model call, naming the recipe: an unknown reviewer or comb alias, `pool: true`, a judge template, combs on a review with no diff (a slice, tasks or arch review takes a recipe with no `combs`), and an explicit `profile` (each stage's alias picks its own). A stage that fails is shown in the review's table; an incomplete recipe never passes: with findings kept its verdict is FAIL, with none it is UNKNOWN and the review fails. The step's usage record carries the recipe's summed cost, so `pipeline.max_cost_usd` counts it. Stages run one at a time; a stage still running after `review.recipe_stage_slow_s` seconds (default 1800) logs a WARNING but is not stopped. A stage call has only its provider's own bound (`codex.turn_timeout_s` for Codex aliases; none from squadron for OpenAI-compatible or Claude Code aliases), so a hung call holds the step until you cancel the run.

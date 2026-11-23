@@ -8,13 +8,12 @@ params:
   # review-model: haiku-xhigh finds the most known bugs of the single reviewers measured
   # (16 of 42) but about 76% of what it raises is minor. sol (OpenAI, needs a Codex login or
   # an API key) finds 12 of 42 at 79% precision. Together they cover more (8 of 14 known bugs
-  # on the 10-case set, against 6 and 5), and an opus-high comb over the union drops 57% of
-  # the findings while keeping all 8. A review step takes one model, so this default is
+  # on the 10-case set, against 6 and 5). A review step takes one model, so this default is
   # haiku-xhigh alone; with an OpenAI account or key, `review-model: sol` is the cleaner
   # single reviewer. Data: project-documents/user/reference/review-recall-results/SUMMARY.md.
   # review-model also takes a recipe name (reviewers plus comb filters, run as one review):
-  # the shipped haiku-solr-luna-opus (needs OPENROUTER_API_KEY), haiku-sol-luna-opus (needs
-  # Codex credits) and haiku-sol-opus. The default stays haiku-xhigh, which needs neither.
+  # the shipped haiku-solr-luna (needs OPENROUTER_API_KEY) and haiku-sol-luna (needs Codex
+  # credits and OPENROUTER_API_KEY). The default stays haiku-xhigh, which needs neither.
   review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass

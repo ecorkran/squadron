@@ -222,10 +222,10 @@ class TestRenderReview:
         resolver = MagicMock()
         with caplog.at_level(logging.DEBUG, logger="squadron.pipeline.prompt_renderer"):
             result = _render_review(
-                {"template": "code", "model": "haiku-sol-opus"}, {"slice": "434"}, resolver
+                {"template": "code", "model": "haiku-sol-luna"}, {"slice": "434"}, resolver
             )
-        assert result.command == "sq review code 434 --model haiku-sol-opus"
-        assert result.model == "haiku-sol-opus"
+        assert result.command == "sq review code 434 --model haiku-sol-luna"
+        assert result.model == "haiku-sol-luna"
         resolver.resolve.assert_not_called()
         assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 

@@ -236,7 +236,7 @@ steps:
       emit: [stdout, clipboard, file]
 ```
 
-`review-model` (and `sq review --model`) also takes a recipe name, such as the shipped `haiku-sol-opus`: several reviewers, then comb models that drop weak findings, merged into one review. Add your own in `project-documents/user/recipes/`; see [Recipe reviews](docs/PIPELINES.md#recipe-reviews).
+`review-model` (and `sq review --model`) also takes a recipe name, such as the shipped `haiku-sol-luna`: several reviewers, then comb models that drop weak findings, merged into one review. Add your own in `project-documents/user/recipes/`; see [Recipe reviews](docs/PIPELINES.md#recipe-reviews).
 
 The building blocks are phase steps (`design`, `tasks`, `implement`), `dispatch` (send a prompt to a model), `review`, `gate` (decide from a review or a judge), `loop` (with `until`, `accept_if`, and an exhaustion policy), `each` (fan out over a list), `summary`, `compact`, and `devlog`. Loops can commit each round, so you can see the revision history in git.
 

@@ -1180,10 +1180,10 @@ def test_review_model_recipe_passes_the_pre_run_check() -> None:
     pipeline = make_pipeline(steps)
     pipeline.params["review-model"] = "haiku-xhigh"
     result = classify_pipeline(
-        pipeline, make_resolver(), params={"review-model": "haiku-sol-opus"}, cwd="."
+        pipeline, make_resolver(), params={"review-model": "haiku-sol-luna"}, cwd="."
     )
     assert len(result.steps) == 1
-    assert result.steps[0].rationale.startswith("recipe haiku-sol-opus")
+    assert result.steps[0].rationale.startswith("recipe haiku-sol-luna")
 
 
 def test_unknown_review_model_lists_the_recipe_names() -> None:
@@ -1192,7 +1192,18 @@ def test_unknown_review_model_lists_the_recipe_names() -> None:
         classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")
     message = str(excinfo.value)
     assert "unknown model alias 'no-such-name'" in message
-    assert "Known recipes:" in message and "haiku-sol-opus" in message
+    assert "Known recipes:" in message and "haiku-sol-luna" in message
+
+
+@pytest.mark.parametrize("removed", ["haiku-sol-opus", "haiku-sol-luna-opus", "haiku-solr-luna-opus"])
+def test_recipe_no_longer_shipped_is_refused_at_the_pre_run_check(tmp_path: Path, removed: str) -> None:
+    """Outside this repo the three ``-opus`` recipes are unknown names: no alias, no shim (#389)."""
+    steps = [make_step("review", "review-step", {"template": "code", "model": removed})]
+    with pytest.raises(ClassificationError) as excinfo:
+        classify_pipeline(make_pipeline(steps), make_resolver(), cwd=str(tmp_path))
+    message = str(excinfo.value)
+    assert f"unknown model alias '{removed}'" in message
+    assert "Known recipes: haiku-sol-luna, haiku-solr-luna." in message
 
 
 def test_recipe_with_unknown_member_fails_naming_it(
@@ -1215,8 +1226,8 @@ def test_recipe_with_unknown_member_fails_naming_it(
 def test_recipe_with_explicit_profile_or_judge_template_is_refused(
     template: str, params: dict[str, object], reason: str
 ) -> None:
-    steps = [make_step("review", "review-step", {"template": template, "model": "haiku-sol-opus"})]
-    with pytest.raises(ClassificationError, match=f"recipe 'haiku-sol-opus'.*{reason}"):
+    steps = [make_step("review", "review-step", {"template": template, "model": "haiku-sol-luna"})]
+    with pytest.raises(ClassificationError, match=f"recipe 'haiku-sol-luna'.*{reason}"):
         classify_pipeline(make_pipeline(steps), make_resolver(), params=params, cwd=".")
 
 
@@ -1231,7 +1242,7 @@ def test_recipe_is_found_in_the_run_cwd_not_the_process_cwd(tmp_path: Path) -> N
 
 
 def test_tool_less_recipe_step_is_refused_at_the_pre_run_check() -> None:
-    config = {"template": "code", "model": "haiku-sol-opus", "allowed_tools": []}
+    config = {"template": "code", "model": "haiku-sol-luna", "allowed_tools": []}
     steps = [make_step("review", "review-step", config)]
-    with pytest.raises(ClassificationError, match="recipe 'haiku-sol-opus'.*tool-less review"):
+    with pytest.raises(ClassificationError, match="recipe 'haiku-sol-luna'.*tool-less review"):
         classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")

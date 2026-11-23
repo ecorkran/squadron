@@ -124,12 +124,13 @@ def test_auth_failure_is_error_and_refusal(tmp_path: Path, caplog: pytest.LogCap
     assert rows[0].answer is AuthAnswer.YES
 
 
-def test_d11_recipe_on_nonsquadron_cases_gives_bound_with_plan_billed_count() -> None:
+def test_shipped_recipe_on_nonsquadron_cases_gives_bound_with_plan_billed_count() -> None:
     cases = committed_cases()
     members = parse_sets(SETS_FILE.read_text(encoding="utf-8"))["real-bugs-nonsquadron"]
-    recipe = load_recipe(shipped_recipes_dir() / "haiku-sol-luna-opus.yaml")
+    recipe = load_recipe(shipped_recipes_dir() / "haiku-sol-luna.yaml")
     pending = expand_pending([recipe], [cases[m] for m in members], [1], {}, live_stage_config)
-    assert len(pending) == 14 * 2 * 3
+    # 14 cases x 2 reviewers x (1 review + 1 comb stage, luna-r)
+    assert len(pending) == 14 * 2 * 2
     with pytest.raises(RecallRefusal, match="--max-plan-calls"):
         build_run_bound(pending, [], 25.0, 0.5, None, leak_judgeable)
     bound = build_run_bound(pending, [], 25.0, 0.5, 14, leak_judgeable)
