@@ -12,21 +12,21 @@ projectState: Slices 430 and 434 complete. Slice 437 design revised after its re
 dateCreated: 20261123
 dateUpdated: 20261123
 status: not_started
-turns: 52
-promptTokens: 4995458
-cachedTokens: 4819938
-cacheWriteTokens: 175430
-completionTokens: 66236
-durationSeconds: 597.1
-costUsd: 3.692827
-usageRounds: 3
-pricedRounds: 3
+turns: 66
+promptTokens: 5483932
+cachedTokens: 5254151
+cacheWriteTokens: 229673
+completionTokens: 72288
+durationSeconds: 663.1
+costUsd: 4.334911
+usageRounds: 4
+pricedRounds: 4
 usageByModel:
   claude-opus-5-5:
-    rounds: 3
-    costUsd: 3.6928266000000005
-    completionTokens: 66236
-revision_number: 2
+    rounds: 4
+    costUsd: 4.3349104
+    completionTokens: 72288
+revision_number: 3
 ---
 
 ## Context Summary
