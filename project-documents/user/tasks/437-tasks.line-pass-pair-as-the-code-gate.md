@@ -135,7 +135,7 @@ revision_number: 2
 ### Task 9: Runner applies options and the filter (D2, D5, D6)
 - [ ] `recipes/recipe_outcome.py`: `ReviewerOutcome.not_gating` (the findings the filter did not keep; empty by default)
 - [ ] `recipes/recipe_runner.py`: each reviewer's call uses `reviewer_call_options(options, recipe.reviewer_options.get(alias))`; no `no_tools` or `rules_content` keyword is passed separately
-- [ ] In `_run_chain`, split first: `split_by_category(split.scored, recipe.keep_categories)`. The gating findings replace `split.scored` as the chain input and in `chain_result`, so `kept` holds only gating findings; the not-gating findings go to `ReviewerOutcome.not_gating`. The finding-id map (`source`) still covers every finding returned
+- [ ] In `_run_chain`, split first: `split_by_category(split.scored, recipe.keep_categories)`. The gating findings replace `split.scored` as the chain input and in `chain_result`, so `kept` holds only gating findings; the not-gating findings go to `ReviewerOutcome.not_gating`. The finding-id map (`source`) still covers every finding returned. `recipe_runner.py` gains only that call and the `not_gating=` argument; any further logic goes in `kept_findings.py`
 - [ ] Incomplete recipes follow 434 D5 with "kept" meaning gating (D6)
 - [ ] `tests/recipes/support.py`: `CallRecord` gains `no_tools: bool | None = None` and `rules_content: str | None = None` (last, with defaults); `ScriptedReviewCall.__call__` records both from its keyword arguments
 - [ ] Tests in `tests/recipes/test_recipe_runner.py` with the scripted review call:
@@ -157,7 +157,7 @@ revision_number: 2
   - [ ] A recipe review with no not-gating findings renders as before (existing tests pass)
 
 ### Task 11: Findings section of a review with no gating finding (D6)
-- [ ] `review/persistence.py`: a new branch in the body, directly after the body's `if result.findings:` block (the one that writes `## Findings`, not the frontmatter one) and before `elif result.fallback_used`: when `recipe is not None and recipe.not_gating > 0`, write `## Findings`, a blank line, and "No gating findings; N not gating (see the Recipe section).", its text held in one module constant. So an incomplete recipe with only not-gating findings (verdict UNKNOWN) gets this line, not "Findings Not Parsed"
+- [ ] `review/persistence.py`: a new branch in the body, directly after the body's `if result.findings:` block (the one that writes `## Findings`, not the frontmatter one) and before `elif result.fallback_used`: when `recipe is not None and recipe.not_gating > 0`, write `## Findings`, a blank line, and "No gating findings; N not gating (see the Recipe section).", its text held in one module constant. The branch only extends the body with the lines of a new helper `_not_gating_findings_section(count)` beside `_findings_not_parsed_section`. So an incomplete recipe with only not-gating findings (verdict UNKNOWN) gets this line, not "Findings Not Parsed"
 - [ ] Tests in `tests/review/test_persistence.py`:
   - [ ] D6 parser test: save a recipe review with no gating finding and one not-gating finding whose title holds `|` and `- [CONCERN] ` and has no location; parse the saved file; assert the table row is one row, no finding is parsed, and the "No gating findings; 1 not gating" line is under `## Findings`
   - [ ] The same review with verdict UNKNOWN: the saved file has the "No gating findings" line and no "Findings Not Parsed" heading
@@ -214,14 +214,14 @@ revision_number: 2
   - [ ] `tests/pipeline/test_classification.py` `test_recipe_no_longer_shipped_is_refused_at_the_pre_run_check`: the pinned "Known recipes:" string gains `haiku-line-pass` in its sorted place
 - [ ] New tests in `tests/benchmark/recall/test_recipe.py`:
   - [ ] The shipped rules file's bytes equal `MARTIAN/rules-line-pass.md`
-  - [ ] The recipe loads from the installed package data directory (`importlib.resources`), with `rules_content` set, `haiku` options `tools: false`, and the five categories
-- [ ] One-time check, not a unit test: `uv build --wheel --out-dir <temp dir>` and `unzip -l` on the wheel lists `squadron/data/recipes/line-pass.rules.md`. Record the result as a note under this item
+  - [ ] The recipe loads from the shipped data directory (`shipped_recipes_dir()`), with `rules_content` set, `haiku` options `tools: false`, and the five categories
+- [ ] One-time check, not a unit test (a checkout's pytest run reads `src/squadron/data`, so only this checks packaging): `uv build --wheel --out-dir <temp dir>` and `unzip -l` on the wheel lists `squadron/data/recipes/line-pass.rules.md`. Record the result as a note under this item
 - [ ] Task 2's pins pass unchanged
 
 **Commit**: `feat: ship the haiku-line-pass recipe and line-pass rules file`
 
 ### Task 18: D11 hand-run fixture
-- [ ] Choose five PRs from `MARTIAN/out/` (`<case>-haiku-xhigh-1.json`, and `<case>-haiku-line-1.json` for the `haiku` line pass) so that both reviewers have gating and not-gating CONCERN/FAIL findings and at least one PR has a finding whose category is `other`. Every CONCERN/FAIL finding in the five has a category, and every category in the five is a `ReviewCategory` value (Task 19 asserts it)
+- [ ] Choose five PRs from `MARTIAN/out/` (`<case>-haiku-xhigh-1.json`, and `<case>-haiku-line-1.json` for the `haiku` line pass) so that both reviewers have gating and not-gating CONCERN/FAIL findings and at least one PR has a finding whose category is `other`. No chosen output has verdict UNKNOWN (the runner uses no findings from such an output). Every CONCERN/FAIL finding in the five has a category, and every category in the five is a `ReviewCategory` value (Task 19 asserts it)
 - [ ] Write `tests/recipes/fixtures/hand_run/<case>-<alias>.json` (alias `haiku-xhigh` or `haiku`): a JSON with only `verdict` and `findings` (no other key, so no sandbox path is committed)
 - [ ] Write `tests/recipes/fixtures/hand_run/expected.json` once, with a short throwaway script applying `MARTIAN/convert.py`'s rule (severity CONCERN or FAIL, category in the five): `{"<case>": {"haiku-xhigh": [titles in order], "haiku": [titles in order]}}`. Do not use the code under test. Do not commit the script
 - [ ] `grep` the fixture directory for `/Users/`, `/tmp/` and `sandbox`: no hits
@@ -288,7 +288,7 @@ revision_number: 2
 ### Task 25: Final validation and completion
 - [ ] `ruff format`, `ruff check`, `pyright` (zero errors) pass
 - [ ] `uv run pytest -q` passes; Task 2's pin test is unmodified since its commit (`git diff <Task 2 commit> -- tests/recipes/test_identity_pins.py` is empty)
-- [ ] `grep -rnE "in [A-Za-z_.]*keep_categories" src/squadron` prints nothing (the only comparison is inside `split_by_category`, against its `keep` parameter)
+- [ ] `grep -rnE "\bin +(keep|[A-Za-z_.]*keep_categories)\b" src/squadron` prints only the comparison inside `split_by_category`; and reading the call sites of Tasks 9, 14 and 16 shows each passes the kept list to `split_by_category` and compares no category itself
 - [ ] Every Success Criteria item of the design was checked by the task that built it (Tasks 2–24 checked off)
 - [ ] Set the task file and slice design `status: complete`; check off entry 18 (437) in `user/architecture/420-slices.model-benchmark.md`; DEVLOG entry
 
