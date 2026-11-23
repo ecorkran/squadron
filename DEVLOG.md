@@ -13,6 +13,13 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261123
 
+### Slice 437: Line-Pass Pair as the Code Gate — Task Breakdown Complete
+
+- **Document:** `project-documents/user/tasks/437-tasks.line-pass-pair-as-the-code-gate.md` (24 tasks, 252 lines); frontmatter validates. Built from the design as revised after its review (CONCERNS; resolution in the review file).
+- **Order:** pin today's `recipe_hash` and stage `config_key`s for the 2 shipped and 11 reference recipes first; then recipe options, stage identity, `split_by_category` and `reviewer_call_options`, runner, merge table, record, refusals, benchmark (#393 refusals, filter scoring, real-work column), shipped recipe, D11 fixture, pipeline defaults, end-to-end tests, docs, live walkthrough.
+- **Decided in the breakdown:** the wheel check for `line-pass.rules.md` is a one-time `uv build` check, not a unit test (the project has no slow-test marker). Per-reviewer call options go in new `recipes/reviewer_options.py` because `recipe_runner.py` is already 322 lines.
+- **Next:** Phase 6 on branch `437-slice.line-pass-pair-as-the-code-gate` from `main`.
+
 ### Slice 437: Line-Pass Pair as the Code Gate — Design Complete
 
 - **Document:** `project-documents/user/slices/437-slice.line-pass-pair-as-the-code-gate.md`; `cf validate design` passes. Not reviewed yet.
