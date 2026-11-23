@@ -395,3 +395,25 @@ A search of the haiku outputs found no historical category strings from the mapp
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 24
 - Finding-shaped matches — surviving validation: 24
+
+## Resolution
+
+Task file revised 20261123 after this review; the design's D6 and its docs criterion edited in the same planning commit. No further review was run.
+
+- **Task 3's keep_categories check is unreachable** — Applied: `field_validator("keep_categories", mode="before")`.
+- **Loader-set rules fields can be set from YAML** — Applied: a before-validator on `ReviewerOptions` refuses them; the loader sets them with `model_copy`. New refusal and test in Task 3.
+- **Task 16 leaves the before-filter numbers without a mechanism** — Applied: an unfiltered pass with `model_copy(update={"keep_categories": None})`, and `ReviewerOutput.not_gating` set in `reviewer_output` (Task 14).
+- **Task 16 is too large** — Applied: split into Task 14 (scoring, label candidates) and Task 15 (report columns).
+- **Task 19 does not say where the expected file lives** — Applied: `tests/recipes/fixtures/hand_run/expected.json` with its shape; the fixture names and the `ReviewCategory` constraint are stated (Task 18).
+- **Task 22 spans six scenarios and names no file** — Applied: Task 21 (CLI and refusals, `tests/cli/test_review_recipe.py`) and Task 22 (action path, reviser, failure modes); the action path asserts `no_tools` and rules content.
+- **Task 24 step 6 cannot produce a row** — Applied: step 4 sets `metrology.project_id` in the fixture.
+- **Task 23 leaves two stale passages** — Applied: the shipped-recipes paragraph and the refusal list are named, and the grep covers them.
+- **Task 10 changes a design rule inside an implementation task** — Applied: D6's cell rule now escapes every `|`, `[` and `#`, edited in this planning commit; the task item is removed.
+- **Numbered sub-items have no checkboxes** — Applied: each is a `- [ ]` subitem.
+- **Task 9 must split before `_run_chain`** — Applied.
+- **Record derivation must count only OK review stages** — Applied in Task 12 and in D6's record sentence.
+- **A design criterion names a P6 table row that does not exist** — Applied: the design criterion now names the `implement-plan` sentence and the batch-table row, and says the Built-in Pipelines table has no defaults.
+- **Task 11 does not say which `if result.findings:`** — Applied: the body's.
+- **Shared-name rules not carried into the tasks** — Applied: Tasks 3, 10, 11, 12 and 13 name their constants.
+- **Two small tasks could merge** — Applied: old 12+13 are Task 12, old 14+15 are Task 13; commits unchanged.
+- PASS findings — No change.
