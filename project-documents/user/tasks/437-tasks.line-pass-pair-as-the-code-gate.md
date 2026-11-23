@@ -64,6 +64,7 @@ revision_number: 2
 ### Task 3: Recipe model: `reviewer_options` and `keep_categories` (D1, D5)
 - [ ] In `recipes/recipe.py` add `ReviewerOptions` (pydantic, unknown keys forbidden): `tools: bool = True`, `rules: str | None = None` (the file name as written), and loader-set `rules_path: Path | None = None` and `rules_content: str | None = None`. A `model_validator(mode="before")` refuses `rules_path` and `rules_content` in the input; `load_recipe` (Task 4) sets them with `model_copy(update=...)`, which runs no validator
 - [ ] Add `Recipe.reviewer_options: Mapping[str, ReviewerOptions]` (alias to options, empty by default) and `Recipe.keep_categories: tuple[ReviewCategory, ...] | None = None`. `Recipe.reviewers` stays a tuple of alias strings; existing `Recipe(reviewers=(...))` constructions still type-check
+- [ ] In the same change, `recipes/recipe_record.py` `recipe_hash` stops dumping `recipe.model_dump(mode="json")`, which would put the two new fields into every recipe's hash. It builds the canonical dict explicitly from `name`, `reviewers`, `pool` and `combs`, with the values `model_dump(mode="json")` gives them today. Task 5 adds the new keys to it. Without this, Task 2's pins fail as soon as the fields exist
 - [ ] Validation, each failure a `RecipeError` from `load_recipe` naming the recipe path and the problem:
   - [ ] a `reviewer_options` key not in `reviewers`
   - [ ] an unknown option key inside an entry
@@ -94,7 +95,7 @@ revision_number: 2
   - [ ] `rules_sha256` gives two values for two contents and `None` with no rules
 
 ### Task 5: `recipe_hash` canonical form (D1)
-- [ ] In `recipes/recipe_record.py`, `recipe_hash` stops dumping `recipe.model_dump(mode="json")` (which would add the two new fields to every recipe and the loader-set fields to recipes with options). It builds the canonical dict explicitly: `name`, `reviewers`, `pool`, `combs` as `model_dump` gives them today; plus `reviewer_options` only when non-empty (per alias: `tools`, `rules`, `rules_sha256(options)`) and `keep_categories` only when set. `rules_path` and `rules_content` are never in it
+- [ ] In `recipes/recipe_record.py`, extend the explicit canonical dict of `recipe_hash` (four keys since Task 3): add `reviewer_options` only when non-empty (per alias: `tools`, `rules`, `rules_sha256(options)`) and `keep_categories` only when set. `rules_path` and `rules_content` are never in it
 - [ ] Tests in `tests/recipes/test_recipe_options.py`:
   - [ ] Task 2's pins pass unchanged
   - [ ] Changing the rules file content changes `recipe_hash`; changing `tools` changes it; adding `keep_categories` changes it
@@ -239,8 +240,9 @@ revision_number: 2
 - [ ] `P56.yaml` and `P456.yaml` unchanged; the `code` template's `model` unchanged
 - [ ] Pinned tests updated:
   - [ ] `tests/pipeline/test_builtin_pipelines.py` `test_implement_plan_params_and_shape`: `review-model` is `haiku-line-pass`
-  - [ ] `tests/review/test_review_template_defaults.py`: the `code` row is split out of `test_standalone_review_default_matches_the_pipeline` into its own test asserting `haiku-xhigh`, with a comment giving the template-hash reason; `slice` and `tasks` still match their pipelines
-  - [ ] `tests/pipeline/test_loader.py`: correct the docstring that says the standalone code review runs P6's reviewer
+  - [ ] `tests/review/test_review_template_defaults.py`: no assertion changes. The test reads the templates, not the pipelines, and the `code` template's model stays `haiku-xhigh`, so it passes as it is. Reword the module docstring and the `PIPELINE_REVIEW_MODEL` comment, which say the templates agree with every pipeline's reviewer: the `code` template keeps `haiku-xhigh` (its model is part of the template hash) while four pipelines now review code with `haiku-line-pass`
+  - [ ] `tests/pipeline/test_loader.py` `test_review_pipeline_defaults_to_the_p6_code_reviewer`: no change. It compares `review.yaml`'s `model` with P6's `review-model`; both become `haiku-line-pass`, so the assertion and its docstring stay true
+  - [ ] New parametrized test in `tests/pipeline/test_builtin_pipelines.py` pinning each shipped pipeline's code reviewer: `review-model` is `haiku-line-pass` in `P6`, `implement` and `implement-plan`; `model` is `haiku-line-pass` in `review`; `review-model` is `haiku-xhigh` in `P56` and `P456` (#390)
 - [ ] New test in `tests/pipeline/test_classification.py`, beside `test_review_model_recipe_passes_the_pre_run_check`: the pre-run check passes for each of the four pipelines with `review-model` (or `model`) resolved to `haiku-line-pass` as a recipe
 
 **Commit**: `feat: make haiku-line-pass the code review default of four pipelines`

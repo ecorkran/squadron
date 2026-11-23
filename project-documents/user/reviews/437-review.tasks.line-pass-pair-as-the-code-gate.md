@@ -242,3 +242,15 @@ A pytest run from a checkout loads `src/squadron/data`, not an installed wheel, 
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 7
 - Finding-shaped matches — surviving validation: 7
+
+## Resolution
+
+Task file and design revised 20261123 after this review, by the monitoring session. No further review was run.
+
+- **Task 3's gate cannot pass until Task 5** — Applied. Checked against `recipes/recipe_record.py`: `recipe_hash` dumps the whole model, so new fields change every hash. Task 3 now also gives `recipe_hash` its explicit four-key canonical dict, so the pins hold from Task 3 on. Task 5 adds the two new keys to that dict.
+- **Task 20 changes a test on a false premise** — Applied. Checked against `tests/review/test_review_template_defaults.py`: it loads templates only. Task 20 and design D10 now leave its assertions alone and reword its docstring and constant comment. A new test pins each shipped pipeline's code reviewer, `P56` and `P456` included.
+- **The test_loader docstring stays true** — Applied. Task 20 and D10 no longer change `tests/pipeline/test_loader.py`.
+- **The Task 25 grep does not enforce the single-comparison rule** — Not applied. The grep is a spot check, and Tasks 9, 14 and 16 each name `split_by_category` as the call to make.
+- **Task 18 has no verdict criterion** — Not applied. No stored output in the pool has an UNKNOWN verdict, as the finding says.
+- **The "installed package" test cannot check the wheel** — Not applied. The task already has the one-time wheel check; the test's name is not worth a change.
+- **Tasks 9 and 11 add code to files already over the size guideline** — Not applied. Both files are over the guideline today, and the additions are a call site and one branch.

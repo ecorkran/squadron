@@ -271,8 +271,10 @@ Status: decided
 - `P56` and `P456` keep `haiku-xhigh` (Overview).
 - Pinned tests that change with the defaults:
   - `tests/pipeline/test_builtin_pipelines.py`, `test_implement_plan_params_and_shape`: the params dict's `review-model`.
-  - `tests/review/test_review_template_defaults.py`: the `code` row no longer equals the pipelines' code reviewer. It is split out and asserts `haiku-xhigh` with the template-hash reason; `slice` and `tasks` still match their pipelines.
-  - `tests/pipeline/test_loader.py`: the docstring that says the standalone code review runs P6's reviewer.
+  - A new test pins each shipped pipeline's code reviewer: `haiku-line-pass` in `P6`, `implement`, `implement-plan` and `review`; `haiku-xhigh` in `P56` and `P456`.
+- Tests that stay as they are (corrected 20261123 after the tasks review):
+  - `tests/review/test_review_template_defaults.py` reads the templates, not the pipelines, and the `code` template keeps `haiku-xhigh`, so its assertions pass unchanged. Only its docstring and the `PIPELINE_REVIEW_MODEL` comment are reworded, since the `code` template no longer agrees with four pipelines' code reviewer.
+  - `tests/pipeline/test_loader.py` compares `review.yaml` with P6. Both change together, so the test and its docstring stay true.
 
 ### D11 — The hand-run entry is reproduced from stored outputs
 Status: decided
