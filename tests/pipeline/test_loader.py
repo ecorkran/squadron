@@ -47,6 +47,13 @@ class TestLoadPipelineBuiltIn:
         assert defn.name == "p456"
         assert len(defn.steps) == 13
 
+    def test_review_pipeline_defaults_to_the_p6_code_reviewer(self) -> None:
+        """The standalone code review runs the reviewer P6's code review runs."""
+        nowhere = Path("/nonexistent")
+        review = load_pipeline("review", project_dir=nowhere, user_dir=nowhere)
+        p6 = load_pipeline("P6", project_dir=nowhere, user_dir=nowhere)
+        assert review.params["model"] == p6.params["review-model"]
+
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(FileNotFoundError, match="no-such-pipeline"):
             load_pipeline(

@@ -5,12 +5,12 @@ params:
   slice: required
   summary-model: sonnet
   model: sonnet
-  # review-model: haiku-xhigh finds the most known bugs of the single reviewers measured
-  # (16 of 42) but about 76% of what it raises is minor. sol (OpenAI, needs a Codex login or
-  # an API key) finds 12 of 42 at 79% precision. Together they cover more (8 of 14 known bugs
-  # on the 10-case set, against 6 and 5). A review step takes one model, so this default is
-  # haiku-xhigh alone; with an OpenAI account or key, `review-model: sol` is the cleaner
-  # single reviewer. Data: project-documents/user/reference/review-recall-results/SUMMARY.md.
+  # review-model: haiku-xhigh finds the most known bugs of the single reviewers measured.
+  # On 50 public PRs (2026-11-22, one run each) it found 64.7% of the known bugs and 52 of
+  # the 66 critical or high ones; fable-high found about the same at twelve times the cost, and
+  # sol-r found 43.9%. About a quarter of what haiku-xhigh raises matches a known bug, and
+  # a second run of it differs by about five points. Data:
+  # project-documents/user/reference/review-recall-results/20261122-martian/RESULTS.md.
   # review-model also takes a recipe name (reviewers plus comb filters, run as one review):
   # the shipped haiku-solr-luna (needs OPENROUTER_API_KEY) and haiku-sol-luna (needs Codex
   # credits and OPENROUTER_API_KEY). The default stays haiku-xhigh, which needs neither.

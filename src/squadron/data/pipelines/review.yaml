@@ -3,7 +3,8 @@ description: Run a review against existing artifacts
 
 params:
   slice: required
-  model: sonnet
+  # The reviewer P6 runs: see the review-model note in P6.yaml.
+  model: haiku-xhigh
 
 steps:
   - review:

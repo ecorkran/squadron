@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Model alias `neon` for Google's Gemini 4 Neon (`gemini-4-neon`, Gemini API key). It runs at Google's default effort, which is high.
 - Model alias `neon-medium`: the same model at medium effort.
 
+### Changed
+- `sq run review` now reviews with `haiku-xhigh` by default, the reviewer P6 uses. It was `sonnet`; pass `--param model=sonnet` to keep it.
+- A recipe's comb now keeps every finding it verifies as a true behavior defect. Before, it also dropped true findings it judged unlikely or minor, some of them critical (#389).
+
 ### Removed
 - The shipped recipes are now `haiku-sol-luna` and `haiku-solr-luna`. `haiku-sol-opus`, `haiku-sol-luna-opus` and `haiku-solr-luna-opus` are no longer shipped: their `opus-high` comb dropped real findings (#389). A pipeline or `sq review --model` that names one now fails before the run starts; switch to one of the two new names.
 

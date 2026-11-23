@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from squadron.benchmark.recall.review_output import read_findings
@@ -112,17 +113,21 @@ def test_no_output_file_when_the_call_raises(
     assert not output.exists()
 
 
-def _without_setting_sources(lines: list[str]) -> list[str]:
-    return [line for line in lines if not line.startswith("setting_sources:")]
+#: Keys the shipped comb sets for itself: its own name, and no Claude Code settings (reviews
+#: stopped loading them after the measured runs; the recorded file is left as it was).
+_COMB_OWN_KEYS = frozenset({"name", "description", "setting_sources"})
 
 
-def test_comb_template_is_the_hand_run_prompt_with_decisions_output() -> None:
+def _measured_keys(path: Path) -> dict[str, Any]:
+    loaded: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return {key: value for key, value in loaded.items() if key not in _COMB_OWN_KEYS}
+
+
+def test_comb_template_is_the_measured_truth_only_prompt_with_decisions_output() -> None:
     builtin = data_dir() / "templates" / "comb.yaml"
-    body = [line for line in builtin.read_text().splitlines() if not line.startswith("#")]
-    hand_run = (RESULTS_DIR / "20261113-comb" / "comb.yaml").read_text().splitlines()
-    # The prompt is pinned to the measured one. The settings line is not: reviews stopped
-    # loading Claude Code settings after that run, and the recorded file is left as it was.
-    assert _without_setting_sources(body) == _without_setting_sources(hand_run)
+    # The prompt is pinned to the measured one: the truth-only comb of 2026-11-22 (#389).
+    measured = RESULTS_DIR / "20261122-martian" / "comb-truth.yaml"
+    assert _measured_keys(builtin) == _measured_keys(measured)
     template = load_template(builtin)
     assert template.name == "comb" and template.output is TemplateOutput.DECISIONS
 
