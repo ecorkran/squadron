@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261121
+dateUpdated: 20261123
 status: not_started
 ---
 
@@ -233,6 +233,25 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
    - **Risk Level:** Med (a sequential reviewer that repeats or argues with earlier findings instead of finding new ones)
    - **Relative Effort:** 3/5
 
+18. [ ] **(437) Line-Pass Pair as the Code Gate** — The code review gate becomes two reviewers run as one recipe: haiku-xhigh with tools, as today, and a line pass (plain haiku, no tools, with a rules file that tells it to read the changed lines of the diff for slips). Their findings merge into one review, and a category rule says which findings set the verdict: the behavior categories (`correctness`, `security-hygiene`, `error-handling-observability`, `consistency-rot`, `type-contract-debt`). Added 20261123 from the public-benchmark runs of 20261122 (`review-recall-results/20261122-martian/RESULTS.md`): judged as one entry, in two runs, the pair scored 69.1% and 66.9% recall at 33.4% and 34.8% precision for $0.13 a review. haiku-xhigh alone scored 64.7% and 59.7% at 25.7% and 23.8% on the same two runs, and fable-high alone 64.0% at 27.5% for $1.43 a review. A recipe today is a list of reviewer names plus combs, so it cannot describe this pair. The slice adds:
+   - A reviewer entry with its own options: no tools, and a rules file sent the way `sq review --rules` sends one.
+   - A category filter: a stage that makes no model call and marks each finding kept or not by its category.
+   - The line-pass rules file and the pair recipe, shipped in the package.
+   - **Value:** User-facing. The code gate finds more real defects and raises fewer findings that match nothing, for a cent more a review. It is the best squadron entry measured and the first to beat haiku-xhigh alone on both recall and precision.
+   - **Success Criteria:**
+     - A recipe's reviewer entry is a name, or a name with `tools: false` and a rules file. Recipes written before this slice load unchanged. Both options are part of the stage identity, so a changed rules file or tools setting never reuses a stored output.
+     - A category filter stage keeps or marks findings by category with no model call. The categories come from the one definition in `core/finding_categories.py`; a recipe that names an unknown category fails when it loads. What happens to a finding with no category is a stated rule with a test.
+     - The filter is scored in 430's report like a comb: kept and not-kept per finding, and recall before and after.
+     - From the stored 20261122 reviewer outputs, for a checked-in sample of the benchmark's PRs, the recipe's merged and filtered findings equal the hand-run entry's for those PRs. No model call.
+     - `sq review code --model <recipe>` and a pipeline `review-model` give the same review. A line pass that fails is reported in the review and the run record (434's rule), never left out silently.
+     - The shipped code-review defaults (`P6`, `implement`, `implement-plan`, `review.yaml`) name the pair recipe.
+     - One full benchmark run of the built recipe is the PM's to start after the slice (50 reviews, about $6.50 on the plan, and about $3.60 of judging on OpenRouter). No task runs it.
+   - **Not in this slice:** merging duplicate findings between the two reviewers (435), and reviewers that read earlier findings (436).
+   - **Dependencies:** [430, 434].
+   - **Interfaces:** Extends 430's recipe file, stage identities and report, and 434's recipe review. Provides the per-reviewer rules file and tools option, which 436's focused reviewers use.
+   - **Risk Level:** Med (the filter trusts the category each reviewer gives its own finding; a real defect filed under the wrong category does not set the verdict)
+   - **Relative Effort:** 3/5
+
 ---
 
 ## Notes
@@ -262,6 +281,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 - The diff-size rule for the judge (426).
 - The rule for when a finding hits a known bug, and how recipes are stored and scored (430).
 - The sample count, measured in 425 before any large run.
+- What the category filter does with findings outside the behavior categories (437): drop them, as the measurement did, or keep them in the review file where they do not set the verdict and are not sent to the reviser. On the benchmark those categories held 120 of haiku-xhigh's 260 false flags and 5 of its 90 hits.
 
 ---
 
