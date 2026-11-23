@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261121
+dateUpdated: 20261123
 ---
 
 # Development Log
@@ -10,6 +10,22 @@ dateUpdated: 20261121
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261123
+
+### Slice 437: Line-Pass Pair as the Code Gate — Design Complete
+
+- **Document:** `project-documents/user/slices/437-slice.line-pass-pair-as-the-code-gate.md`; `cf validate design` passes. Not reviewed yet.
+- **Shape:** recipe `haiku-line-pass` (haiku-xhigh with tools, plain haiku with `tools: false` and `line-pass.rules.md`), a `keep_categories` filter with no model call, reviewer options in the stage identity, the filter scored in `sq benchmark recall report`, defaults switched in `P6`, `implement`, `implement-plan` and `review`.
+- **Decided in the design:**
+  - Findings outside the five behavior categories stay in the review file ("Not gating" table) and the record, out of the findings list, so they set no verdict and reach neither the reviser nor review ingest. The reviser is sent NOTE findings, so downgrading them to NOTE was rejected.
+  - A finding with no category is gating.
+  - The filter is a field on the review stage, not a stage kind (the plan calls it a stage).
+  - `config_key` and `recipe_hash` stay unchanged for recipes that set no reviewer option.
+  - The recipe is refused on reviews with no diff.
+- **Checked against the stored outputs:** the convert.py rule gives 343 findings (run 1) and 313 (run 2), the hand-run entries' counts; no CONCERN or FAIL finding lacks a category.
+- **Not in the slice:** `P56` and `P456` keep `haiku-xhigh`, since their one `review-model` also reviews documents (#390). The `code` template's default model is unchanged because it is part of the template hash.
+- **Issues filed:** #390 (P56 and P456 need a separate code-review model parameter).
 
 ## 20261121
 
