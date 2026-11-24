@@ -236,15 +236,17 @@ def exit_code_for(run: BenchmarkRun) -> int:
     return EXIT_PARTIAL if run.status is BenchmarkStatus.PARTIAL else EXIT_COMPLETE
 
 
-def delete_harness_replays(store: BenchmarkRecordStore, benchmark_id: str) -> int:
-    """``--retry-harness``: delete every replay of the benchmark whose absence is the
-    harness's, so the next plan runs them again. Returns how many were deleted."""
+def delete_harness_replays(store: BenchmarkRecordStore, plan: BenchmarkPlan) -> int:
+    """``--retry-harness``: delete every replay in *plan* whose absence is the harness's, so
+    the next plan runs them again. A replay a ``--case`` or ``--sample`` filter left out of
+    the plan would not be run again, so its record is kept. Returns how many were deleted."""
+    planned = {replay.record_id for replay in plan.replays}
     harness = [
         record_id
-        for record_id, replay in store.replays_for(benchmark_id)
-        if replay.absence is AbsenceClass.HARNESS
+        for record_id, replay in store.replays_for(plan.benchmark_id)
+        if replay.absence is AbsenceClass.HARNESS and record_id in planned
     ]
     deleted = store.delete_replays(harness)
     if deleted:
-        _logger.info("deleted %d harness-absent replays of %s", deleted, benchmark_id)
+        _logger.info("deleted %d harness-absent replays of %s", deleted, plan.benchmark_id)
     return deleted

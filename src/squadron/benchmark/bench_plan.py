@@ -164,24 +164,35 @@ def build_plan(
     samples: int,
     existing_record_ids: Collection[str],
     only_cases: Collection[str] | None = None,
+    only_samples: Collection[int] | None = None,
 ) -> BenchmarkPlan:
     """The benchmark's replays in schedule order; a replay with a record is not pending.
 
-    ``only_cases`` (``--case``) limits the plan to those cases for debugging. It does not
-    change the benchmark id, so the records it makes count toward the full benchmark; a case
-    id that is not in the set is a refusal.
+    ``only_cases`` (``--case``) and ``only_samples`` (``--sample``) limit the plan to those
+    cases and sample indexes. Neither changes the benchmark id, so the records they make
+    count toward the full benchmark: one sample can be run first and the rest later. A case
+    id that is not in the set, or a sample index the benchmark does not have, is a refusal.
     """
     if only_cases is not None:
         unknown = sorted(set(only_cases) - set(case_ids))
         if unknown:
             raise BenchmarkRefusal(f"--case names cases that are not in the set: {', '.join(unknown)}")
         case_ids = [case_id for case_id in case_ids if case_id in only_cases]
+    sample_indexes = range(samples)
+    if only_samples is not None:
+        outside = sorted(set(only_samples) - set(sample_indexes))
+        if outside:
+            raise BenchmarkRefusal(
+                f"--sample names samples the benchmark does not have "
+                f"(it has 0 to {samples - 1}): {', '.join(str(index) for index in outside)}"
+            )
+        sample_indexes = [index for index in sample_indexes if index in only_samples]
     keys = [config_key(config) for config in configs]
     identifier = benchmark_id(set_name, set_version, keys, samples)
     replays = tuple(
         PlannedReplay(case_id, sample, config, replay_record_id(identifier, case_id, key, sample))
         for case_id in case_ids
-        for sample in range(samples)
+        for sample in sample_indexes
         for config, key in zip(configs, keys, strict=True)
     )
     pending = tuple(r for r in replays if r.record_id not in existing_record_ids)

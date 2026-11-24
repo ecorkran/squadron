@@ -366,6 +366,30 @@ class TestCaseFilter:
             )  # fmt: skip
 
 
+class TestSampleFilter:
+    def test_sample_filter_limits_the_plan_without_changing_the_benchmark_id(
+        self, scenario: Scenario
+    ) -> None:
+        full = scenario.plan
+        limited = build_plan(
+            set_name="fixes", set_version=1, case_ids=scenario.case_ids, configs=scenario.configs,
+            samples=scenario.samples, existing_record_ids=(), only_samples=[0],
+        )  # fmt: skip
+        assert limited.benchmark_id == full.benchmark_id
+        assert {r.sample for r in limited.replays} == {0}
+        assert {r.record_id for r in limited.replays} < {r.record_id for r in full.replays}
+        assert len(limited.replays) == 4
+
+    def test_a_sample_outside_the_benchmark_is_refused(self, scenario: Scenario) -> None:
+        from squadron.benchmark.bench_plan import BenchmarkRefusal
+
+        with pytest.raises(BenchmarkRefusal, match="--sample"):
+            build_plan(
+                set_name="fixes", set_version=1, case_ids=scenario.case_ids,
+                configs=scenario.configs, samples=2, existing_record_ids=(), only_samples=[2],
+            )  # fmt: skip
+
+
 class TestCaseDrops:
     def test_a_dropped_case_is_reported_once_and_none_of_its_replays_run(
         self, scenario: Scenario
@@ -405,7 +429,7 @@ class TestRetryHarness:
                 update={"benchmark_id": plan.benchmark_id, "outcome": outcome, "absence": absence}
             )
             scenario.store.write_replay(planned.record_id, record)
-        assert delete_harness_replays(scenario.store, plan.benchmark_id) == 2
+        assert delete_harness_replays(scenario.store, plan) == 2
         left = {record.outcome for _, record in scenario.store.replays_for(plan.benchmark_id)}
         assert left == {ProducerOutcome.COMMITTED, ProducerOutcome.NO_COMMIT}
         assert len(scenario.make_plan().pending) == 6
@@ -413,7 +437,28 @@ class TestRetryHarness:
     def test_nothing_to_retry_deletes_nothing(self, scenario: Scenario) -> None:
         from squadron.benchmark.bench_runner import delete_harness_replays
 
-        assert delete_harness_replays(scenario.store, scenario.plan.benchmark_id) == 0
+        assert delete_harness_replays(scenario.store, scenario.plan) == 0
+
+    def test_harness_records_outside_a_filtered_plan_are_kept(self, scenario: Scenario) -> None:
+        from squadron.benchmark.bench_runner import delete_harness_replays
+
+        full = scenario.plan
+        for planned in full.replays:
+            record = make_replay().model_copy(
+                update={
+                    "benchmark_id": full.benchmark_id,
+                    "outcome": ProducerOutcome.NO_RUN_STATE,
+                    "absence": AbsenceClass.HARNESS,
+                }
+            )
+            scenario.store.write_replay(planned.record_id, record)
+        limited = build_plan(
+            set_name="fixes", set_version=1, case_ids=scenario.case_ids, configs=scenario.configs,
+            samples=scenario.samples, existing_record_ids=(),
+            only_cases=[scenario.case_ids[0]], only_samples=[0],
+        )  # fmt: skip
+        assert delete_harness_replays(scenario.store, limited) == 2
+        assert len(scenario.store.replays_for(full.benchmark_id)) == 6
 
 
 class TestStoreFailure:

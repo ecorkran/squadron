@@ -234,7 +234,7 @@ def test_help_lists_every_option() -> None:
     options = {opt for param in command.params for opt in param.opts}
     assert options >= {
         "--set", "--set-version", "--model", "--samples", "--max-cost",
-        "--max-cost-per-replay", "--case", "--retry-harness", "--keep",
+        "--max-cost-per-replay", "--case", "--sample", "--retry-harness", "--keep",
     }  # fmt: skip
 
 
@@ -369,6 +369,22 @@ class TestOutput:
         assert full_id in filtered.output
         assert "pending 0 of 1" in filtered.output
         assert harness.events == []
+
+    def test_sample_filter_limits_the_plan_without_changing_the_benchmark(
+        self, harness: Harness
+    ) -> None:
+        full = harness.invoke("--model", "opus", "--samples", "2", *CAPS)
+        full_id = next(w for w in full.output.split() if w.startswith("bench-"))
+        harness.events.clear()
+        filtered = harness.invoke("--model", "opus", "--samples", "2", "--sample", "0", *CAPS)
+        assert full_id in filtered.output
+        assert "pending 0 of 2" in filtered.output
+        assert harness.events == []
+
+    def test_a_sample_outside_the_benchmark_is_refused(self, harness: Harness) -> None:
+        result = harness.invoke("--model", "opus", "--samples", "2", "--sample", "2", *CAPS)
+        assert result.exit_code == 1
+        assert "--sample" in result.output
 
     def test_retry_harness_deletes_only_harness_records_and_runs_them_again(
         self, harness: Harness

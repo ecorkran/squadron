@@ -120,6 +120,7 @@ class RunOptions:
     max_cost: float | None
     max_cost_per_replay: float | None
     only_cases: list[str] | None
+    only_samples: list[int] | None
     retry_harness: bool
     keep: bool
 
@@ -153,6 +154,7 @@ def _make_plan(
         samples=samples,
         existing_record_ids=existing,
         only_cases=options.only_cases,
+        only_samples=options.only_samples,
     )
 
 
@@ -172,7 +174,7 @@ def _execute(
         # of this benchmark can be running, then the plan is rebuilt to include them.
         nonlocal plan
         if options.retry_harness:
-            deleted = delete_harness_replays(services.store, plan.benchmark_id)
+            deleted = delete_harness_replays(services.store, plan)
             typer.echo(f"deleted {deleted} harness-absent replay records to run again")
             plan = make_plan()
         typer.echo(format_bound(plan, caps, DISPATCH_BOUNDED_PROFILES, unpriced))
@@ -257,6 +259,12 @@ def make_run_command(services_factory: ServicesFactory) -> Callable[..., None]:
         case: Annotated[
             list[str] | None, typer.Option("--case", help="Replay only this case id (repeatable).")
         ] = None,
+        sample: Annotated[
+            list[int] | None,
+            typer.Option(
+                "--sample", help="Replay only this sample index, counted from 0 (repeatable)."
+            ),
+        ] = None,
         retry_harness: Annotated[
             bool,
             typer.Option("--retry-harness", help="Rerun replays whose absence was the harness's."),
@@ -270,7 +278,7 @@ def make_run_command(services_factory: ServicesFactory) -> Callable[..., None]:
         """Run the producer on each case of a set under each model and record the replays."""
         options = RunOptions(
             set_name, set_version, models, samples, max_cost, max_cost_per_replay, case,
-            retry_harness, keep,
+            sample, retry_harness, keep,
         )  # fmt: skip
         try:
             code = _run(services_factory, options, repo)

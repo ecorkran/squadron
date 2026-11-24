@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq benchmark run --sample N` replays only that sample index (repeatable), so a benchmark can run one sample per case first and the rest later without starting a new benchmark. `--retry-harness` together with `--case` or `--sample` now reruns only the replays those filters select and keeps the other records.
+
 ### Fixed
 - `sq benchmark run` no longer marks a replay as leaked for a `gh` or `git` call that cannot read the case's answer: `gh auth status`, `gh repo view --json nameWithOwner`, `command -v gh`, a `git fetch` with no remote, or a clone of another repository. A `gh` command that reads from a repository, and git pointed at the case's own repository, still count (#376).
 
