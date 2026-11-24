@@ -171,17 +171,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 
 12. [x] **(431) Implementation Report from Run Records** — ⏪ Dropped 20261123. `sq stats producers` already reports first-review verdicts, revise rounds, accepted/failed and cost per producer config for design and tasks. The one part it lacks, an implement phase, is #397. Never designed or implemented.
 
-13. [ ] **(432) Document Review Recall from Real Corrections** — 430's method on documents: architecture documents, slice designs and task files. A case is a document as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). The spike is done (amended 20261119): the hand-run mining found 82 valid flaws in 43 cases from squadron, context-forge and migratory (19 arch, 32 slice, 31 tasks), far past the stop line of five, and the hand-run grids answered the first question (`review-recall-results/RESULTS.md` sections 16-20). What remains is making that repeatable, so a new model is measured on documents with one command instead of a hand-run grid and its grading agents.
-   - **Value:** Shows which model reviews architecture documents, designs and task breakdowns, the checks that run before code is written, and re-measures cheaply when a new model arrives.
-   - **Success Criteria:**
-     - Document case kinds (arch, slice, tasks) load as 430 cases, reviewed with the matching template in 430's sandbox, and scored by 430's report.
-     - Two cases are checked in: amoeba slice 260's task file with the #383 key, and one slice design. Every flaw has a later correcting commit.
-     - One agent matcher labels hits under a cost bound taken from observed costs, so no person reads findings to score a run (#383).
-     - Reduced 20261121 (PM): the import of the 43 mined cases, the section 16 reproduction, the added architecture cases (#373) and the question of flaws with no later commit moved to [#387](https://github.com/ecorkran/squadron/issues/387).
-   - **Dependencies:** [430].
-   - **Interfaces:** Consumes 430's case records, recipes and report.
-   - **Risk Level:** Medium (document flaws are matched by agent grading, not by file location)
-   - **Relative Effort:** 3/5
+13. [x] **(432) Document Review Recall from Real Corrections** — ⏪ Dropped 20261123. The hand runs answered its question three times (`review-recall-results/RESULTS.md` sections 16-20, 22 and 23): haiku-xhigh reviews documents best for the money, and the 2026-11-21 review templates changed more than any choice of model. What is still unknown about document reviews is how many of their findings are real, and this slice did not measure that. The known-defect check before a review change ships stays as #383. Designed and cut down after three failed design reviews; never implemented.
 
 14. [x] **(433) Model Answers Report** — ⏪ Dropped 20261119. `review-recall-results/SUMMARY.md` and `ANSWERS.yaml` already give the per-category answer with its evidence and confidence, updated by hand when data changes. Real-work recipe rows come from `sq benchmark recall report --real-work` (434).
 
@@ -198,31 +188,21 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
    - **Risk Level:** Med (the merged verdict and how a failed stage affects it)
    - **Relative Effort:** 3/5
 
-16. [ ] **(435) Repeated Reviewers and Finding Dedupe** — A recipe can run the same reviewer several times on one case run (`repeat: 3`) and merge the outputs, and duplicate findings across reviewers or repeats are merged into one issue before combing or counting. A vote filter keeps only issues raised by at least N of the repeats, as a comb that costs no model call beyond the dedupe. Added 20261118 from 430's live data: one haiku-xhigh run finds 35% of the real-bugs-nonsquadron bugs, but the union of its 3 runs finds 11 of 18 (61%), more than any measured recipe, at triple the findings.
-   - **Value:** User-facing. Tests the cheapest known lever on recall (repeat a cheap reviewer) and whether agreement across repeats filters noise as well as an opus-high comb (haiku-opus: 1.4 findings/run, 36 matched nothing, but 15 of haiku's 19 bug hits).
+16. [ ] **(435) Repeated Reviewers and Finding Dedupe** — Reduced 20261123 (PM). A recipe can run the same reviewer more than once on one review (`repeat: 2`), and duplicate findings across the repeats are merged into one before the review is written. The measuring this slice was added for is done from stored data (`review-recall-results/RESULTS.md` sections 22 and 23): a second haiku-xhigh run on a document finds 68 of 78 flaws against 57 to 62 for one, different reviewers beat repeats of one, and votes rank findings but do not filter them. On code the line-pass pair (437) took the gain. What is left is the feature, for the document review gate.
+   - **Value:** User-facing. The document review gate can run haiku-xhigh twice, for about $0.33 more a review, without sending the reviser the same finding twice.
+   - **Precondition:** the share of document-review findings that are real is measured (SUMMARY.md, "What we cannot say"). Design starts only after that number exists, because a second run is worth building only if the findings it adds are real.
    - **Success Criteria:**
-     - A recipe declares a repeat count per reviewer. Stored single-review outputs are reused where the store already holds enough samples, and `run` prints the bound for only the missing ones.
-     - Fan-out and repeat outputs pass through a dedupe stage that groups findings naming the same issue; the report gives findings/run both before and after dedupe, and a duplicate never counts twice after it.
-     - The dedupe method is chosen by measurement, not assumed. 430's stored labels are the test set: findings labeled HIT for the same bug should merge, and findings labeled HIT for different bugs of one case must not. Candidates: file location alone; location plus sentence embeddings with a similarity threshold (graph or agglomerative clustering, as in the PM's [embedding-cluster](https://github.com/ecorkran/embedding-cluster), all-MiniLM-L6-v2 with a threshold sweep); location plus a cheap model grouping the findings. Embedding candidates cost no model call, so the sweep runs over every stored output.
-     - A vote filter (`min_votes: N`) keeps an issue only when N or more repeats raised it, and is scored like a comb (kept/dropped per finding, recall lower and upper bounds).
-     - The report compares, on real-bugs-nonsquadron: haiku-xhigh ×1, ×3 union, ×3 vote-2, ×3 + opus-high comb, against haiku-opus and haiku-solr-luna-opus.
-     - 434 recipes in pipelines accept repeat and dedupe, so a production review can use them; a vote filter's verdict is deterministic for a fixed set of stage outputs.
-   - **Dependencies:** [430]; [434] for production use.
-   - **Interfaces:** Extends 430's recipe file, stage identities, scoring and report. Provides deduped finding groups that 436's sequential reviewer can read.
+     - A recipe declares a repeat count per reviewer, and each repeat is stored as its own stage output.
+     - Repeat outputs pass through a dedupe step that merges findings naming the same issue, so a duplicate reaches the review once. The report gives findings per review before and after dedupe.
+     - The dedupe method is checked against 430's stored labels before it ships: findings labeled HIT for the same bug should merge, and findings labeled HIT for different bugs of one case must not. Candidates: file location alone; location plus sentence embeddings with a similarity threshold (as in the PM's [embedding-cluster](https://github.com/ecorkran/embedding-cluster)); location plus a cheap model grouping the findings.
+     - `sq review --model <recipe>` and a pipeline `review-model` accept a recipe with repeats and give the same review (434).
+   - **Cut 20261123:** the vote filter (`min_votes`), and the report comparing ×1, ×3 union, ×3 vote and combed recipes.
+   - **Dependencies:** [430, 434].
+   - **Interfaces:** Extends 430's recipe file and stage identities, and 434's recipe review.
    - **Risk Level:** Med (dedupe quality: two findings in different words about one bug must merge, two bugs in one file must not)
-   - **Relative Effort:** 3/5
+   - **Relative Effort:** 2/5
 
-17. [ ] **(436) Focused and Sequential Reviewers** — Two new reviewer shapes in a recipe. **Focused:** a reviewer entry names a focus (a rules file such as correctness, concurrency, error handling, security, tests), sent with the review the way `sq review --rules` sends one, so several cheap reviewers each look at one thing. **Sequential:** a reviewer stage reads the findings of the stages before it and is asked only what they missed; its findings join the merge. Neither shape has been measured: 430's design-review "second pass" was two independent reviews unioned, and the only sequential stages so far are two combs in a row.
-   - **Value:** User-facing. Answers whether a narrow brief lifts cheap models (haiku, mimo, glm-flash) more than repetition does, and whether "find what they missed" beats an independent second reviewer.
-   - **Success Criteria:**
-     - A reviewer entry may carry a focus; the focus file's content is part of the stage identity, so a changed focus never reuses an old output.
-     - A sequential stage names the stages it reads; its prompt carries their deduped findings (435), and it is stored and scored like any reviewer.
-     - The report compares, on real-bugs-nonsquadron: haiku-xhigh with 3–4 focuses against haiku-xhigh ×3 (435), and haiku-xhigh → sequential mimo or sol-r against the same pair in parallel, each with and without the opus-high comb.
-     - 434 recipes in pipelines accept both shapes.
-   - **Dependencies:** [430, 435]. Scope is set by 435's results (amended 20261119): design starts only after 435's report exists. If repeat-and-vote clearly beats the measured recipes, the design cuts the shapes that report leaves little room for, and says which and why.
-   - **Interfaces:** Extends 430's recipe file, stage runner and stage identities; reads 435's finding groups.
-   - **Risk Level:** Med (a sequential reviewer that repeats or argues with earlier findings instead of finding new ones)
-   - **Relative Effort:** 3/5
+17. [x] **(436) Focused and Sequential Reviewers** — ⏪ Dropped 20261123. The focused shape is what 437 built: a reviewer entry with its own rules file and tools setting, and the line pass is one. The sequential shape (a reviewer asked only what the earlier stages missed) was never measured, and nothing measured since argues for it. Never designed or implemented.
 
 18. [x] **(437) Line-Pass Pair as the Code Gate** — The code review gate becomes two reviewers run as one recipe: haiku-xhigh with tools, as today, and a line pass (plain haiku, no tools, with a rules file that tells it to read the changed lines of the diff for slips). Their findings merge into one review, and a category rule says which findings set the verdict: the behavior categories (`correctness`, `security-hygiene`, `error-handling-observability`, `consistency-rot`, `type-contract-debt`). Added 20261123 from the public-benchmark runs of 20261122 (`review-recall-results/20261122-martian/RESULTS.md`): judged as one entry, in two runs, the pair scored 69.1% and 66.9% recall at 33.4% and 34.8% precision for $0.13 a review. haiku-xhigh alone scored 64.7% and 59.7% at 25.7% and 23.8% on the same two runs, and fable-high alone 64.0% at 27.5% for $1.43 a review. A recipe today is a list of reviewer names plus combs, so it cannot describe this pair. The slice adds:
    - A reviewer with its own options: no tools, and a rules file sent with the review's other rules, after them (amended 20261123, design D3; `sq review --rules` places its file earlier).
@@ -267,6 +247,9 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 
 **Relevance review 20261123 (PM decision):**
 - 431 dropped: `sq stats producers` does its job for design and tasks; the implement phase is #397.
+- 432 dropped: the hand runs answered which model reviews documents, and the slice did not measure the open question (how many document findings are real). #387 closes with it; #383 keeps the known-defect check.
+- 436 dropped: 437 built the focused shape; the sequential shape has no evidence for it.
+- 435 reduced to repeat and dedupe for the document review gate. The vote filter and the comparison report are cut. Its design waits on the measured share of document findings that are real.
 
 **Open for slice design:**
 - The producer-only mode's flag name and how it reports the stop (424).
