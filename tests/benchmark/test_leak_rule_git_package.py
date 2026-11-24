@@ -13,6 +13,8 @@ from squadron.benchmark.transcripts import ToolCall
 
 OWNER = "acme-org"
 REPOSITORY = "widget"
+REPOSITORY_URL = f"https://github.com/{OWNER}/{REPOSITORY}"
+REPOSITORY_SCP = f"git@github.com:{OWNER}/{REPOSITORY}.git"
 DISTRIBUTION = "widget-ai"
 
 
@@ -40,8 +42,13 @@ def bash(command: str) -> ToolCall:
 
 GIT_HOST_HITS = [
     "gh issue view 3",
-    "gh",
     "/usr/local/bin/gh pr list",
+    # A gh command that reads from a repository on the host.
+    "gh repo view",
+    "gh repo view --json nameWithOwner,description",
+    "gh repo clone a/b",
+    "gh auth status && gh pr list",
+    "command -v gh && gh issue view 3",
     "env GH_HOST=x gh api /repos",
     "FOO=1 gh issue view 3",
     "ls && gh issue view 3",
@@ -52,11 +59,18 @@ GIT_HOST_HITS = [
     "git --git-dir /x log",
     "git --work-tree=/elsewhere status",
     "git -c core.pager=cat -C /elsewhere log",
-    "git clone https://example.com/a/b",
-    "git fetch origin",
-    "git pull",
-    "git remote add up https://example.com/a/b",
-    "git remote -v add up https://example.com/a/b",
+    # git told to read from the case's repository.
+    f"git clone {REPOSITORY_URL}",
+    f"git clone --depth 1 {REPOSITORY_URL}.git /tmp/x",
+    f"git clone {REPOSITORY_SCP}",
+    f"git fetch {REPOSITORY_URL} main",
+    f"git pull {REPOSITORY_SCP}",
+    f"git ls-remote {REPOSITORY_URL}",
+    f"git remote add up {REPOSITORY_URL}",
+    f"git remote -v add up {REPOSITORY_URL}",
+    f"git remote set-url origin {REPOSITORY_SCP}",
+    f"git config remote.origin.url {REPOSITORY_URL}",
+    f"git submodule add {REPOSITORY_URL}",
     f"curl https://github.com/{OWNER}/{REPOSITORY}/issues/3",
     f"curl -s https://api.github.com/repos/{OWNER}/{REPOSITORY}/issues/3",
     f"wget https://raw.githubusercontent.com/{OWNER}/{REPOSITORY}/main/x.py",
@@ -97,6 +111,26 @@ GIT_HOST_NON_HITS = [
     "git --git-dir=.git log",
     "git remote -v",
     "git remote show origin",
+    # The sandbox repository has no remote, so these reach nothing unless one that names
+    # the case's repository was added, and adding it is the hit.
+    "git fetch",
+    "git fetch origin",
+    "git pull",
+    # Another repository does not hold the case's answer.
+    "git clone https://example.com/a/b",
+    "git remote add up https://example.com/a/b",
+    f"git clone https://github.com/{OWNER}/other-repo",
+    # gh commands that read nothing from a repository.
+    "gh",
+    "gh --version",
+    "gh auth status 2>&1",
+    "gh help issue",
+    "gh repo view --json nameWithOwner 2>&1",
+    "gh repo view --json=nameWithOwner,url",
+    # A lookup of where a program is runs nothing.
+    "command -v gh",
+    "command -v gh >/dev/null 2>&1",
+    "command -V git",
     "git commit -m fetch",
     "echo gh issue view 3",
     "echo git clone x",
@@ -139,7 +173,9 @@ class TestGitAndHost:
         assert git_host_hits(bash(f"git -C {tmp_path}/tree/sub log"), rules) == []
 
     def test_hit_text_names_the_offending_invocation(self, rules: LeakRules) -> None:
-        assert git_host_hits(bash("git clone https://x/y"), rules) == ["git clone"]
+        assert git_host_hits(bash(f"git clone {REPOSITORY_URL}"), rules) == [
+            f"git clone {REPOSITORY_URL}"
+        ]
         assert git_host_hits(bash("gh issue view 3"), rules) == ["gh issue view 3"]
 
 

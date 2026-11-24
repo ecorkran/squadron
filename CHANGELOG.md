@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq benchmark run` no longer marks a replay as leaked for a `gh` or `git` call that cannot read the case's answer: `gh auth status`, `gh repo view --json nameWithOwner`, `command -v gh`, a `git fetch` with no remote, or a clone of another repository. A `gh` command that reads from a repository, and git pointed at the case's own repository, still count (#376).
+
 ## [0.24.38] - 20261123
 
 ### Added

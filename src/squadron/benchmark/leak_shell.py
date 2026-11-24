@@ -37,6 +37,9 @@ WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
     "time": frozenset({"-f", "-o"}),
     "exec": frozenset({"-a"}),
 }
+#: ``command -v`` / ``command -V`` say where a program is and run nothing.
+LOOKUP_WRAPPER = "command"
+LOOKUP_OPTIONS = frozenset({"-v", "-V"})
 #: Shells whose ``-c`` argument is itself a command line.
 SHELL_PROGRAMS = frozenset({"sh", "bash", "zsh", "dash"})
 #: ``eval`` runs its joined arguments as a command line.
@@ -91,7 +94,8 @@ def _strip_prefixes(command: list[str]) -> tuple[list[str], list[str]]:
     """Split off leading ``NAME=value`` assignments and wrapper programs (``env gh`` runs ``gh``).
 
     Returns the assignments and the words from the real program on. A wrapper option's
-    separate value (``sudo -u bob gh``) is dropped with the option.
+    separate value (``sudo -u bob gh``) is dropped with the option. ``command -v gh`` runs
+    nothing, so it has no program.
     """
     rest = list(command)
     assignments: list[str] = []
@@ -103,6 +107,8 @@ def _strip_prefixes(command: list[str]) -> tuple[list[str], list[str]]:
         elif _ASSIGNMENT.match(word):
             assignments.append(word)
         elif wrapper is not None and _WRAPPER_ARGUMENT.fullmatch(word):
+            if wrapper == LOOKUP_WRAPPER and word in LOOKUP_OPTIONS:
+                return assignments, []
             if word in WRAPPER_VALUE_OPTIONS.get(wrapper, frozenset()) and len(rest) > 1:
                 rest.pop(0)  # the option's value is the next word
         else:
