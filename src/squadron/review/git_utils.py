@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
@@ -26,8 +30,12 @@ INTEGRATION_BRANCH_KEY = "git.integration_branch"
 GIT_COMMAND_TIMEOUT_SECONDS = 30
 
 
-def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+def run_git(
+    args: list[str], *, cwd: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str] | None:
     """Run a git command, returning the CompletedProcess or None if it could not answer.
+
+    ``env`` replaces the child's environment when given; None inherits this process's.
 
     ``None`` means git could not be invoked at all (missing binary, bad cwd)
     or did not finish within the timeout;
@@ -47,6 +55,7 @@ def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | 
             text=True,
             **TEXT_DECODING,
             cwd=cwd,
+            env=env,
             check=False,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
         ),
@@ -621,8 +630,65 @@ def assert_reviewable_scope(
     return filtered
 
 
+def _checked_out_with_uncommitted_work(branch: str, cwd: str) -> bool:
+    """True when *branch* is this checkout's current branch and its tree is dirty.
+
+    Raises ``DiffRangeUnresolvedError`` when git cannot say: guessing "clean"
+    would review the committed code and call it the slice as it stands.
+    """
+    head = run_git(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd)
+    if head is None:
+        raise DiffRangeUnresolvedError(f"git could not report the current branch in {cwd!r}.")
+    # Non-zero is a detached HEAD: no branch is checked out, so not this one.
+    if head.returncode != 0 or head.stdout.strip() != branch:
+        return False
+    status = run_git(["status", "--porcelain"], cwd=cwd)
+    if status is None or status.returncode != 0:
+        raise DiffRangeUnresolvedError(f"git could not report the working tree state in {cwd!r}.")
+    return bool(status.stdout.strip())
+
+
+def _snapshot_working_tree(cwd: str) -> str:
+    """Write the working tree as a git tree object and return its SHA.
+
+    ``git add -A`` into a scratch index: tracked edits, deletions and untracked
+    files, ``.gitignore`` honoured. The real index and the files are untouched.
+    It is the same staging a code round's commit does, so this is the tree that
+    commit will record.
+
+    Raises ``DiffRangeUnresolvedError`` when git refuses (an unresolved merge, for one).
+    """
+    located = run_git(["rev-parse", "--git-path", "index"], cwd=cwd)
+    if located is None or located.returncode != 0:
+        raise DiffRangeUnresolvedError(f"git could not locate the index in {cwd!r}.")
+    real_index = Path(cwd) / located.stdout.strip()
+
+    with tempfile.TemporaryDirectory() as scratch_dir:
+        scratch_index = Path(scratch_dir) / "index"
+        # Start from the real index so unchanged files are not hashed again.
+        shutil.copyfile(real_index, scratch_index)
+        env = {**os.environ, "GIT_INDEX_FILE": str(scratch_index)}
+        _run_snapshot_step(["add", "-A"], cwd, env)
+        return _run_snapshot_step(["write-tree"], cwd, env)
+
+
+def _run_snapshot_step(args: list[str], cwd: str, env: dict[str, str]) -> str:
+    """Run one scratch-index git command and return its stdout; raise if git refuses."""
+    done = run_git(args, cwd=cwd, env=env)
+    if done is None or done.returncode != 0:
+        detail = done.stderr.strip() if done is not None else "git did not answer"
+        raise DiffRangeUnresolvedError(
+            f"Could not snapshot the working tree in {cwd!r} (git {' '.join(args)}): {detail}"
+        )
+    return done.stdout.strip()
+
+
 def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = None) -> str:
     """Resolve the git diff range for a slice's commits.
+
+    When the slice's branch is checked out in ``cwd`` with uncommitted work, the
+    range ends at a snapshot of the working tree instead of the branch tip, so
+    the diff is the slice as it stands on disk (#395).
 
     ``base`` is the ref the slice branch forked from — ``main``, or the
     configured ``git.integration_branch`` when one is set. Pass None to
@@ -670,7 +736,10 @@ def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = Non
                     base,
                     branch,
                 )
-                return f"{merge_base}...{branch}"
+                if _checked_out_with_uncommitted_work(branch, cwd):
+                    # #395: a revise round is reviewed before it is committed.
+                    return f"{merge_base}{TWO_DOT}{_snapshot_working_tree(cwd)}"
+                return f"{merge_base}{THREE_DOT}{branch}"
             # branch_tip == merge_base: the branch is fully contained in
             # base. A --no-ff merge leaves a merge commit for the path
             # below, but a fast-forward merge leaves none (issue #54), and

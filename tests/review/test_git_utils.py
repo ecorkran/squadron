@@ -206,6 +206,79 @@ class TestResolveForkPoint:
         assert "no local branch" not in message
 
 
+class TestSliceDiffCoversWorkingTree:
+    """Real-git tests for #395: a checked-out slice is reviewed as it stands on disk."""
+
+    @staticmethod
+    def _git(cwd: Path, *args: str) -> str:
+        done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+        return done.stdout
+
+    def _repo_on_slice_branch(self, repo: Path) -> Path:
+        self._git(repo, "init", "-q", "-b", "main")
+        self._git(repo, "config", "user.email", "t@t.co")
+        self._git(repo, "config", "user.name", "T")
+        (repo / ".gitignore").write_text("ignored.log\n")
+        (repo / "a.txt").write_text("base\n")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-qm", "base")
+        self._git(repo, "checkout", "-q", "-b", "395-slice.foo")
+        (repo / "b.txt").write_text("defect\n")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-qm", "feat: slice work")
+        return repo
+
+    def test_uncommitted_fix_and_new_file_are_in_the_diff(self, tmp_path: Path) -> None:
+        """A revise round's edit is uncommitted when its review runs; the review must see it."""
+        repo = self._repo_on_slice_branch(tmp_path)
+        (repo / "b.txt").write_text("fixed\n")
+        (repo / "c.txt").write_text("new file\n")
+        (repo / "ignored.log").write_text("noise\n")
+        status_before = self._git(repo, "status", "--porcelain")
+
+        diff_range = resolve_slice_diff_range(395, str(repo), base="main")
+
+        diff = self._git(repo, "diff", diff_range)
+        assert "+fixed" in diff
+        assert "+defect" not in diff
+        assert self._git(repo, "diff", "--name-only", diff_range).split() == ["b.txt", "c.txt"]
+        # The snapshot is taken through a scratch index: nothing is staged or changed.
+        assert self._git(repo, "status", "--porcelain") == status_before
+
+    def test_clean_checkout_keeps_the_committed_range(self, tmp_path: Path) -> None:
+        repo = self._repo_on_slice_branch(tmp_path)
+        merge_base = self._git(repo, "rev-parse", "main").strip()
+        assert resolve_slice_diff_range(395, str(repo), base="main") == (
+            f"{merge_base}...395-slice.foo"
+        )
+
+    def test_snapshot_refusal_raises_instead_of_reviewing_committed_code(self, tmp_path: Path) -> None:
+        """If git cannot write the tree, the review must not fall back to the stale range."""
+        repo = self._repo_on_slice_branch(tmp_path)
+        (repo / "b.txt").write_text("fixed\n")
+
+        def refuse_write_tree(
+            args: list[str], *, cwd: str, env: dict[str, str] | None = None
+        ) -> subprocess.CompletedProcess[str] | None:
+            if args == ["write-tree"]:
+                return subprocess.CompletedProcess(args, 128, stdout="", stderr="unmerged entry")
+            return run_git(args, cwd=cwd, env=env)
+
+        with patch("squadron.review.git_utils.run_git", side_effect=refuse_write_tree):
+            with pytest.raises(DiffRangeUnresolvedError, match="unmerged entry"):
+                resolve_slice_diff_range(395, str(repo), base="main")
+
+    def test_dirty_tree_on_another_branch_is_not_the_slice(self, tmp_path: Path) -> None:
+        """Edits on some other checked-out branch are not this slice's work."""
+        repo = self._repo_on_slice_branch(tmp_path)
+        merge_base = self._git(repo, "rev-parse", "main").strip()
+        self._git(repo, "checkout", "-q", "main")
+        (repo / "a.txt").write_text("edited on main\n")
+        assert resolve_slice_diff_range(395, str(repo), base="main") == (
+            f"{merge_base}...395-slice.foo"
+        )
+
+
 class TestResolveSliceDiffRange:
     """Tests for resolve_slice_diff_range()."""
 

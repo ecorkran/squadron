@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - The shipped recipes are now `haiku-sol-luna` and `haiku-solr-luna`. `haiku-sol-opus`, `haiku-sol-luna-opus` and `haiku-solr-luna-opus` are no longer shipped: their `opus-high` comb dropped real findings (#389). A pipeline or `sq review --model` that names one now fails before the run starts; switch to one of the two new names.
 
+### Fixed
+- A code review in a revise loop now sees that round's fix. Before, it was given the committed diff, which was one round behind, so a fixed finding was raised again. `sq review code <slice>` on a checked-out slice branch likewise includes uncommitted work (#395).
+
 ## [0.24.37] - 20261121
 
 ### Fixed
