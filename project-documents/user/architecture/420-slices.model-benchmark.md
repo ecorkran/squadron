@@ -169,16 +169,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
    - **Risk Level:** Medium (the hit rule; the graded-real share is agent-graded and needs a human-checked sample)
    - **Relative Effort:** 3/5
 
-12. [ ] **(431) Implementation Report from Run Records** — A report over pipeline runs already recorded: per producer model and step (design, tasks, implement), the first-review verdict and finding counts by severity, revise rounds, pauses by kind, cost and turns, split by the slice's effort rating. No replay and no model calls. It is not controlled, since slice difficulty differs between runs, so each row shows its run count and no row is ranked below a stated floor.
-   - **Value:** User-facing. Answers "which implementation model" from work already done. Alternating models across real slices turns it into a comparison at no extra cost.
-   - **Success Criteria:**
-     - Rows per step, model and effort sent, with the run count, from the run records and review files of every project with recorded runs.
-     - Runs with no review, and runs whose records cannot be read, are counted and named, never dropped silently.
-     - Finding categories are right for current reviews (needs #338 fixed).
-   - **Dependencies:** 199 run listings, 175 usage records, review frontmatter; #338. [434] for recipe reviews: its `recipe_review` metrology records, read by `run_id` and `step_name`, and `aiRecipe` in review frontmatter.
-   - **Interfaces:** Provides the implementation rows for `review-recall-results/SUMMARY.md` and `ANSWERS.yaml`.
-   - **Risk Level:** Low
-   - **Relative Effort:** 2/5
+12. [x] **(431) Implementation Report from Run Records** — ⏪ Dropped 20261123. `sq stats producers` already reports first-review verdicts, revise rounds, accepted/failed and cost per producer config for design and tasks. The one part it lacks, an implement phase, is #397. Never designed or implemented.
 
 13. [ ] **(432) Document Review Recall from Real Corrections** — 430's method on documents: architecture documents, slice designs and task files. A case is a document as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). The spike is done (amended 20261119): the hand-run mining found 82 valid flaws in 43 cases from squadron, context-forge and migratory (19 arch, 32 slice, 31 tasks), far past the stop line of five, and the hand-run grids answered the first question (`review-recall-results/RESULTS.md` sections 16-20). What remains is making that repeatable, so a new model is measured on documents with one command instead of a hand-run grid and its grading agents.
    - **Value:** Shows which model reviews architecture documents, designs and task breakdowns, the checks that run before code is written, and re-measures cheaply when a new model arrives.
@@ -273,6 +264,9 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 - 433 dropped: the hand-maintained SUMMARY.md and ANSWERS.yaml do its job.
 - 432's spike is done (82 flaws in 43 cases); the slice now makes document recall repeatable and covers architecture documents (#373).
 - 436's scope waits on 435's results.
+
+**Relevance review 20261123 (PM decision):**
+- 431 dropped: `sq stats producers` does its job for design and tasks; the implement phase is #397.
 
 **Open for slice design:**
 - The producer-only mode's flag name and how it reports the stop (424).
