@@ -13,6 +13,9 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261123
 
+### Release 0.24.38
+
+- **Contents:** slice 437 (line-pass pair as the code gate: `haiku-line-pass` is the default code review, recipes take `reviewer_options` and `keep_categories`); #389 (recipes ending in an opus-high comb no longer shipped, truth-only comb); #390 (`code-review-model` on P56 and P456); #395 (a revise round's code review sees that round's fix); `neon` and `neon-medium` aliases.
 
 **p6: devlog-4**
 - branch-0:branch-0: PASS
