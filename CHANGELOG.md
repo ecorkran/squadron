@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The shipped recipe `haiku-line-pass` is now the default code review of `P6`, `implement`, `implement-plan` and `sq run review`: a `haiku-xhigh` review plus a no-tools `haiku` line pass, where only findings in the behavior categories set the verdict. The others stay in the review file under "Not gating". Set `review-model: haiku-xhigh` for the old single reviewer. Recipes can now give a reviewer `tools: false` and a `rules` file, and set `keep_categories`.
+- The shipped recipe `haiku-line-pass` is now the default code review of `P6`, `implement`, `implement-plan`, `P56`, `P456` and `sq run review`: a `haiku-xhigh` review plus a no-tools `haiku` line pass, where only findings in the behavior categories set the verdict. The others stay in the review file under "Not gating". Set `review-model: haiku-xhigh` for the old single reviewer.
+- `P56` and `P456` have a new param, `code-review-model`, for the code review alone. Their `review-model` now sets only the design and tasks reviews, so `-p review-model=X` no longer changes the code reviewer; pass `-p code-review-model=X` for that (#390). Recipes can now give a reviewer `tools: false` and a `rules` file, and set `keep_categories`.
 - Model alias `neon` for Google's Gemini 4 Neon (`gemini-4-neon`, Gemini API key). It runs at Google's default effort, which is high.
 - Model alias `neon-medium`: the same model at medium effort.
 

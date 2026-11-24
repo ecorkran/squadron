@@ -7,9 +7,11 @@ params:
   design-model: fable-medium
   tasks-model: opus-high
   model: sonnet
-  # review-model stays haiku-xhigh: it also reviews documents, where the haiku-line-pass
-  # recipe is refused (#390). P6.yaml explains the recipe.
+  # review-model reviews the design and tasks documents. code-review-model reviews the
+  # code: the haiku-line-pass recipe needs a diff, so it cannot review a document. P6.yaml
+  # explains the recipe.
   review-model: haiku-xhigh
+  code-review-model: haiku-line-pass
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
@@ -66,7 +68,7 @@ steps:
   - implement:
       phase: 6
       model: "{model}"
-      review: { template: code, model: "{review-model}" }
+      review: { template: code, model: "{code-review-model}" }
       checkpoint: never
       existing: keep
   - dispatch:
@@ -83,6 +85,6 @@ steps:
       on_exhaust: checkpoint
       steps:
         - dispatch: { name: revise, model: "{model}", feedback: review }
-        - review: { template: code, model: "{review-model}", slice: "{slice}" }
+        - review: { template: code, model: "{code-review-model}", slice: "{slice}" }
   - devlog: auto
   - branch: { op: merge, when: "{merge}" }

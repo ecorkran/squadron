@@ -67,15 +67,42 @@ _CODE_REVIEWERS = [
     ("implement", "review-model", "haiku-line-pass"),
     ("implement-plan", "review-model", "haiku-line-pass"),
     ("review", "model", "haiku-line-pass"),
-    # P56 and P456 keep haiku-xhigh: their review-model also reviews documents (#390).
-    ("P56", "review-model", "haiku-xhigh"),
-    ("P456", "review-model", "haiku-xhigh"),
+    # P56 and P456 also review documents, so their code reviewer has its own param (#390).
+    ("P56", "code-review-model", "haiku-line-pass"),
+    ("P456", "code-review-model", "haiku-line-pass"),
 ]
+_CODE_REVIEWER_PARAM = {name: param for name, param, _ in _CODE_REVIEWERS}
+_DOCUMENT_REVIEWER_PARAM = "review-model"
 
 
 @pytest.mark.parametrize(("name", "param", "expected"), _CODE_REVIEWERS)
 def test_code_reviewer_default_of_each_pipeline(name: str, param: str, expected: str) -> None:
     assert load_pipeline(name).params[param] == expected
+
+
+def _review_configs(value: object) -> list[dict[str, object]]:
+    """Every ``review: {template: ..., model: ...}`` mapping anywhere under *value*."""
+    found: list[dict[str, object]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():  # type: ignore[union-attr]
+            if key == "review" and isinstance(child, dict) and "template" in child:
+                found.append(child)  # type: ignore[arg-type]
+            found.extend(_review_configs(child))
+    elif isinstance(value, list):
+        for child in value:  # type: ignore[union-attr]
+            found.extend(_review_configs(child))
+    return found
+
+
+@pytest.mark.parametrize("name", ["P56", "P456"])
+def test_document_and_code_reviews_use_separate_params(name: str) -> None:
+    """#390: the recipe default reaches the code reviews and no document review."""
+    assert load_pipeline(name).params[_DOCUMENT_REVIEWER_PARAM] == "haiku-xhigh"
+    reviews = _review_configs(_raw_steps(name))
+    code_models = {r["model"] for r in reviews if r["template"] == "code"}
+    document_models = {r["model"] for r in reviews if r["template"] != "code"}
+    assert code_models == {f"{{{_CODE_REVIEWER_PARAM[name]}}}"}
+    assert document_models == {f"{{{_DOCUMENT_REVIEWER_PARAM}}}"}
 
 
 # ---------------------------------------------------------------------------
@@ -124,10 +151,29 @@ def _batch_body() -> list[dict[str, object]]:
     return each["each"]["steps"]  # type: ignore[index]
 
 
+def _with_code_reviewer_named(value: object, param: str) -> object:
+    """*value* with the placeholder of the pipeline's code-reviewer param made generic.
+
+    The param's name legitimately differs (#390); which steps use it must not.
+    """
+    if value == f"{{{param}}}":
+        return "{<code reviewer>}"
+    if isinstance(value, dict):
+        return {
+            k: _with_code_reviewer_named(v, param)
+            for k, v in value.items()  # type: ignore[union-attr]
+        }
+    if isinstance(value, list):
+        return [_with_code_reviewer_named(v, param) for v in value]  # type: ignore[union-attr]
+    return value
+
+
 @pytest.mark.parametrize("name", _SINGLE_SLICE_CODE_PIPELINES)
 def test_single_slice_code_pipelines_match_the_batch_body(name: str) -> None:
-    assert _normalize(_enter_through_merge(_raw_steps(name))) == _normalize(
-        _enter_through_merge(_batch_body())
+    own = _normalize(_enter_through_merge(_raw_steps(name)))
+    batch = _normalize(_enter_through_merge(_batch_body()))
+    assert _with_code_reviewer_named(own, _CODE_REVIEWER_PARAM[name]) == (
+        _with_code_reviewer_named(batch, _CODE_REVIEWER_PARAM["implement-plan"])
     )
 
 
