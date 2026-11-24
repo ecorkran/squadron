@@ -50,8 +50,21 @@ class RecallKind(Protocol):
         """The tree a review reads; raises ``SandboxError`` on enter."""
         ...
 
-    def review_argv(self, case: RealBugCase, alias: str, sq_path: Path, out_path: Path) -> list[str]:
-        """The review command, run with cwd = the sandbox tree."""
+    def review_argv(
+        self,
+        case: RealBugCase,
+        alias: str,
+        sq_path: Path,
+        out_path: Path,
+        *,
+        no_tools: bool = False,
+        rules_path: Path | None = None,
+    ) -> list[str]:
+        """The review command, run with cwd = the sandbox tree.
+
+        *no_tools* and *rules_path* are the reviewer's recipe options: a review without
+        tools, and a rules file to add to the review's rules.
+        """
         ...
 
 
@@ -76,8 +89,17 @@ class CodeKind:
             fetch_timeout=context.fetch_timeout,
         )
 
-    def review_argv(self, case: RealBugCase, alias: str, sq_path: Path, out_path: Path) -> list[str]:
-        return [
+    def review_argv(
+        self,
+        case: RealBugCase,
+        alias: str,
+        sq_path: Path,
+        out_path: Path,
+        *,
+        no_tools: bool = False,
+        rules_path: Path | None = None,
+    ) -> list[str]:
+        argv = [
             str(sq_path),
             "review",
             "code",
@@ -95,6 +117,11 @@ class CodeKind:
             "--cwd",
             ".",
         ]
+        if no_tools:
+            argv.append("--no-tools")
+        if rules_path is not None:
+            argv.extend(["--rules", str(rules_path)])
+        return argv
 
 
 _REGISTRY: dict[RecallCaseKind, RecallKind] = {RecallCaseKind.CODE: CodeKind()}

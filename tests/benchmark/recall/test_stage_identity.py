@@ -26,7 +26,7 @@ from squadron.metrology.recall_run_models import (
 from squadron.models import aliases
 from squadron.models.aliases import ModelAlias
 from squadron.pipeline.usage_capture import effort_sent_by_profile
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions, rules_sha256
 from squadron.review import templates
 from squadron.review.templates import load_template
 from tests.benchmark.recall.scoring_support import finding, make_case, make_run
@@ -58,6 +58,21 @@ def test_different_configured_effort_gives_different_entry_keys() -> None:
     config_low, effort_low = live_stage_config("twin-low", StageKind.REVIEW)
     assert config_a.config_key == config_low.config_key
     assert entry_key(config_a, effort_a) != entry_key(config_low, effort_low)
+
+
+def test_reviewer_options_enter_the_live_config_and_the_resolved_identity() -> None:
+    options = ReviewerOptions(tools=False, rules="line.md").model_copy(
+        update={"rules_content": "Read the changed lines.\n"}
+    )
+    plain, _ = live_stage_config("twin-a", StageKind.REVIEW)
+    line, _ = live_stage_config("twin-a", StageKind.REVIEW, options)
+    assert line.tool_use is False and line.rules_hash == rules_sha256(options)
+    assert line.config_key != plain.config_key
+    resolver = LiveStageResolver()
+    resolved_plain = resolver.resolve("twin-a", StageKind.REVIEW)
+    resolved_line = resolver.resolve("twin-a", StageKind.REVIEW, options)
+    assert resolved_plain is not None and resolved_plain.config_key == plain.config_key
+    assert resolved_line is not None and resolved_line.config_key == line.config_key
 
 
 def test_review_and_comb_templates_differ() -> None:

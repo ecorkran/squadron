@@ -18,7 +18,7 @@ from squadron.core.process_runner import ProcessResult
 from squadron.metrology.content_sidecars import ContentSidecars, SidecarKind
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import RecallLeakVerdict, StageConfig, StageKind
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions, rules_sha256
 from squadron.replay.history_free_sandbox import SandboxError
 from tests.benchmark.recall.support import FIXED_NOW
 from tests.benchmark.support import RunnerCall, ScriptedRunner, ok
@@ -27,13 +27,16 @@ PROFILE = "openrouter"
 API_KEY_ENV = "OPENROUTER_API_KEY"
 
 
-def live_config_for(alias: str, kind: StageKind) -> tuple[StageConfig, Effort | None]:
+def live_config_for(
+    alias: str, kind: StageKind, options: ReviewerOptions | None = None
+) -> tuple[StageConfig, Effort | None]:
     config = StageConfig(
         model=f"vendor/{alias}",
         profile=PROFILE,
         template_hash=f"live-{kind.value}",
-        tool_use=True,
+        tool_use=options is None or options.tools,
         max_output_tokens=None,
+        rules_hash=None if options is None else rules_sha256(options),
     )
     return config, None
 
@@ -124,9 +127,11 @@ def write_json(path: Path, document: object) -> None:
 PLAN_PROFILE = "openai-oauth"
 
 
-def plan_config_for(alias: str, kind: StageKind) -> tuple[StageConfig, Effort | None]:
+def plan_config_for(
+    alias: str, kind: StageKind, options: ReviewerOptions | None = None
+) -> tuple[StageConfig, Effort | None]:
     """Aliases starting ``codex`` are plan-billed (Codex profile); others as ``live_config_for``."""
-    config, effort = live_config_for(alias, kind)
+    config, effort = live_config_for(alias, kind, options)
     if alias.startswith("codex"):
         config = config.model_copy(update={"profile": PLAN_PROFILE})
     return config, effort

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sq benchmark recall run` runs recipes whose reviewers have `reviewer_options`: a `tools: false` reviewer is called with `--no-tools`, and its `rules` file is sent. `haiku-line-pass` can now be measured on your own case sets, and `sq benchmark recall report` scores it from those outputs (#393).
 - `sq benchmark run --sample N` replays only that sample index (repeatable), so a benchmark can run one sample per case first and the rest later without starting a new benchmark. `--retry-harness` together with `--case` or `--sample` now reruns only the replays those filters select and keeps the other records.
 
 ### Fixed

@@ -48,6 +48,8 @@ from squadron.metrology.recall_run_models import (
 from squadron.providers.base import ProfileName
 
 COMB_TEMPLATE = "comb"
+#: The reviewer's rules file inside the call's scrubbed home.
+REVIEWER_RULES_FILE = "reviewer-rules.md"
 
 
 @dataclass(frozen=True)
@@ -136,9 +138,10 @@ def run_stage(stage: PendingStage, run: RecallRun, sandbox: Path, deps: StageDep
     environment.prepare()
     paths.output.unlink(missing_ok=True)
     paths.sandbox_record.write_text(str(sandbox), encoding="utf-8")
+    rules_path = _write_reviewer_rules(stage, environment.home)
     try:
         result = deps.runner.run(
-            _argv(stage, paths, deps.sq_path),
+            _argv(stage, paths, deps.sq_path, rules_path),
             cwd=str(sandbox),
             timeout=deps.review_timeout,
             env=variables,
@@ -188,9 +191,30 @@ def remove_home(stage: PendingStage, bench_root: Path) -> None:
     shutil.rmtree(stage_paths(stage, bench_root).home, ignore_errors=True)
 
 
-def _argv(stage: PendingStage, paths: StagePaths, sq_path: Path) -> list[str]:
+def _write_reviewer_rules(stage: PendingStage, home: Path) -> Path | None:
+    """The reviewer's rules, written into the call's scrubbed home; ``None`` with no rules.
+
+    The bytes written are the ones the stage's ``rules_hash`` was taken from, so an edit
+    to the recipe's rules file during a run cannot send new rules under the old hash.
+    """
+    content = None if stage.options is None else stage.options.rules_content
+    if content is None:
+        return None
+    path = home / REVIEWER_RULES_FILE
+    path.write_bytes(content.encode("utf-8"))
+    return path
+
+
+def _argv(stage: PendingStage, paths: StagePaths, sq_path: Path, rules_path: Path | None) -> list[str]:
     if stage.kind is StageKind.REVIEW:
-        return get_kind(stage.case.kind).review_argv(stage.case, stage.alias, sq_path, paths.output)
+        return get_kind(stage.case.kind).review_argv(
+            stage.case,
+            stage.alias,
+            sq_path,
+            paths.output,
+            no_tools=stage.options is not None and not stage.options.tools,
+            rules_path=rules_path,
+        )
     return [
         str(sq_path), "benchmark", "recall", "_stage", "--template", COMB_TEMPLATE,
         "--input", str(paths.comb_input), "--output", str(paths.output),

@@ -30,7 +30,7 @@ from squadron.core.process_runner import SubprocessRunner
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseKind
 from squadron.metrology.recall_run_models import RecallLeakVerdict, RecallRun, StageKind, StageOutcome
 from squadron.providers.base import ProfileName
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions
 from tests.benchmark.recall.fixtures.bug_repo.build import BUG_FILE, BuiltBugRepo
 from tests.benchmark.recall.scoring_support import make_case
 from tests.benchmark.recall.stage_support import harness_env, live_config_for
@@ -69,8 +69,10 @@ class HomeTranscript:
 
 
 class LiveIdentities:
-    def resolve(self, alias: str, stage_kind: StageKind) -> StageIdentity | None:
-        config, _ = live_config_for(alias, stage_kind)
+    def resolve(
+        self, alias: str, stage_kind: StageKind, options: ReviewerOptions | None = None
+    ) -> StageIdentity | None:
+        config, _ = live_config_for(alias, stage_kind, options)
         return StageIdentity(config.config_key, None)
 
 
@@ -167,7 +169,16 @@ class StubKind:
     ) -> AbstractContextManager[Path]:
         return nullcontext(self.tree)
 
-    def review_argv(self, case: RealBugCase, alias: str, sq_path: Path, out_path: Path) -> list[str]:
+    def review_argv(
+        self,
+        case: RealBugCase,
+        alias: str,
+        sq_path: Path,
+        out_path: Path,
+        *,
+        no_tools: bool = False,
+        rules_path: Path | None = None,
+    ) -> list[str]:
         return [str(self.sq), "--model", alias, "--output-path", str(out_path)]
 
 

@@ -153,14 +153,9 @@ def _pair_variants(
     """Each combination of the reviewers' matching (review, chain) choices."""
     per_reviewer: list[list[ReviewerOutput]] = []
     for alias in recipe.reviewers:
-        if alias in recipe.reviewers_with_options():
-            # A stored entry carries no record of the options it ran with: a live `haiku`
-            # entry ran with tools and an imported one by alias only, so neither can stand
-            # in for the reviewer with options. Left out until #393 stores them.
-            return {}
         choices = [
             reviewer_output(alias, review, chain, keep=recipe.keep_categories)
-            for key, review in matching_reviews(run, alias, resolver)
+            for key, review in matching_reviews(run, alias, resolver, recipe.call_options(alias))
             for chain in matching_chains(run, key, recipe.combs, resolver)
         ]
         if not choices:

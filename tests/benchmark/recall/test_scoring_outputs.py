@@ -155,17 +155,32 @@ def test_nothing_stored_leaves_every_pair_out() -> None:
     assert row.pairs == [] and row.left_out == [("demo-1", 1), ("demo-1", 2)]
 
 
-def test_reviewer_with_options_matches_no_stored_entry_live_or_imported() -> None:
-    """A tool-enabled live `haiku` and an imported `haiku` never score as the line pass (#393)."""
+def test_reviewer_with_options_is_scored_only_from_an_entry_run_with_them() -> None:
+    """A tool-enabled live `haiku` and an imported `haiku` never score as the line pass."""
+    options = ReviewerOptions(tools=False, rules="line.md")
+    with_tools = review("haiku", (finding(1, "src/a.py"),), source=LIVE_SOURCE)
+    imported = review("haiku", (finding(2, "src/b.py"),), model="haiku-imported")
+    line_pass = review("haiku", (finding(3, "src/a.py"),), model="haiku-line", source=LIVE_SOURCE)
+    recipe = Recipe(name="line", reviewers=("haiku",), reviewer_options={"haiku": options})
+    resolver = StubResolver(
+        {"haiku": identity_of(with_tools)}, {("haiku", options): identity_of(line_pass)}
+    )
+    run = make_run(CASE, 1, with_tools, imported, line_pass)
+    (row,) = recipe_outputs(recipe, [CASE], _runs(run), [1], resolver)
+    (pair,) = row.pairs
+    assert [f.finding_id for f in pair.reviewers[0].upper] == ["F3"]
+
+
+def test_reviewer_with_options_matches_no_tool_enabled_or_imported_entry() -> None:
+    options = ReviewerOptions(tools=False, rules="line.md")
     live = review("haiku", (finding(1, "src/a.py"),), source=LIVE_SOURCE)
     imported = review("haiku", (finding(2, "src/b.py"),), model="haiku-imported")
     run = make_run(CASE, 1, live, imported)
-    recipe = Recipe(
-        name="line",
-        reviewers=("haiku",),
-        reviewer_options={"haiku": ReviewerOptions(tools=False, rules="line.md")},
+    recipe = Recipe(name="line", reviewers=("haiku",), reviewer_options={"haiku": options})
+    resolver = StubResolver(
+        {"haiku": identity_of(live)},
+        {("haiku", options): StageIdentity("key-of-the-line-pass", None)},
     )
-    resolver = StubResolver({"haiku": identity_of(live)})
     plain = Recipe(name="plain", reviewers=("haiku",))
     assert recipe_outputs(plain, [CASE], _runs(run), [1], resolver)[
         0

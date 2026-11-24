@@ -21,6 +21,7 @@ from squadron.metrology.recall_run_models import (
     comb_slot,
     content_key,
 )
+from squadron.recipes.recipe import ReviewerOptions
 from tests.benchmark.recall.support import FIXED_NOW, case_fields, make_bug
 
 IMPORT_SOURCE = "import:20261112-grid2"
@@ -126,10 +127,19 @@ def add_chain(run: RecallRun, review_entry: StageEntry, *combs: StageEntry) -> N
 
 
 class StubResolver:
-    """Resolves aliases to fixed identities."""
+    """Resolves aliases to fixed identities; a reviewer with options by ``(alias, options)``."""
 
-    def __init__(self, identities: dict[str, StageIdentity]) -> None:
+    def __init__(
+        self,
+        identities: dict[str, StageIdentity],
+        with_options: dict[tuple[str, ReviewerOptions], StageIdentity] | None = None,
+    ) -> None:
         self._identities = identities
+        self._with_options = with_options or {}
 
-    def resolve(self, alias: str, stage_kind: StageKind) -> StageIdentity | None:
+    def resolve(
+        self, alias: str, stage_kind: StageKind, options: ReviewerOptions | None = None
+    ) -> StageIdentity | None:
+        if options is not None:
+            return self._with_options.get((alias, options))
         return self._identities.get(alias)

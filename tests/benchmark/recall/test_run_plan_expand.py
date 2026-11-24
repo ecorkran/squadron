@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.run_plan import expand_pending
 from squadron.core.models import Effort
 from squadron.metrology.recall_run_models import (
@@ -13,15 +16,57 @@ from squadron.metrology.recall_run_models import (
     StageKind,
     StageOutcome,
 )
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions, rules_sha256
 from tests.benchmark.recall.scoring_support import comb, config, make_case, review
 
 CASE = make_case()
 RECIPE = Recipe(name="r", reviewers=("haiku", "sol"), combs=("luna", "opus"))
 
 
-def config_for(alias: str, kind: StageKind) -> tuple[StageConfig, Effort | None]:
-    return config(f"{alias}-model", f"live-{kind.value}"), Effort.high
+LINE_RULES = "Read the changed lines.\n"
+LINE_PASS = ReviewerOptions(tools=False, rules="line.md").model_copy(
+    update={"rules_content": LINE_RULES}
+)
+
+
+def config_for(
+    alias: str, kind: StageKind, options: ReviewerOptions | None = None
+) -> tuple[StageConfig, Effort | None]:
+    cfg = config(f"{alias}-model", f"live-{kind.value}")
+    if options is not None:
+        cfg = cfg.model_copy(update={"tool_use": options.tools, "rules_hash": rules_sha256(options)})
+    return cfg, Effort.high
+
+
+def test_a_reviewer_with_options_is_keyed_and_carried_with_them() -> None:
+    plain = Recipe(name="plain", reviewers=("haiku",))
+    line = Recipe(
+        name="line", reviewers=("haiku",), combs=("luna",), reviewer_options={"haiku": LINE_PASS}
+    )
+    plain_review, line_review, line_comb = expand_pending([plain, line], [CASE], [1], {}, config_for)
+    assert plain_review.options is None and plain_review.config.tool_use is True
+    assert line_review.options == LINE_PASS
+    assert line_review.config.tool_use is False
+    assert line_review.config.rules_hash == rules_sha256(LINE_PASS)
+    assert line_review.review_key != plain_review.review_key
+    # The comb is its own call: it reads the review under the review's key, with no options.
+    assert line_comb.options is None and line_comb.review_key == line_review.review_key
+    assert line_comb.config.tool_use is True and line_comb.config.rules_hash is None
+
+
+def test_options_that_change_nothing_expand_as_no_options() -> None:
+    plain = Recipe(name="plain", reviewers=("haiku",))
+    same = Recipe(name="same", reviewers=("haiku",), reviewer_options={"haiku": ReviewerOptions()})
+    (only,) = expand_pending([plain, same], [CASE], [1], {}, config_for)
+    assert only.options is None
+
+
+def test_a_rules_file_that_was_never_read_is_refused() -> None:
+    unread = Recipe(
+        name="line", reviewers=("haiku",), reviewer_options={"haiku": ReviewerOptions(rules="line.md")}
+    )
+    with pytest.raises(RecallRefusal, match="line.md"):
+        expand_pending([unread], [CASE], [1], {}, config_for)
 
 
 def _live_review(

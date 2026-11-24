@@ -165,21 +165,27 @@ def test_exit_1_when_refused(tmp_path: Path, bug_repo: BuiltBugRepo) -> None:
     assert refused.exit_code == 1 and BENCHMARK_REVIEW_TIMEOUT_KEY in refused.output
 
 
-def test_recipe_with_reviewer_options_is_refused_before_any_bound_or_call(
+def test_recipe_with_reviewer_options_runs_its_reviewer_with_them(
     tmp_path: Path, bug_repo: BuiltBugRepo
 ) -> None:
     events: list[str] = []
     services = _services(tmp_path, events)
     _add_fixture(services, bug_repo)
     recipe = tmp_path / "rev.yaml"
+    (tmp_path / "line.md").write_text("Read the changed lines.\n", encoding="utf-8")
     recipe.write_text(
-        "name: rev\nreviewers: [rev]\nreviewer_options:\n  rev: {tools: false}\n", encoding="utf-8"
+        "name: rev\nreviewers: [rev]\nreviewer_options:\n  rev: {tools: false, rules: line.md}\n",
+        encoding="utf-8",
     )
     result = _run(services, recipe, "--max-cost", "1", "--call-cost", "0.01")
-    assert result.exit_code == 1
-    assert "#393" in result.output and "rev" in result.output
-    assert "stages to run" not in result.output and "at most" not in result.output
-    assert events == []
+    assert result.exit_code == 0, result.output
+    assert events == ["call"]
+    runner = services.process_runner
+    assert isinstance(runner, ScriptedRunner)
+    (call,) = [c for c in runner.calls if c.argv[0] == SQ]
+    assert "--no-tools" in call.argv and "--rules" in call.argv
+    again = _run(services, recipe, "--max-cost", "1")
+    assert again.exit_code == 0 and "0 stages to run" in again.output
 
 
 def test_exit_2_when_capped(tmp_path: Path, bug_repo: BuiltBugRepo) -> None:

@@ -102,10 +102,14 @@ class Recipe(BaseModel):
             )
         )
 
-    def reviewers_with_options(self) -> tuple[str, ...]:
-        """Reviewers whose options change how they are called; all-default options do not."""
-        default = ReviewerOptions()
-        return tuple(a for a, options in self.reviewer_options.items() if options != default)
+    def call_options(self, reviewer: str) -> ReviewerOptions | None:
+        """The options that change how *reviewer* is called; ``None`` when it has none.
+
+        All-default options change nothing and give the same stage identity as no options,
+        so they are ``None`` too.
+        """
+        options = self.reviewer_options.get(reviewer)
+        return None if options is None or options == ReviewerOptions() else options
 
     @field_validator("keep_categories", mode="before")
     @classmethod

@@ -187,10 +187,12 @@ def test_recipe_with_reviewer_options_is_hashable_and_equal_recipes_hash_alike(
     assert first == second and hash(first) == hash(second)
 
 
-def test_reviewers_with_options_leaves_out_options_that_change_nothing() -> None:
+def test_call_options_are_none_for_options_that_change_nothing() -> None:
     recipe = Recipe(
         name="r",
-        reviewers=("a", "b"),
+        reviewers=("a", "b", "c"),
         reviewer_options={"a": ReviewerOptions(), "b": ReviewerOptions(tools=False)},
     )
-    assert recipe.reviewers_with_options() == ("b",)
+    assert recipe.call_options("a") is None
+    assert recipe.call_options("b") == ReviewerOptions(tools=False)
+    assert recipe.call_options("c") is None

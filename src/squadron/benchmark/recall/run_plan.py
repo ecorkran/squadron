@@ -1,7 +1,8 @@
 """The stages ``run`` still has to call for recipes over a case set (slice 430 D2, D4, D9).
 
 Each recipe expands, per case and run index, to one review stage per reviewer and one comb
-stage per chain prefix, keyed by live ``entry_key``s. A stage is already stored only when a
+stage per chain prefix, keyed by live ``entry_key``s. A reviewer's recipe options (no tools,
+a rules file) are part of its key and travel with its stage. A stage is already stored only when a
 live entry sits at that key; imported entries never count. With ``--retry-harness`` a live
 harness failure or a dropped-leak entry is pending again, and the entry it replaces is
 carried so the loop can move it to ``superseded``.
@@ -29,16 +30,15 @@ from squadron.metrology.recall_run_models import (
     entry_key,
     run_record_id,
 )
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions
 
-#: Refusal for a reviewer with options (437 D8): the benchmark would run it with tools and
-#: no rules file. Tracked in #393.
-REVIEWER_OPTIONS_REFUSAL = (
-    "recipe '{recipe}': reviewer '{reviewer}' has reviewer_options, which "
-    "`sq benchmark recall run` cannot apply yet (#393)"
+#: Refusal for a rules file ``load_recipe`` never read: its content cannot be hashed or sent.
+RULES_NOT_READ_REFUSAL = (
+    "recipe '{recipe}': reviewer '{reviewer}' names rules file {rules!r}, which was never read"
 )
 
-ConfigFor = Callable[[str, StageKind], tuple[StageConfig, Effort | None]]
+#: (alias, stage kind, the reviewer's options or ``None``) to its config and configured effort.
+ConfigFor = Callable[[str, StageKind, ReviewerOptions | None], tuple[StageConfig, Effort | None]]
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,8 @@ class PendingStage:
     chain: tuple[str, ...]
     #: The live entry a ``--retry-harness`` call replaces.
     replaces: StageEntry | None = None
+    #: What a review is called with beyond its alias; ``None`` for none, and for a comb.
+    options: ReviewerOptions | None = None
 
     @property
     def record_id(self) -> str:
@@ -105,9 +107,6 @@ def expand_pending(
     A comb whose parent stage is pending is pending too: its stored entry was built from
     the parent's old output, so it is replaced (and moved to ``superseded``) after the rerun.
     """
-    for recipe in recipes:
-        for reviewer in recipe.reviewers_with_options():
-            raise RecallRefusal(REVIEWER_OPTIONS_REFUSAL.format(recipe=recipe.name, reviewer=reviewer))
     pending: list[PendingStage] = []
     pending_slots: set[tuple[str, str]] = set()
     seen: set[tuple[str, str]] = set()
@@ -133,7 +132,8 @@ def _recipe_stages(
     """Per reviewer: its review, then one comb stage per chain prefix."""
     stages: list[PendingStage] = []
     for reviewer in recipe.reviewers:
-        config, effort = config_for(reviewer, StageKind.REVIEW)
+        options = _call_options(recipe, reviewer)
+        config, effort = config_for(reviewer, StageKind.REVIEW, options)
         review = PendingStage(
             case=case,
             run_index=run_index,
@@ -144,11 +144,12 @@ def _recipe_stages(
             effort_configured=effort,
             review_key=entry_key(config, effort),
             chain=(),
+            options=options,
         )
         stages.append(review)
         chain: tuple[str, ...] = ()
         for comb in recipe.combs:
-            comb_config, comb_effort = config_for(comb, StageKind.COMB)
+            comb_config, comb_effort = config_for(comb, StageKind.COMB, None)
             chain = (*chain, entry_key(comb_config, comb_effort))
             stages.append(
                 dataclasses.replace(
@@ -158,9 +159,20 @@ def _recipe_stages(
                     config=comb_config,
                     effort_configured=comb_effort,
                     chain=chain,
+                    options=None,
                 )
             )
     return stages
+
+
+def _call_options(recipe: Recipe, reviewer: str) -> ReviewerOptions | None:
+    """The reviewer's call options, refused when its rules file was never read."""
+    options = recipe.call_options(reviewer)
+    if options is not None and options.rules is not None and options.rules_content is None:
+        raise RecallRefusal(
+            RULES_NOT_READ_REFUSAL.format(recipe=recipe.name, reviewer=reviewer, rules=options.rules)
+        )
+    return options
 
 
 def _pending_form(

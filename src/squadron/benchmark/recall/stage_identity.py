@@ -2,7 +2,8 @@
 
 ``live_stage_config`` is what ``run`` keys pending calls by (with ``entry_key``) and what a
 live entry is stored with. ``LiveStageResolver`` gives ``report`` the identity a recipe
-alias resolves to now: its ``config_key`` and the effort its profile actually sends.
+alias resolves to now: its ``config_key`` and the effort its profile actually sends. A
+reviewer's recipe options (no tools, a rules file) are part of both, as in production.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from squadron.core.models import Effort
 from squadron.metrology.recall_run_models import StageConfig, StageKind
 from squadron.models.aliases import get_all_aliases, model_effort
 from squadron.pipeline.usage_capture import effort_sent_by_profile
+from squadron.recipes.recipe import ReviewerOptions
 from squadron.recipes.stage_config import (
     COMB_TEMPLATE_NAME,
     StageConfigError,
@@ -32,8 +34,13 @@ class StageIdentityError(ValueError):
     """An alias or template that gives no live stage identity."""
 
 
-def live_stage_config(alias: str, stage_kind: StageKind) -> tuple[StageConfig, Effort | None]:
-    """The stage config and configured effort of *alias*; unknown alias or template raises."""
+def live_stage_config(
+    alias: str, stage_kind: StageKind, options: ReviewerOptions | None = None
+) -> tuple[StageConfig, Effort | None]:
+    """The stage config and configured effort of *alias* called with *options*.
+
+    An unknown alias or template raises.
+    """
     if alias not in get_all_aliases():
         raise StageIdentityError(f"model alias {alias!r} is not in the alias registry")
     try:
@@ -41,7 +48,7 @@ def live_stage_config(alias: str, stage_kind: StageKind) -> tuple[StageConfig, E
         template_hash = builtin_template_hash(STAGE_TEMPLATES[stage_kind])
     except (UnresolvedProfileError, StageConfigError) as exc:
         raise StageIdentityError(str(exc)) from exc
-    return stage_config(alias, model, profile.value, template_hash), model_effort(alias)
+    return stage_config(alias, model, profile.value, template_hash, options), model_effort(alias)
 
 
 class LiveStageResolver:
@@ -52,18 +59,22 @@ class LiveStageResolver:
     """
 
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, StageKind], StageIdentity | None] = {}
+        self._cache: dict[tuple[str, StageKind, ReviewerOptions | None], StageIdentity | None] = {}
 
-    def resolve(self, alias: str, stage_kind: StageKind) -> StageIdentity | None:
-        key = (alias, stage_kind)
+    def resolve(
+        self, alias: str, stage_kind: StageKind, options: ReviewerOptions | None = None
+    ) -> StageIdentity | None:
+        key = (alias, stage_kind, options)
         if key not in self._cache:
-            self._cache[key] = self._resolve(alias, stage_kind)
+            self._cache[key] = self._resolve(alias, stage_kind, options)
         return self._cache[key]
 
     @staticmethod
-    def _resolve(alias: str, stage_kind: StageKind) -> StageIdentity | None:
+    def _resolve(
+        alias: str, stage_kind: StageKind, options: ReviewerOptions | None
+    ) -> StageIdentity | None:
         try:
-            config, effort = live_stage_config(alias, stage_kind)
+            config, effort = live_stage_config(alias, stage_kind, options)
         except StageIdentityError as exc:
             _logger.warning("recall report: no live identity for %s: %s", alias, exc)
             return None

@@ -24,7 +24,7 @@ from squadron.metrology.recall_run_models import (
     StageKind,
     StageOutcome,
 )
-from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe import Recipe, ReviewerOptions, rules_sha256
 from squadron.review.models import Verdict
 from tests.benchmark.recall.scoring_support import StubResolver, make_case
 from tests.benchmark.recall.stage_support import (
@@ -48,6 +48,41 @@ WITH_COMB = Recipe(name="rc", reviewers=("rev",), combs=("comber",))
 
 def _review_stage() -> PendingStage:
     return pending_for(CASE, REVIEW_ONLY)[0]
+
+
+def test_a_reviewer_with_options_is_called_without_tools_and_with_the_hashed_rules(
+    tmp_path: Path,
+) -> None:
+    rules = "Read the changed lines for slips.\nÜmlaut kept.\n"
+    options = ReviewerOptions(tools=False, rules="line.md").model_copy(
+        update={"rules_content": rules, "rules_path": tmp_path / "elsewhere" / "line.md"}
+    )
+    recipe = Recipe(name="line", reviewers=("rev",), reviewer_options={"rev": options})
+    (stage,) = pending_for(CASE, recipe)
+    seen: dict[str, bytes] = {}
+
+    def write(call: RunnerCall) -> None:
+        # Read during the call: the home is the call's own and is removed afterwards.
+        seen["rules"] = Path(call.argv[call.argv.index("--rules") + 1]).read_bytes()
+        write_json(output_arg(call.argv), review_document([sq_finding(1)]))
+
+    runner = writing_runner(write)
+    entry = _run(tmp_path, stage, runner)
+    (call,) = runner.calls
+    assert "--no-tools" in call.argv
+    rules_arg = Path(call.argv[call.argv.index("--rules") + 1])
+    home = stage_paths(stage, tmp_path / "bench").home
+    assert rules_arg.is_relative_to(home)  # the copy in the scrubbed home, not the recipe's file
+    assert seen["rules"] == rules.encode("utf-8")
+    assert entry.outcome is StageOutcome.OK
+    assert entry.config.tool_use is False and entry.config.rules_hash == rules_sha256(options)
+
+
+def test_a_reviewer_without_options_gets_neither_flag(tmp_path: Path) -> None:
+    runner = writing_runner(lambda call: write_json(output_arg(call.argv), review_document([])))
+    _run(tmp_path, _review_stage(), runner)
+    (call,) = runner.calls
+    assert "--no-tools" not in call.argv and "--rules" not in call.argv
 
 
 def _warned(caplog: pytest.LogCaptureFixture, *parts: str) -> bool:
@@ -233,8 +268,10 @@ def test_comb_with_empty_input_makes_no_call(tmp_path: Path) -> None:
 
 
 def test_failed_and_no_call_entries_keep_their_identity_and_are_scored(tmp_path: Path) -> None:
-    def high(alias: str, kind: StageKind) -> tuple[StageConfig, Effort | None]:
-        return live_config_for(alias, kind)[0], Effort.high
+    def high(
+        alias: str, kind: StageKind, options: ReviewerOptions | None = None
+    ) -> tuple[StageConfig, Effort | None]:
+        return live_config_for(alias, kind, options)[0], Effort.high
 
     review_stage, comb_stage = expand_pending([WITH_COMB], [CASE], [1], {}, high)
     deps = stage_deps(tmp_path, writing_runner(lambda call: None))

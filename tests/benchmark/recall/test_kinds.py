@@ -27,7 +27,16 @@ class StubKind:
     ) -> AbstractContextManager[Path]:
         return nullcontext(root)
 
-    def review_argv(self, case: RealBugCase, alias: str, sq_path: Path, out_path: Path) -> list[str]:
+    def review_argv(
+        self,
+        case: RealBugCase,
+        alias: str,
+        sq_path: Path,
+        out_path: Path,
+        *,
+        no_tools: bool = False,
+        rules_path: Path | None = None,
+    ) -> list[str]:
         return ["stub", alias, str(out_path)]
 
 
@@ -54,3 +63,12 @@ def test_code_review_argv() -> None:
         "/bin/sq", "review", "code", "--diff", case.base, "--model", "luna",
         "--no-save", "--output", "file", "--output-path", "/o/x.json", "--cwd", ".",
     ]  # fmt: skip
+
+
+def test_code_review_argv_with_reviewer_options() -> None:
+    case = RealBugCase.build(**case_fields())
+    plain = CodeKind().review_argv(case, "luna", Path("/bin/sq"), Path("/o/x.json"))
+    argv = CodeKind().review_argv(
+        case, "luna", Path("/bin/sq"), Path("/o/x.json"), no_tools=True, rules_path=Path("/h/r.md")
+    )
+    assert argv == [*plain, "--no-tools", "--rules", "/h/r.md"]
